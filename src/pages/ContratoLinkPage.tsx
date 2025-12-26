@@ -22,22 +22,23 @@ const ContratoLinkPage: React.FC = () => {
     
     setLoading(true);
     
-    // Busca apenas o título e o status
+    // USANDO RPC PÚBLICA PARA BYPASSAR RLS
     const { data, error: fetchError } = await supabase
-      .from('contratos_gerados')
-      .select('valores_tags_preenchidos, status')
-      .eq('id', id)
-      .single();
+      .rpc('get_public_contract_info', { p_contract_id: id });
 
     if (fetchError) {
       console.error('Erro ao carregar contrato:', fetchError);
+      setError('Contrato não encontrado ou erro de conexão.');
+    } else if (!data || data.length === 0) {
       setError('Contrato não encontrado ou inválido.');
     } else {
-      const titulo = data.valores_tags_preenchidos?.titulo || 'Documento Importante';
+      const contrato = data[0]; // RPC retorna array
+      const titulo = contrato.valores_tags_preenchidos?.titulo || 'Documento Importante';
       setTituloContrato(titulo);
       
-      if (data.status === 'ativo' || data.status === 'concluido') {
-          setError('Este contrato já foi assinado.');
+      if (contrato.status === 'ativo' || contrato.status === 'concluido') {
+          // Se já assinado, podemos mostrar mensagem ou redirecionar para visualizar
+          // setError('Este contrato já foi assinado.'); // Opcional: deixar clicar para ver
       }
     }
     setLoading(false);
@@ -67,7 +68,7 @@ const ContratoLinkPage: React.FC = () => {
           <CardTitle className="text-2xl">Contrato Pendente de Assinatura</CardTitle>
           <CardDescription className="mt-2">
             {error ? (
-                <span className="text-red-500">{error}</span>
+                <span className="text-red-500 font-medium">{error}</span>
             ) : (
                 <>
                     Você recebeu um documento para assinatura eletrônica.

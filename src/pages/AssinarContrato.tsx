@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
@@ -11,7 +11,6 @@ import CameraCapture from '@/components/CameraCapture';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
 
 const AssinarContrato: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,19 +34,19 @@ const AssinarContrato: React.FC = () => {
     
     setLoading(true);
     
-    // Busca todos os campos, incluindo os novos de assinatura do proprietário
+    // USANDO RPC PÚBLICA PARA BYPASSAR RLS
     const { data, error: fetchError } = await supabase
-      .from('contratos_gerados')
-      .select('*')
-      .eq('id', id)
-      .single();
+      .rpc('get_public_contract_info', { p_contract_id: id });
 
     if (fetchError) {
       console.error('Erro ao carregar contrato:', fetchError);
       setError('Contrato não encontrado ou acesso negado.');
+    } else if (!data || data.length === 0) {
+      setError('Contrato não encontrado.');
     } else {
-      setContrato(data as ContratoGerado);
-      if (data.status === 'ativo' || data.status === 'concluido') {
+      const contratoData = data[0] as ContratoGerado;
+      setContrato(contratoData);
+      if (contratoData.status === 'ativo' || contratoData.status === 'concluido') {
           showSuccess('Este contrato já foi assinado.');
       }
     }
@@ -68,23 +67,22 @@ const AssinarContrato: React.FC = () => {
   
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    // CORREÇÃO: Adiciona 'public/' no início do caminho para satisfazer a política de RLS
+    // Caminho direto no bucket (a policy agora permite insert público em 'contrato_self')
     const fileName = `public/${contrato!.id}/assinatura-cliente-${Date.now()}.${fileExt}`;
-    const filePath = fileName;
 
     const { error } = await supabase.storage
       .from('contrato_self')
-      .upload(filePath, file, {
+      .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
       });
 
     if (error) {
       console.error("LOG: Erro detalhado do Supabase Storage:", error);
-      throw new Error('Falha ao fazer upload da selfie. Verifique se o bucket "contrato_self" existe e tem permissão de RLS pública.');
+      throw new Error('Falha ao fazer upload da selfie. Tente novamente.');
     }
 
-    const { data: publicUrlData } = supabase.storage.from('contrato_self').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from('contrato_self').getPublicUrl(fileName);
     return publicUrlData.publicUrl;
   };
   
@@ -101,7 +99,8 @@ const AssinarContrato: React.FC = () => {
           showSuccess('Cópia do contrato assinado enviada para o seu email!');
       } catch (error: any) {
           console.error('Erro ao enviar email:', error);
-          showError('Falha ao enviar cópia do contrato por email: ' + error.message);
+          // Não bloqueia o fluxo se o email falhar
+          showError('Contrato assinado, mas falha ao enviar email: ' + error.message);
       }
   };
 
@@ -124,18 +123,15 @@ const AssinarContrato: React.FC = () => {
       // 1. Upload da Selfie
       const selfieUrl = await uploadSelfie(selfieFile);
       
-      // 2. Atualizar o status do contrato para 'ativo' e salvar os dados de assinatura
-      const { error: updateError } = await supabase
-        .from('contratos_gerados')
-        .update({ 
-            status: 'ativo', 
-            documento_assinado_url: 'Assinado Eletronicamente', 
-            assinatura_nome: nomeCompleto, 
-            assinatura_selfie_url: selfieUrl, 
-        })
-        .eq('id', contrato.id);
+      // 2. Chamar RPC Pública para Assinar
+      const { data: success, error: rpcError } = await supabase.rpc('sign_contract_public', {
+          p_contract_id: contrato.id,
+          p_assinatura_nome: nomeCompleto,
+          p_assinatura_selfie_url: selfieUrl
+      });
 
-      if (updateError) throw updateError;
+      if (rpcError) throw rpcError;
+      if (!success) throw new Error('Falha ao registrar assinatura. Verifique se o contrato já não foi assinado.');
       
       // 3. Atualizar o estado local
       const updatedContrato = { 
@@ -144,6 +140,7 @@ const AssinarContrato: React.FC = () => {
           documento_assinado_url: 'Assinado Eletronicamente',
           assinatura_nome: nomeCompleto,
           assinatura_selfie_url: selfieUrl,
+          updated_at: new Date().toISOString()
       };
       setContrato(updatedContrato);
       showSuccess('Contrato assinado com sucesso!');
@@ -152,8 +149,6 @@ const AssinarContrato: React.FC = () => {
       const clienteEmail = contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'];
       if (clienteEmail) {
           await sendSignedContractEmail(contrato.id, clienteEmail);
-      } else {
-          showError('Email do cliente não encontrado nas tags para envio de cópia.');
       }
 
     } catch (error: any) {
@@ -169,14 +164,16 @@ const AssinarContrato: React.FC = () => {
         return;
     }
     
-    const isContentHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+    // CORREÇÃO CRÍTICA: Inicializa finalContent com o conteúdo renderizado
     let finalContent = contrato.conteudo_renderizado;
+    
+    const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
     
     // Dados do Cliente
     const clienteNome = contrato.assinatura_nome || contrato.valores_tags_preenchidos?.['{{CLIENTE_NOME}}'] || 'Cliente Contratado';
     const clienteDocumento = contrato.valores_tags_preenchidos?.['{{CLIENTE_DOCUMENTO}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CPF}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CNPJ}}'] || 'Documento Não Informado';
-    const dataAssinatura = isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente';
+    const dataAssinatura = isAssinado && contrato.updated_at ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente';
     
     // --- Lógica de Injeção de Assinaturas ---
     
@@ -216,7 +213,7 @@ const AssinarContrato: React.FC = () => {
     finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignatureBlock);
     
     // 2. Se for HTML, injeta a seção de rodapé (data de assinatura)
-    if (isContentHtml) {
+    if (isHtml) {
         // Adiciona um rodapé de validação eletrônica
         const validationRodape = `
             <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid; text-align: center; font-size: 10px;">
@@ -257,7 +254,6 @@ const AssinarContrato: React.FC = () => {
             ${finalContent}
         </div>
     `;
-    // --- FIM NOVO ---
     
     printContent(finalPrintHtml, `Contrato Assinatura - ${contrato.id}`);
   };
@@ -352,7 +348,7 @@ const AssinarContrato: React.FC = () => {
                               <Camera className="w-4 h-4 mr-1" /> Visualizar Selfie de Assinatura
                           </a>
                       )}
-                      <Button variant="link" size="sm" onClick={() => sendSignedContractEmail(contrato.id, contrato.valores_tags_preenchidas?.['{{CLIENTE_EMAIL}}'])} className="h-auto p-0 text-blue-600 hover:text-blue-700 flex items-center">
+                      <Button variant="link" size="sm" onClick={() => sendSignedContractEmail(contrato.id, contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'])} className="h-auto p-0 text-blue-600 hover:text-blue-700 flex items-center">
                           <Mail className="w-4 h-4 mr-1" /> Reenviar Cópia Assinada
                       </Button>
                   </div>
