@@ -33,14 +33,13 @@ serve(async (req: Request) => {
     console.log(`LOG: Executando contabil_setup_defaults para ${proprietarioId}`);
     
     // Chamada da RPC que executa o reset, importação e mapeamento
-    const { data, error } = await supabaseService.rpc("contabil_setup_defaults", {
+    const { data, error: setupError } = await supabaseService.rpc("contabil_setup_defaults", {
       p_proprietario_id: proprietarioId,
     });
 
-    if (error) {
-      console.error("RPC Error (Supabase):", error);
-      // Se houver um erro de Postgrest (ex: RLS, FK), ele estará aqui.
-      throw new Error(`RPC_FAIL: ${error.message}`);
+    if (setupError) {
+      console.error("RPC Error (Supabase):", setupError);
+      throw new Error(`RPC_FAIL: ${setupError.message}`);
     }
     
     if (data && !data[0]?.success) {
