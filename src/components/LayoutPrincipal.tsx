@@ -71,14 +71,14 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
         setAutoSetupState('done');
       } catch (error: any) {
         console.error('Erro ao executar setup contábil automático:', error);
-        // AQUI: Em caso de falha, voltamos para 'idle' silenciosamente,
-        // permitindo que o usuário use o botão manual.
-        setAutoSetupState('idle'); 
+        // CORREÇÃO: Define como 'failed' para parar o loop.
+        // O usuário poderá tentar novamente pelo botão manual no banner.
+        setAutoSetupState('failed'); 
       }
     };
 
     void run();
-  }, [carregando, ownerId, autoSetupState, shouldAutoRunSetup, refetch, showError]);
+  }, [carregando, ownerId, autoSetupState, shouldAutoRunSetup, refetch]); // Removido showError das dependências para evitar re-renders desnecessários
 
   if (carregando) {
     return (
@@ -170,12 +170,22 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
                 Complete as etapas abaixo para liberar o painel e os lançamentos.
               </p>
               <SetupChecklistList missingSteps={setupStatus.missingSteps} compact />
+              
+              {/* Mostra estado de carregamento apenas se estiver rodando */}
               {autoSetupState === 'running' && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Preparando automaticamente o plano de contas e os históricos...
                 </div>
               )}
+              
+              {/* Opcional: Se falhar, pode mostrar algo discreto ou nada, como pedido */}
+              {autoSetupState === 'failed' && (
+                 <div className="text-xs text-muted-foreground mt-1">
+                    Tentativa automática falhou. Use o botão abaixo em Configurações.
+                 </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-1">
                 <Button variant="secondary" size="sm" asChild>
                   <Link to="/configuracoes">
