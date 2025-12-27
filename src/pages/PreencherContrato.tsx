@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2 } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
@@ -21,6 +21,10 @@ import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog'
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { ptBR } from 'date-fns/locale';
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
+import { useCapitalSocial } from '@/hooks/use-capital-social'; // NOVO IMPORT
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { v4 as uuidv4 } from 'uuid';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 
@@ -30,6 +34,8 @@ const PreencherContrato: React.FC = () => {
   const contratoId = searchParams.get('contratoId');
   const navigate = useNavigate();
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const { configMap } = useContabilConfig(); // NOVO HOOK
+  const { temCapitalSocial, carregando: carregandoCapital } = useCapitalSocial(); // NOVO HOOK
   
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente'; 
@@ -329,6 +335,11 @@ const PreencherContrato: React.FC = () => {
   }, [modelo, valoresTags]);
 
   const handleSalvarContrato = async (status: string) => {
+    if (!temCapitalSocial) {
+        showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos.');
+        return;
+    }
+    
     const dataInicio = tipoLancamento === 'unico' ? dataVencimentoUnico : dataPrimeiroVencimento;
     
     if (!clienteSelecionadoId || !proprietarioContratoId || !dataInicio) {
@@ -337,11 +348,59 @@ const PreencherContrato: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    
+    // Determina as tabelas e chaves
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    
+    // Busca as contas contábeis mapeadas
+    const { data: configData } = await supabase
+        .from('configuracao_contratos')
+        .select('id_conta_clientes_receber, id_conta_receita_contrato')
+        .eq('proprietario_id', proprietarioContratoId)
+        .single();
+        
+    const contaPatrimonialId = configData?.id_conta_clientes_receber || null;
+    const contaReceitaId = configData?.id_conta_receita_contrato || null;
+    
+    // Busca a conta de parcela (analítica)
+    const { data: parcelaConfig } = await supabase
+        .from('configuracao_contas_receber')
+        .select('conta_contabil_id')
+        .eq('proprietario_id', proprietarioContratoId)
+        .eq('tipo_registro', 'parcela')
+        .single();
+        
+    const contaParcelaId = parcelaConfig?.conta_contabil_id || null;
+    
+    const temConfigContabil = !!contaPatrimonialId && !!contaReceitaId && !!contaParcelaId;
+
     try {
         let valorTotalFinal = valorTotal;
-        if (tipoLancamento === 'repetir') valorTotalFinal = valorTotal * numeroParcelas;
+        let valorParcela = valorTotal;
+        let parcelasParaInserir = [];
 
-        const payload = {
+        if (tipoLancamento === 'unico') {
+            valorTotalFinal = valorTotal;
+            valorParcela = valorTotal;
+            parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorTotal, data_vencimento: format(dataVencimentoUnico!, 'yyyy-MM-dd'), status: 'aberta' });
+        } else if (tipoLancamento === 'parcelar') {
+            valorTotalFinal = valorTotal;
+            valorParcela = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
+            for (let i = 0; i < numeroParcelas; i++) {
+                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
+            }
+        } else if (tipoLancamento === 'repetir') {
+            valorTotalFinal = valorTotal * numeroParcelas;
+            valorParcela = valorTotal;
+            for (let i = 0; i < numeroParcelas; i++) {
+                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
+            }
+        }
+        
+        // 1. Inserir/Atualizar Contrato Gerado
+        const contratoPayload = {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId,
@@ -349,16 +408,111 @@ const PreencherContrato: React.FC = () => {
             valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
-            valores_tags_preenchidos: valoresTags,
+            valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento, tipo_conteudo: 'html' },
             conteudo_renderizado: renderConteudo(),
         };
+        
+        let currentContratoId = contratoId;
+        
+        if (isEditing) {
+            const { data, error } = await supabase.from('contratos_gerados').update(contratoPayload).eq('id', contratoId).select('id').single();
+            if (error) throw error;
+            currentContratoId = data.id;
+            
+            // Deletar parcelas antigas e conta sintética (para recriar)
+            const { error: deleteParcelasError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', currentContratoId);
+            if (deleteParcelasError) console.warn('Aviso: Falha ao deletar parcelas antigas:', deleteParcelasError);
+            
+            const { error: deleteContasError } = await supabase.from(tabelaContasReceber).delete().eq('contrato_gerado_id', currentContratoId);
+            if (deleteContasError) console.warn('Aviso: Falha ao deletar conta sintética antiga:', deleteContasError);
+            
+        } else {
+            const { data, error } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
+            if (error) throw error;
+            currentContratoId = data.id;
+        }
+        
+        // 2. Inserir Conta Sintética (Contas a Receber)
+        const contaReceberPayload = {
+            [ownerKey]: proprietarioContratoId,
+            cliente_id: clienteSelecionadoId,
+            descricao: `Contrato: ${tituloDocumento}`,
+            valor_total: valorTotalFinal,
+            data_emissao: format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento,
+            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+            status: 'aberta',
+            origem: 'contrato',
+            contrato_gerado_id: currentContratoId,
+            id_conta_patrimonial: contaPatrimonialId,
+            id_conta_resultado: contaReceitaId,
+        };
+        
+        const { data: newContaSintetica, error: contaError } = await supabase
+            .from(tabelaContasReceber)
+            .insert(contaReceberPayload)
+            .select('id')
+            .single();
+            
+        if (contaError) throw contaError;
+        const contaReceberId = newContaSintetica.id;
+        
+        // 3. Inserir Parcelas
+        const parcelasComId = parcelasParaInserir.map(p => ({ 
+            ...p, 
+            conta_receber_id: contaReceberId, 
+            [ownerKey]: proprietarioContratoId,
+            ...(temConfigContabil && { id_conta_contabil: contaParcelaId })
+        }));
+        
+        const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
+        if (parcelError) throw parcelError;
+        
+        // 4. Lançamentos Contábeis (Partidas Dobradas)
+        if (temConfigContabil) {
+            const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+            const launchDescription = `Contrato: ${tituloDocumento}`;
+            const contaReceberIdShort = contaReceberId.substring(0, 8);
+            
+            // CRÍTICO: Geração de IDs e Referência Cruzada
+            const idPatrimonial = uuidv4();
+            const idReceita = uuidv4();
+            
+            // D: Conta Patrimonial (Clientes a Receber) - ENTRADA (Débito)
+            const lancamentoPatrimonialPayload = {
+                id: idPatrimonial,
+                proprietario_id: proprietarioContratoId,
+                data_movimentacao: dataMovimentacao,
+                descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                valor: valorTotalFinal,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonialId,
+                origem: 'lancamento_cr',
+                historico_id: null,
+                conta_resultado_id: idReceita, // REFERÊNCIA CRUZADA
+            };
+            
+            // C: Conta de Resultado (Receita) - SAÍDA (Crédito)
+            const lancamentoReceitaPayload = {
+                id: idReceita,
+                proprietario_id: proprietarioContratoId,
+                data_movimentacao: dataMovimentacao,
+                descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                valor: valorTotalFinal,
+                tipo: 'Saida' as const, // Saída (Crédito) na Receita
+                conta_bancaria_id: null,
+                conta_contabil_id: contaReceitaId,
+                origem: 'lancamento_cr',
+                historico_id: null,
+                conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
+            };
+            
+            const { error: lancamentoError } = await supabase.from('lancamentos').insert([lancamentoPatrimonialPayload, lancamentoReceitaPayload]);
+            if (lancamentoError) throw lancamentoError;
+        }
 
-        const { error } = isEditing 
-            ? await supabase.from('contratos_gerados').update(payload).eq('id', contratoId)
-            : await supabase.from('contratos_gerados').insert(payload);
-
-        if (error) throw error;
-        showSuccess('Contrato processado com sucesso');
+        showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} e Contas a Receber geradas com sucesso!`);
         navigate('/contratos');
     } catch (e: any) {
         showError(e.message);
@@ -370,16 +524,16 @@ const PreencherContrato: React.FC = () => {
   // Renderizador dos botões de ação para reutilização no topo e rodapé
   const renderActionButtons = () => (
       <div className="flex space-x-4">
-        <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting}>
+        <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting || carregandoCapital}>
             <Save className="mr-2 h-4 w-4"/> Rascunho
         </Button>
-        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting}>
+        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting || carregandoCapital}>
             Gerar e Enviar
         </Button>
       </div>
   );
 
-  if (carregandoSessao || carregandoDados) {
+  if (carregandoSessao || carregandoDados || carregandoCapital) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
   }
 
@@ -393,6 +547,17 @@ const PreencherContrato: React.FC = () => {
         </div>
         {renderActionButtons()}
       </div>
+      
+      {/* ALERTA DE CAPITAL SOCIAL */}
+      {!temCapitalSocial && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Lançamento Inicial Obrigatório</AlertTitle>
+          <AlertDescription>
+            É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-6">
