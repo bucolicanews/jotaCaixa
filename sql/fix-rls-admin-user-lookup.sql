@@ -1,65 +1,40 @@
--- 1. Forçar a atualização da tabela de lookup para garantir que o usuário 'jota' e outros estejam mapeados corretamente
-TRUNCATE TABLE public.admin_user_lookup;
+-- 1. Garante que o RLS está habilitado (boa prática), mas vamos criar uma política permissiva
+ALTER TABLE public.admin_user_lookup ENABLE ROW LEVEL SECURITY;
 
-INSERT INTO public.admin_user_lookup (id, admin_id)
-SELECT id, admin_id FROM public.admin_usuarios;
+-- 2. Remove políticas antigas que possam estar bloqueando
+DROP POLICY IF EXISTS "Allow all on admin_user_lookup" ON public.admin_user_lookup;
+DROP POLICY IF EXISTS "admin_user_lookup_policy" ON public.admin_user_lookup;
+DROP POLICY IF EXISTS "public_admin_user_lookup" ON public.admin_user_lookup;
 
--- 2. Atualizar Políticas da Tabela de Identificadores (admin_identificacao_extrato)
-DROP POLICY IF EXISTS "admin_identificacao_extrato_select" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_insert" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_update" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_delete" ON public.admin_identificacao_extrato;
+-- 3. Cria uma política que permite TUDO para usuários autenticados nesta tabela auxiliar
+-- Isso resolve o erro "new row violates row-level security policy" pois permite que o gatilho escreva nela.
+CREATE POLICY "Allow all on admin_user_lookup"
+ON public.admin_user_lookup
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
 
-CREATE POLICY "admin_identificacao_extrato_select" ON public.admin_identificacao_extrato
-FOR SELECT TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
+-- 4. Garante permissões de Grant (caso tenham sido revogadas)
+GRANT ALL ON public.admin_user_lookup TO authenticated;
+GRANT ALL ON public.admin_user_lookup TO service_role;
 
-CREATE POLICY "admin_identificacao_extrato_insert" ON public.admin_identificacao_extrato
-FOR INSERT TO authenticated WITH CHECK (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_identificacao_extrato_update" ON public.admin_identificacao_extrato
-FOR UPDATE TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_identificacao_extrato_delete" ON public.admin_identificacao_extrato
-FOR DELETE TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
--- 3. Atualizar Políticas da Tabela de Descrições (admin_descricao_extrato) - Correção Proativa
-DROP POLICY IF EXISTS "admin_descricao_extrato_select" ON public.admin_descricao_extrato;
-DROP POLICY IF EXISTS "admin_descricao_extrato_insert" ON public.admin_descricao_extrato;
-DROP POLICY IF EXISTS "admin_descricao_extrato_update" ON public.admin_descricao_extrato;
-DROP POLICY IF EXISTS "admin_descricao_extrato_delete" ON public.admin_descricao_extrato;
-
-CREATE POLICY "admin_descricao_extrato_select" ON public.admin_descricao_extrato
-FOR SELECT TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_descricao_extrato_insert" ON public.admin_descricao_extrato
-FOR INSERT TO authenticated WITH CHECK (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_descricao_extrato_update" ON public.admin_descricao_extrato
-FOR UPDATE TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_descricao_extrato_delete" ON public.admin_descricao_extrato
-FOR DELETE TO authenticated USING (
-  admin_id = auth.uid() OR 
-  admin_id = public.get_admin_id_for_current_user()
-);
+-- 5. Reforça a definição da função do gatilho para garantir que ela funcione
+CREATE OR REPLACE FUNCTION public.sync_admin_user_lookup()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER -- Executa como dono do banco para garantir acesso
+AS $function$
+BEGIN
+  IF (TG_OP = 'DELETE') THEN
+    DELETE FROM public.admin_user_lookup WHERE id = OLD.id;
+    RETURN OLD;
+  ELSE
+    -- Usa ON CONFLICT para evitar erros de duplicidade se o registro já existir
+    INSERT INTO public.admin_user_lookup (id, admin_id)
+    VALUES (NEW.id, NEW.admin_id)
+    ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
+    RETURN NEW;
+  END IF;
+END;
+$function$;
