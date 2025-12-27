@@ -81,7 +81,7 @@ const ContratoLinkPage: React.FC = () => {
           <Button 
             onClick={handleRedirectToSign} 
             disabled={!!error}
-            className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+            className="w-full h-14 text-lg bg-orange-600 hover:bg-green-700"
           >
             Visualizar Contrato <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
