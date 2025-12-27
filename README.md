@@ -1937,7 +1937,7 @@ BEGIN
     valor_total = v_plano_preco,
     data_vencimento = v_proximo_vencimento,
     id_conta_patrimonial = v_conta_contabil_a_receber,
-    id_conta_resultado = v_conta_resultado_stripe_id -- Atualiza a conta de resultado
+    id_conta_resultado = v_conta_resultado_stripe_id
   WHERE id = v_recorrencia_id;
   
   -- 12. MARCA A PARCELA CORRESPONDENTE AO PAGAMENTO COMO PAGA
@@ -2543,7 +2543,7 @@ BEGIN
 
   RETURN QUERY SELECT TRUE, 'Reset contábil concluído com sucesso.'::TEXT;
 EXCEPTION WHEN OTHERS THEN
-  RETURN QUERY SELECT FALSE, 'Erro no reset: ' || SQLERRM::text;
+  RETURN QUERY SELECT FALSE, SQLERRM::text;
 END;
 $function$;
 
@@ -2769,6 +2769,11 @@ Este padrão foi aplicado a todas as tabelas críticas, garantindo que um funcio
 ## Funcionalidades e Telas
 
 O sistema suporta módulos de **Financeiro**, **Contabilidade**, **RH/Ponto** e **Contratos/Documentos Societários**.
+
+### 🆕 Gestão de Contratos
+
+- **Edição de Contratos Ativos/Bloqueados:** Contratos com status `ativo` ou `bloqueado` agora podem ser editados. Ao salvar, o sistema **deleta as contas a receber e parcelas pendentes antigas** e recria o faturamento com os novos valores, definindo o status do contrato para `pendente_assinatura`.
+- **Exclusão Segura:** A exclusão de um contrato é bloqueada se houver parcelas com status `paga`, garantindo a integridade do histórico financeiro.
 
 ### Fluxo Contábil (Partidas Dobradas)
 
