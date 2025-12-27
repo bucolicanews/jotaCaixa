@@ -83,7 +83,7 @@ const ContratoLinkPage: React.FC = () => {
             disabled={!!error}
             className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
           >
-            Clique Aqui para Visualizar e Assinar <ArrowRight className="w-5 h-5 ml-2" />
+            Visualizar Contrato <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
           
           <p className="text-xs text-muted-foreground mt-4">
