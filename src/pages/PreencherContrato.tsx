@@ -59,6 +59,7 @@ const PreencherContrato: React.FC = () => {
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(new Date());
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
+  const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null); // NOVO ESTADO PARA EDIÇÃO
 
   const isEditing = !!contratoId;
 
@@ -150,6 +151,8 @@ const PreencherContrato: React.FC = () => {
         if (contratoError) {
             showError('Erro ao carregar contrato para edição: ' + contratoError.message);
         } else if (contratoExistente) {
+            setContratoInicial(contratoExistente); // SALVA O CONTRATO INICIAL
+            
             // Preenche os estados com os dados do banco
             setClienteSelecionadoId(contratoExistente.cliente_id);
             setProprietarioContratoId(contratoExistente.proprietario_id);
@@ -399,15 +402,39 @@ const PreencherContrato: React.FC = () => {
             }
         }
         
-        // 1. Inserir/Atualizar Contrato Gerado
+        let currentContratoId = contratoId;
+        let contaReceberId: string | null = null;
+        
+        // 1. SE FOR EDIÇÃO: Deletar lançamentos contábeis antigos e conta sintética
+        if (isEditing && contratoInicial) {
+            // 1.1. Buscar a conta sintética antiga
+            const { data: oldContaSintetica } = await supabase
+                .from(tabelaContasReceber)
+                .select('id')
+                .eq('contrato_gerado_id', contratoInicial.id)
+                .single();
+                
+            if (oldContaSintetica) {
+                contaReceberId = oldContaSintetica.id;
+                
+                // 1.2. Deletar lançamentos contábeis antigos (usando o ID da conta sintética)
+                await supabase.from('lancamentos')
+                    .delete()
+                    .eq('origem', 'lancamento_cr')
+                    .eq('proprietario_id', proprietarioContratoId)
+                    .or(`descricao.ilike.%CR ID: ${contaReceberId.substring(0, 8)}%`);
+                    
+                // 1.3. Deletar parcelas antigas e a conta sintética (CASCADE)
+                await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberId);
+            }
+        }
+        
+        // 2. Inserir/Atualizar Contrato Gerado
         const contratoPayload = {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId,
-            // Se for edição de um contrato bloqueado, o status final deve ser 'pendente_assinatura'
-            status: isEditing && contratoId && (await supabase.from('contratos_gerados').select('status').eq('id', contratoId).single()).data?.status === 'bloqueado' 
-                ? 'pendente_assinatura' 
-                : status,
+            status: status,
             valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
@@ -415,35 +442,17 @@ const PreencherContrato: React.FC = () => {
             conteudo_renderizado: renderConteudo(),
         };
         
-        let currentContratoId = contratoId;
-        
         if (isEditing) {
             const { data, error } = await supabase.from('contratos_gerados').update(contratoPayload).eq('id', contratoId).select('id').single();
             if (error) throw error;
             currentContratoId = data.id;
-            
-            // Deletar parcelas antigas e conta sintética (para recriar)
-            const { error: deleteParcelasError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', currentContratoId);
-            if (deleteParcelasError) console.warn('Aviso: Falha ao deletar parcelas antigas:', deleteParcelasError);
-            
-            const { error: deleteContasError } = await supabase.from(tabelaContasReceber).delete().eq('contrato_gerado_id', currentContratoId);
-            if (deleteContasError) console.warn('Aviso: Falha ao deletar conta sintética antiga:', deleteContasError);
-            
-            // Deletar lançamentos contábeis antigos (se existirem)
-            const oldLaunchDescriptionPrefix = `Contrato: ${tituloDocumento}`;
-            await supabase.from('lancamentos')
-                .delete()
-                .eq('origem', 'lancamento_cr')
-                .eq('proprietario_id', proprietarioContratoId)
-                .ilike('descricao', `%${oldLaunchDescriptionPrefix}%`);
-            
         } else {
             const { data, error } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
             if (error) throw error;
             currentContratoId = data.id;
         }
         
-        // 2. Inserir Conta Sintética (Contas a Receber)
+        // 3. Inserir Nova Conta Sintética (Contas a Receber)
         const contaReceberPayload = {
             [ownerKey]: proprietarioContratoId,
             cliente_id: clienteSelecionadoId,
@@ -466,9 +475,9 @@ const PreencherContrato: React.FC = () => {
             .single();
             
         if (contaError) throw contaError;
-        const contaReceberId = newContaSintetica.id;
+        contaReceberId = newContaSintetica.id;
         
-        // 3. Inserir Parcelas
+        // 4. Inserir Parcelas
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
@@ -479,8 +488,8 @@ const PreencherContrato: React.FC = () => {
         const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
         if (parcelError) throw parcelError;
         
-        // 4. Lançamentos Contábeis (Partidas Dobradas)
-        if (temConfigContabil) {
+        // 5. Lançamentos Contábeis (Partidas Dobradas)
+        if (temConfigContabil && status !== 'rascunho') {
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
             const launchDescription = `Contrato: ${tituloDocumento}`;
             const contaReceberIdShort = contaReceberId.substring(0, 8);
