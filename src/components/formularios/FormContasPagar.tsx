@@ -23,6 +23,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { useCapitalSocial } from '@/hooks/use-capital-social';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { v4 as uuidv4 } from 'uuid';
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -37,7 +38,7 @@ const formSchema = z.object({
   intervalo_dias: z.coerce.number().int().min(1).optional(),
   
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
-  novo_historico: z.string().optional(),
+  novo_historico: z.string().optional().or(z.literal('')),
   
   // CAMPO C: Passivo/Obrigação
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
@@ -292,8 +293,20 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         if (error) throw error;
         contaPagarId = data.id;
         
-        const { error: deleteError } = await supabase.from(tabelaParcelasPagar).delete().eq('conta_pagar_id', contaPagarId);
-        if (deleteError) throw deleteError;
+        // 1. Deletar parcelas antigas
+        const { error: deleteParcelasError } = await supabase.from(tabelaParcelasPagar).delete().eq('conta_pagar_id', contaPagarId);
+        if (deleteParcelasError) throw deleteParcelasError;
+        
+        // 2. Deletar lançamentos contábeis antigos (usando a descrição da conta sintética original)
+        const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+        const oldReceitaDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+        
+        await supabase.from('lancamentos')
+            .delete()
+            .eq('origem', 'lancamento_cp')
+            .eq('proprietario_id', proprietarioId)
+            .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%,descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+            
       } else {
         const { data, error } = await supabase.from(tabelaContasPagar).insert(contaPagarPayload).select('id').single();
         if (error) throw error;
@@ -314,16 +327,17 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       const launchDescription = values.descricao;
       const contaPagarIdShort = contaPagarId.substring(0, 8);
       
-      const idPatrimonial = crypto.randomUUID();
-      const idDespesa = crypto.randomUUID();
+      const idPatrimonial = uuidv4();
+      const idDespesa = uuidv4();
       
+      // Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
       const lancamentoPatrimonialPayload = {
           id: idPatrimonial,
           proprietario_id: proprietarioId,
           data_movimentacao: dataMovimentacao,
           descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Saida' as const,
+          tipo: 'Saida' as const, // CRÉDITO (Saída) no Passivo (Aumenta Passivo Credora)
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_patrimonial_id,
           origem: 'lancamento_cp',
@@ -331,39 +345,22 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           conta_resultado_id: idDespesa,
       };
       
-      if (isEditing) {
-          const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-          await supabase.from('lancamentos')
-              .delete()
-              .eq('origem', 'lancamento_cp')
-              .eq('proprietario_id', proprietarioId)
-              .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-      }
-      
       lancamentosPayload.push(lancamentoPatrimonialPayload);
       
+      // Lançamento 2: D: Despesa/Custo (Resultado) - DÉBITO (Entrada)
       const lancamentoDespesaPayload = {
           id: idDespesa,
           proprietario_id: proprietarioId,
           data_movimentacao: dataMovimentacao,
           descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Entrada' as const,
+          tipo: 'Entrada' as const, // DÉBITO (Entrada) na Despesa (Credora)
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_resultado_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
           conta_resultado_id: idPatrimonial,
       };
-      
-      if (isEditing) {
-          const oldReceitaDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-          await supabase.from('lancamentos')
-              .delete()
-              .eq('origem', 'lancamento_cp')
-              .eq('proprietario_id', proprietarioId)
-              .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
-      }
       
       lancamentosPayload.push(lancamentoDespesaPayload);
       
