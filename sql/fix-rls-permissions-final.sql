@@ -1,95 +1,90 @@
--- 1. Garantir que a tabela de lookup existe e está acessível
-CREATE TABLE IF NOT EXISTS public.admin_user_lookup (
-    id uuid PRIMARY KEY,
-    admin_id uuid NOT NULL
+-- 1. CORREÇÃO DA TABELA admin_usuarios
+ALTER TABLE public.admin_usuarios ENABLE ROW LEVEL SECURITY;
+
+-- Remove políticas antigas para garantir limpeza
+DROP POLICY IF EXISTS "admin_usuarios_select" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_insert" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_update" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_delete" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "Admin pode gerenciar seus usuarios" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "Admin Users can view and update their own profile" ON public.admin_usuarios;
+
+-- Política de LEITURA:
+-- 1. O próprio usuário pode ver seu perfil (id = auth.uid())
+-- 2. O Admin pode ver os usuários que ele criou (admin_id = auth.uid())
+CREATE POLICY "admin_usuarios_select" ON public.admin_usuarios
+FOR SELECT TO authenticated
+USING (
+  id = auth.uid() 
+  OR admin_id = auth.uid()
 );
 
--- Desabilitar RLS na tabela de lookup para evitar recursão (a segurança é feita pela função)
-ALTER TABLE public.admin_user_lookup DISABLE ROW LEVEL SECURITY;
+-- Política de INSERÇÃO:
+-- Apenas o Admin pode inserir novos usuários vinculados a ele
+CREATE POLICY "admin_usuarios_insert" ON public.admin_usuarios
+FOR INSERT TO authenticated
+WITH CHECK (
+  admin_id = auth.uid()
+);
 
--- 2. Forçar sincronização total da tabela de lookup
-TRUNCATE TABLE public.admin_user_lookup;
-INSERT INTO public.admin_user_lookup (id, admin_id)
-SELECT id, admin_id FROM public.admin_usuarios;
+-- Política de ATUALIZAÇÃO:
+-- 1. O Admin pode atualizar os usuários dele
+-- 2. O usuário pode atualizar seu próprio perfil
+CREATE POLICY "admin_usuarios_update" ON public.admin_usuarios
+FOR UPDATE TO authenticated
+USING (
+  id = auth.uid() 
+  OR admin_id = auth.uid()
+)
+WITH CHECK (
+  id = auth.uid() 
+  OR admin_id = auth.uid()
+);
 
--- 3. Recriar a função de segurança com privilégios elevados (SECURITY DEFINER)
-CREATE OR REPLACE FUNCTION public.get_admin_id_for_current_user()
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER -- Executa como superusuário/dono
-SET search_path = public -- Segurança contra search_path injection
-AS $$
-DECLARE
-    v_admin_id uuid;
+-- Política de EXCLUSÃO:
+-- Apenas o Admin pode deletar seus usuários
+CREATE POLICY "admin_usuarios_delete" ON public.admin_usuarios
+FOR DELETE TO authenticated
+USING (
+  admin_id = auth.uid()
+);
+
+-- 2. CORREÇÃO DA TABELA AUXILIAR admin_user_lookup
+-- Esta tabela é mantida automaticamente por trigger, mas o RLS precisa permitir a escrita
+ALTER TABLE public.admin_user_lookup ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "admin_user_lookup_all" ON public.admin_user_lookup;
+DROP POLICY IF EXISTS "Allow all on admin_user_lookup" ON public.admin_user_lookup;
+
+-- Permite acesso total para usuários autenticados nesta tabela auxiliar
+-- (A segurança real está na tabela principal admin_usuarios)
+CREATE POLICY "admin_user_lookup_all" ON public.admin_user_lookup
+FOR ALL TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- 3. REFORÇO DO TRIGGER
+-- Garante que a função do trigger execute com privilégios elevados (SECURITY DEFINER)
+CREATE OR REPLACE FUNCTION public.sync_admin_user_lookup()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
 BEGIN
-    SELECT admin_id INTO v_admin_id
-    FROM public.admin_user_lookup
-    WHERE id = auth.uid();
-    
-    RETURN v_admin_id;
+  IF (TG_OP = 'DELETE') THEN
+    DELETE FROM public.admin_user_lookup WHERE id = OLD.id;
+    RETURN OLD;
+  ELSE
+    -- Upsert para garantir sincronia
+    INSERT INTO public.admin_user_lookup (id, admin_id)
+    VALUES (NEW.id, NEW.admin_id)
+    ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
+    RETURN NEW;
+  END IF;
 END;
-$$;
+$function$;
 
--- 4. Garantir permissões básicas (GRANT) para todos os autenticados
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.admin_identificacao_extrato TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.admin_descricao_extrato TO authenticated;
-GRANT SELECT ON public.admin_user_lookup TO authenticated; -- Leitura básica necessária
-
--- 5. Recriar Políticas RLS para Identificadores (admin_identificacao_extrato)
-ALTER TABLE public.admin_identificacao_extrato ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "admin_identificacao_extrato_select" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_insert" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_update" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_delete" ON public.admin_identificacao_extrato;
-DROP POLICY IF EXISTS "admin_identificacao_extrato_access" ON public.admin_identificacao_extrato;
-
--- Política unificada de LEITURA
-CREATE POLICY "admin_identificacao_extrato_select" ON public.admin_identificacao_extrato
-FOR SELECT TO authenticated
-USING (
-    admin_id = auth.uid() -- O próprio Admin
-    OR 
-    admin_id = public.get_admin_id_for_current_user() -- Funcionário do Admin
-);
-
--- Política unificada de ESCRITA (Insert/Update/Delete)
-CREATE POLICY "admin_identificacao_extrato_write" ON public.admin_identificacao_extrato
-FOR ALL TO authenticated
-USING (
-    admin_id = auth.uid() -- Apenas o Admin pode criar/editar (regra de negócio comum)
-    OR
-    admin_id = public.get_admin_id_for_current_user() -- Funcionário também pode se necessário
-)
-WITH CHECK (
-    admin_id = auth.uid() 
-    OR
-    admin_id = public.get_admin_id_for_current_user()
-);
-
--- 6. Recriar Políticas RLS para Descrições (admin_descricao_extrato)
-ALTER TABLE public.admin_descricao_extrato ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "admin_descricao_extrato_select" ON public.admin_descricao_extrato;
-DROP POLICY IF EXISTS "admin_descricao_extrato_all" ON public.admin_descricao_extrato;
-
-CREATE POLICY "admin_descricao_extrato_select" ON public.admin_descricao_extrato
-FOR SELECT TO authenticated
-USING (
-    admin_id = auth.uid() 
-    OR 
-    admin_id = public.get_admin_id_for_current_user()
-);
-
-CREATE POLICY "admin_descricao_extrato_write" ON public.admin_descricao_extrato
-FOR ALL TO authenticated
-USING (
-    admin_id = auth.uid() 
-    OR 
-    admin_id = public.get_admin_id_for_current_user()
-)
-WITH CHECK (
-    admin_id = auth.uid() 
-    OR 
-    admin_id = public.get_admin_id_for_current_user()
-);
+-- 4. GRANT EXPLÍCITO
+GRANT ALL ON public.admin_usuarios TO authenticated;
+GRANT ALL ON public.admin_user_lookup TO authenticated;
+GRANT ALL ON public.admin_user_lookup TO service_role;
