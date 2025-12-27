@@ -68,7 +68,8 @@ const ContratosTable: React.FC<ContratosTableProps> = ({
                         <TableRow><TableCell colSpan={isSupervisao ? 6 : 5} className="text-center py-4 text-muted-foreground">Nenhum contrato encontrado.</TableCell></TableRow>
                     ) : (
                         list.map(c => {
-                            const canEdit = c.status === 'rascunho' || c.status === 'pendente_assinatura';
+                            // Permite edição se for rascunho, pendente OU BLOQUEADO
+                            const canEdit = c.status === 'rascunho' || c.status === 'pendente_assinatura' || c.status === 'bloqueado';
                             const isMyContract = c.proprietario_id === empresaId;
                             const isCanceledOrBlocked = c.status === 'cancelado' || c.status === 'bloqueado';
                             

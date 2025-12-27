@@ -49,7 +49,7 @@ const PreencherContrato: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   
   // Estados do Formulário
-  const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
+  const [clienteSelecionadoId, setClienteSelecionadoId, ] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number>(0); 
   const [tituloDocumento, setTituloDocumento] = useState('');
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
@@ -404,7 +404,10 @@ const PreencherContrato: React.FC = () => {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId,
-            status,
+            // Se for edição de um contrato bloqueado, o status final deve ser 'pendente_assinatura'
+            status: isEditing && contratoId && (await supabase.from('contratos_gerados').select('status').eq('id', contratoId).single()).data?.status === 'bloqueado' 
+                ? 'pendente_assinatura' 
+                : status,
             valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
@@ -425,6 +428,14 @@ const PreencherContrato: React.FC = () => {
             
             const { error: deleteContasError } = await supabase.from(tabelaContasReceber).delete().eq('contrato_gerado_id', currentContratoId);
             if (deleteContasError) console.warn('Aviso: Falha ao deletar conta sintética antiga:', deleteContasError);
+            
+            // Deletar lançamentos contábeis antigos (se existirem)
+            const oldLaunchDescriptionPrefix = `Contrato: ${tituloDocumento}`;
+            await supabase.from('lancamentos')
+                .delete()
+                .eq('origem', 'lancamento_cr')
+                .eq('proprietario_id', proprietarioContratoId)
+                .ilike('descricao', `%${oldLaunchDescriptionPrefix}%`);
             
         } else {
             const { data, error } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
