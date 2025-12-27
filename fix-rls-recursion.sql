@@ -78,9 +78,13 @@ ALTER TABLE public.admin_usuarios ENABLE ROW LEVEL SECURITY;
 -- Remover políticas antigas
 DROP POLICY IF EXISTS "admin_usuarios_access_policy" ON public.admin_usuarios;
 
--- NOVA POLÍTICA: Um usuário pode ver seu próprio vínculo. Um admin pode ver os vínculos de seus funcionários.
+-- NOVA POLÍTICA: Um usuário pode ver/mudar seu próprio vínculo. Um admin pode gerenciar os vínculos de seus funcionários.
 CREATE POLICY "admin_usuarios_access_policy" ON public.admin_usuarios
-FOR SELECT USING (
+FOR ALL USING (
+  id = auth.uid() 
+  OR admin_id = auth.uid()
+)
+WITH CHECK (
   id = auth.uid() 
   OR admin_id = auth.uid()
 );

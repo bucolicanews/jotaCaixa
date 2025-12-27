@@ -58,11 +58,13 @@ const GerenciarTags = () => {
       .select('*')
       .order('nome_tag', { ascending: true });
       
-    if (isCliente || isUsuario) {
-        // Clientes e Usuários veem apenas tags da sua empresa
+    const isUsuarioCliente = role === 'Usuario' && !!(perfil as any)?.cliente_id;
+      
+    if (isCliente || isUsuarioCliente) {
+        // Clientes e Usuários de Clientes veem apenas tags da sua empresa
         query = query.eq('empresa_id', ownerId);
     } else if (isAdmin) {
-        // Admin vê todas (RLS garante)
+        // Admin e Usuários de Admin veem o que a RLS permitir
     }
     
     if (filtroTextoDebounced) {

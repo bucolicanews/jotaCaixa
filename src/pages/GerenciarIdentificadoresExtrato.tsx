@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface IdentificacaoExtrato {
     id: string;
@@ -26,20 +27,20 @@ interface IdentificacaoExtrato {
 interface FormIdentificacaoProps {
     identificacaoInicial?: IdentificacaoExtrato | null;
     proprietarioId: string;
-    isAdmin: boolean;
+    isSupervisao: boolean;
     onSaveComplete: () => void;
     proximaOrdem: number;
 }
 
-const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ identificacaoInicial, proprietarioId, isAdmin, onSaveComplete, proximaOrdem }) => {
+const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ identificacaoInicial, proprietarioId, isSupervisao, onSaveComplete, proximaOrdem }) => {
     const [descricao, setDescricao] = useState(identificacaoInicial?.descricao || '');
     const [status, setStatus] = useState(identificacaoInicial?.status ?? true);
     const [ordem, setOrdem] = useState(identificacaoInicial?.ordem ?? proximaOrdem);
     const [loading, setLoading] = useState(false);
     const isEditing = !!identificacaoInicial;
 
-    const tabela = isAdmin ? 'admin_identificacao_extrato' : 'identificacao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabela = isSupervisao ? 'admin_identificacao_extrato' : 'identificacao_extrato';
+    const campoId = isSupervisao ? 'admin_id' : 'empresa_id';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -117,7 +118,7 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ identificacaoInic
 };
 
 const GerenciarIdentificadoresExtrato: React.FC = () => {
-    const { perfil, role, carregando: carregandoSessao } = useSessao();
+    const { perfil, role, carregando: carregandoSessao, usuario } = useSessao();
     
     const [identificadores, setIdentificadores] = useState<IdentificacaoExtrato[]>([]);
     const [carregando, setCarregando] = useState(true);
@@ -125,25 +126,26 @@ const GerenciarIdentificadoresExtrato: React.FC = () => {
     const [identificadorSelecionado, setIdentificadorSelecionado] = useState<IdentificacaoExtrato | null>(null);
     const [filtroTexto, setFiltroTexto] = useState('');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
-    
-    const isAdmin = role === 'Admin';
-    const tabela = isAdmin ? 'admin_identificacao_extrato' : 'identificacao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
 
     const getOwnerId = () => {
-        if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+        if (!role || !usuario) return null;
+        if (role === 'Admin') return usuario.id;
+        if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
         if (role === 'Usuario') {
-            const user = perfil as any;
-            if (user?.admin_id) return user.admin_id;
-            if (user?.cliente_id) return user.cliente_id;
+            const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+            if ('admin_id' in user && user.admin_id) return user.admin_id;
+            if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
         }
         return null;
     };
+    const proprietarioId = getOwnerId();
     
-    const ownerId = getOwnerId();
+    const isSupervisao = role === 'Admin' || (role === 'Usuario' && !!(perfil as any)?.admin_id);
+    const tabela = isSupervisao ? 'admin_identificacao_extrato' : 'identificacao_extrato';
+    const campoId = isSupervisao ? 'admin_id' : 'empresa_id';
 
     const buscarIdentificadores = useCallback(async () => {
-        if (!ownerId) {
+        if (!proprietarioId) {
             setCarregando(false);
             return;
         }
@@ -152,7 +154,7 @@ const GerenciarIdentificadoresExtrato: React.FC = () => {
         let query = supabase
             .from(tabela)
             .select('*')
-            .eq(campoId, ownerId)
+            .eq(campoId, proprietarioId)
             .order('ordem', { ascending: true });
             
         if (filtroTextoDebounced) {
@@ -168,13 +170,13 @@ const GerenciarIdentificadoresExtrato: React.FC = () => {
             setIdentificadores(data || []);
         }
         setCarregando(false);
-    }, [ownerId, filtroTextoDebounced, tabela, campoId]);
+    }, [proprietarioId, filtroTextoDebounced, tabela, campoId]);
 
     useEffect(() => {
-        if (!carregandoSessao && ownerId) {
+        if (!carregandoSessao && proprietarioId) {
             buscarIdentificadores();
         }
-    }, [carregandoSessao, ownerId, buscarIdentificadores]);
+    }, [carregandoSessao, proprietarioId, buscarIdentificadores]);
 
     const handleDelete = async (id: string) => {
         const { error } = await supabase.from(tabela).delete().eq('id', id);
@@ -264,11 +266,11 @@ const GerenciarIdentificadoresExtrato: React.FC = () => {
                             <DialogHeader>
                                 <DialogTitle>{identificadorSelecionado ? 'Editar Identificador' : 'Novo Identificador'}</DialogTitle>
                             </DialogHeader>
-                            {ownerId && (
+                            {proprietarioId && (
                                 <FormIdentificacao
                                     identificacaoInicial={identificadorSelecionado}
-                                    proprietarioId={ownerId}
-                                    isAdmin={isAdmin}
+                                    proprietarioId={proprietarioId}
+                                    isSupervisao={isSupervisao}
                                     onSaveComplete={handleDialogClose}
                                     proximaOrdem={proximaOrdem}
                                 />

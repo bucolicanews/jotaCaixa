@@ -26,20 +26,20 @@ interface DescricaoExtrato {
 interface FormDescricaoProps {
     descricaoInicial?: DescricaoExtrato | null;
     proprietarioId: string;
-    isAdmin: boolean;
+    isSupervisao: boolean;
     onSaveComplete: () => void;
     proximaOrdem: number;
 }
 
-const FormDescricao: React.FC<FormDescricaoProps> = ({ descricaoInicial, proprietarioId, isAdmin, onSaveComplete, proximaOrdem }) => {
+const FormDescricao: React.FC<FormDescricaoProps> = ({ descricaoInicial, proprietarioId, isSupervisao, onSaveComplete, proximaOrdem }) => {
     const [descricao, setDescricao] = useState(descricaoInicial?.descricao || '');
     const [status, setStatus] = useState(descricaoInicial?.status ?? true);
     const [ordem, setOrdem] = useState(descricaoInicial?.ordem ?? proximaOrdem);
     const [loading, setLoading] = useState(false);
     const isEditing = !!descricaoInicial;
 
-    const tabela = isAdmin ? 'admin_descricao_extrato' : 'descricao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabela = isSupervisao ? 'admin_descricao_extrato' : 'descricao_extrato';
+    const campoId = isSupervisao ? 'admin_id' : 'empresa_id';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -126,9 +126,9 @@ const GerenciarDescricoesExtrato: React.FC = () => {
     const [filtroTexto, setFiltroTexto] = useState('');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
     
-    const isAdmin = role === 'Admin';
-    const tabela = isAdmin ? 'admin_descricao_extrato' : 'descricao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+    const isSupervisao = role === 'Admin' || (role === 'Usuario' && !!(perfil as any)?.admin_id);
+    const tabela = isSupervisao ? 'admin_descricao_extrato' : 'descricao_extrato';
+    const campoId = isSupervisao ? 'admin_id' : 'empresa_id';
 
     const getOwnerId = () => {
         if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -268,7 +268,7 @@ const GerenciarDescricoesExtrato: React.FC = () => {
                                 <FormDescricao
                                     descricaoInicial={descricaoSelecionada}
                                     proprietarioId={ownerId}
-                                    isAdmin={isAdmin}
+                                    isSupervisao={isSupervisao}
                                     onSaveComplete={handleDialogClose}
                                     proximaOrdem={proximaOrdem}
                                 />

@@ -406,6 +406,8 @@ const GerenciarUsuarios: React.FC = () => {
             <Button 
                 onClick={() => handleOpenDialog(null)}
                 className="w-full sm:w-auto"
+                disabled={isAdminUsuario}
+                title={isAdminUsuario ? 'Apenas o Admin principal pode criar novos usuários.' : buttonText}
             >
               <Plus className="mr-2 h-4 w-4" />
               {buttonText}

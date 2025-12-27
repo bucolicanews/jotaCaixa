@@ -107,24 +107,23 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         role = 'Cliente';
         console.log('[SessionContext] Perfil Cliente carregado:', { id: clienteData.id, email: clienteData.email, admin_id: clienteData.admin_id });
       } else {
-        // 3. Buscar Usuário (Funcionário do Cliente)
-        const usuarioData = await fetchProfile('tbl_usuarios');
-        if (usuarioData) {
-          perfil = usuarioData;
+        // 3. Buscar Usuário (Funcionário do Admin)
+        const adminUsuarioData = await fetchProfile('admin_usuarios');
+        if (adminUsuarioData) {
+          // Mapeia para o tipo AdminUsuarioProfile, garantindo que admin_id seja mapeado corretamente
+          perfil = {
+            ...adminUsuarioData,
+            cliente_id: null,
+            // Tenta admin_id, depois adm_id, depois admin (para robustez)
+            admin_id: adminUsuarioData.admin_id ?? adminUsuarioData.adm_id ?? adminUsuarioData.admin ?? null,
+          } as AdminUsuarioProfile;
+
           role = 'Usuario';
         } else {
-          // 4. Buscar Usuário (Funcionário do Admin)
-          const adminUsuarioData = await fetchProfile('admin_usuarios');
-          
-          if (adminUsuarioData) {
-            // Mapeia para o tipo AdminUsuarioProfile, garantindo que admin_id seja mapeado corretamente
-            perfil = { 
-                ...adminUsuarioData, 
-                cliente_id: null,
-                // Tenta admin_id, depois adm_id, depois admin (para robustez)
-                admin_id: adminUsuarioData.admin_id ?? adminUsuarioData.adm_id ?? adminUsuarioData.admin ?? null
-            } as AdminUsuarioProfile;
-            
+          // 4. Buscar Usuário (Funcionário do Cliente)
+          const usuarioData = await fetchProfile('tbl_usuarios');
+          if (usuarioData) {
+            perfil = usuarioData;
             role = 'Usuario';
           }
         }

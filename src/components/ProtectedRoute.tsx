@@ -37,8 +37,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children
     return <Navigate to="/login" replace />;
   }
 
-  // 🔓 Admin e Cliente passam direto
-  if (role === 'Admin' || role === 'Cliente') {
+  const isUsuarioAdmin = role === 'Usuario' && !!(perfil as any)?.admin_id;
+
+  // 🔓 Admin, their sub-users, and Clients pass directly
+  if (role === 'Admin' || role === 'Cliente' || isUsuarioAdmin) {
     return <>{children}</>;
   }
 

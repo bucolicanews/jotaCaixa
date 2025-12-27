@@ -73,9 +73,7 @@ const GerenciarModelos: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Alinhando com a lógica de GerenciarBlocosSocietarios:
-    // Apenas 'Cliente' tem filtro explícito. Para 'Admin' e 'Usuario', confiamos na RLS do Supabase.
-    if (isCliente) {
+    if (isCliente || (role === 'Usuario' && !!(perfil as any)?.admin_id)) {
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
 
@@ -89,7 +87,7 @@ const GerenciarModelos: React.FC = () => {
       setModelos(data as ExtendedContratoModelo[]);
     }
     setCarregando(false);
-  }, [ownerId, isAdmin, isCliente]);
+  }, [ownerId, isAdmin, isCliente, role, perfil]);
 
   useEffect(() => {
     if (!carregandoSessao && (isAdmin || ownerId)) {
