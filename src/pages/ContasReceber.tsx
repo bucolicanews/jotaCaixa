@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -118,12 +117,11 @@ const ContasReceber = () => {
         contasQuery = contasQuery.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
     }
     
-    // Aplica filtro de texto (busca apenas por descrição no backend)
-    if (filtroTextoDebounced) {
-        const termo = `%${filtroTextoDebounced}%`;
-        // CORREÇÃO: Remove a busca por ID (UUID) e clientes.nome (relação)
-        contasQuery = contasQuery.ilike('descricao', termo);
-    }
+    // REMOVIDO: Filtro de texto no backend para evitar erro de operador em UUID
+    // if (filtroTextoDebounced) {
+    //     const termo = `%${filtroTextoDebounced}%`;
+    //     contasQuery = contasQuery.ilike('descricao', termo);
+    // }
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
@@ -237,7 +235,8 @@ const ContasReceber = () => {
             const termo = filtroTextoDebounced.toLowerCase();
             fetchedContas = fetchedContas.filter(c => 
                 c.id.toLowerCase().includes(termo) ||
-                c.clientes?.nome?.toLowerCase().includes(termo)
+                c.clientes?.nome?.toLowerCase().includes(termo) ||
+                c.descricao.toLowerCase().includes(termo)
             );
         }
         
@@ -374,6 +373,7 @@ const ContasReceber = () => {
         clientes: conta.clientes,
         created_at: conta.created_at,
         updated_at: conta.updated_at,
+        historico_id: conta.historico_id,
         id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
     };
     setContaSelecionada(baseConta);
