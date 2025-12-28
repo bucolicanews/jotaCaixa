@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
+import { usePermissoesUsuario } from '@/hooks/use-permissoes-usuario';
 import { Loader2, Plus, Search, Trash2, Edit, Filter, Users as UsersIcon, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ interface EmpresaFiltro {
 
 const GerenciarUsuarios: React.FC = () => {
   const { usuario, perfil, role, carregando } = useSessao();
+  const { hasPermissao, carregando: carregandoPermissoes } = usePermissoesUsuario();
   const [usuarios, setUsuarios] = useState<UsuarioComEmpresa[]>([]);
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -41,6 +43,8 @@ const GerenciarUsuarios: React.FC = () => {
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   const isUsuario = role === 'Usuario';
+  
+  const canManageUsers = hasPermissao('cadastrar_usuarios');
   
   // Determina se o usuário é funcionário do Admin (admin_usuario)
   const isAdminUsuario = isUsuario && !!(perfil as AdminUsuarioProfile)?.admin_id;
@@ -362,6 +366,7 @@ const GerenciarUsuarios: React.FC = () => {
                                         variant="outline" 
                                         size="icon" 
                                         onClick={() => handleOpenDialog(userProfile)}
+                                        disabled={!canManageUsers}
                                     >
                                         <Edit className="h-4 w-4" />
                                     </Button>
@@ -369,6 +374,7 @@ const GerenciarUsuarios: React.FC = () => {
                                         variant="destructive" 
                                         size="icon" 
                                         onClick={() => handleDelete(id, nome)}
+                                        disabled={!canManageUsers}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -383,7 +389,7 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
 
-  if (carregando || carregandoDados) {
+  if (carregando || carregandoDados || carregandoPermissoes) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -406,8 +412,8 @@ const GerenciarUsuarios: React.FC = () => {
             <Button 
                 onClick={() => handleOpenDialog(null)}
                 className="w-full sm:w-auto"
-                disabled={isAdminUsuario}
-                title={isAdminUsuario ? 'Apenas o Admin principal pode criar novos usuários.' : buttonText}
+                disabled={!canManageUsers}
+                title={!canManageUsers ? 'Você não tem permissão para criar novos usuários.' : buttonText}
             >
               <Plus className="mr-2 h-4 w-4" />
               {buttonText}

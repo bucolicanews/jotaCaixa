@@ -440,6 +440,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 : clientProfile?.data_fim_acesso || null;
             const limiteUsuariosAtualizado = values.limite_usuarios ?? clientProfile?.limite_usuarios ?? 5;
             // Edição de Cliente Profile (tbl_clientes)
+            // Adiciona a verificação para bloquear edição de permissões pelo próprio usuário
+            const isSelfEditing = isEditing && usuarioInicial?.id === criadorPerfil?.id;
+
             const dataToUpdate: Partial<ClienteProfile> = {
                 avatar_url: values.avatar_url || null, // ADICIONADO
                 nome: values.nome,
@@ -447,7 +450,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 admin_id: isAdminContext ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
                 aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
                 limite_usuarios: limiteUsuariosAtualizado,
-                permissoes: values.permissoes,
+                // permissões só podem ser editadas pelo Admin
+                ...(isSelfEditing ? {} : { permissoes: values.permissoes }),
                 plano_id: planoIdAtualizado,
                 data_fim_acesso: dataFimAcessoIso,
                 
@@ -484,7 +488,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             const dataToUpdate: any = { 
                 avatar_url: values.avatar_url || null, // ADICIONADO
                 nome: values.nome,
-                permissoes: values.permissoes,
+                ...(isSelfEditing ? {} : { permissoes: values.permissoes }),
                 
                 // Dados de RH/Contrato
                 dias_folga_fixos: values.dias_folga_fixos || [],
@@ -807,11 +811,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     onUploadComplete={handleAvatarUploadComplete}
                     isReadOnly={isSubmitting || isChildFormReadOnly('pessoal')}
                 />
-              <FormGeral
+              <FormGeral 
                   control={form.control}
                   isSubmitting={isSubmitting}
                   handleSelectAll={handleSelectAll}
                   isReadOnly={isChildFormReadOnly('pessoal')}
+                  isEditingSelfPermissions={isSelfEditUsuario && activeTab === 'pessoal'}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}

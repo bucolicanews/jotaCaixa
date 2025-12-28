@@ -45,8 +45,22 @@ export const usePermissoesUsuario = () => {
     fetchPermissoes();
   }, [usuario, role]);
 
+  const hasPermissao = (permissaoKey: string): boolean => {
+    // Admins e Clientes (proprietários de contas) têm todas as permissões implicitamente,
+    // a menos que estejamos falando de um "Usuario" que é funcionário.
+    if (role === 'Admin' || role === 'Cliente') {
+      // Se a permissão for para gerenciar usuários, o Admin/Cliente sempre tem.
+      // Pode adicionar outras lógicas aqui para diferenciar se necessário.
+      return true;
+    }
+    
+    // Para usuários que são funcionários, verificamos as permissões específicas
+    return permissoes ? permissoes[permissaoKey] === true : false;
+  };
+
   return {
     permissoes,
     carregando,
+    hasPermissao,
   };
 };

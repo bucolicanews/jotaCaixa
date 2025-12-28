@@ -11,6 +11,7 @@ interface FormGeralProps {
   isSubmitting: boolean;
   handleSelectAll: (select: boolean) => void;
   isReadOnly: boolean;
+  isEditingSelfPermissions: boolean;
 }
 
 const FormGeral: React.FC<FormGeralProps> = ({
@@ -18,6 +19,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isSubmitting,
   handleSelectAll,
   isReadOnly,
+  isEditingSelfPermissions,
 }) => {
   
   const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
@@ -63,8 +65,8 @@ const FormGeral: React.FC<FormGeralProps> = ({
         <div className="flex justify-between items-center mb-1">
           <FormLabel className="text-lg font-semibold">Permissoes de Acesso</FormLabel>
           <div className="space-x-2">
-            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly}>Selecionar Todos</Button>
-            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly}>Desmarcar Todos</Button>
+            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isEditingSelfPermissions}>Selecionar Todos</Button>
+            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isEditingSelfPermissions}>Desmarcar Todos</Button>
           </div>
         </div>
         
@@ -77,7 +79,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
                   <FormField key={p.key} control={control} name={`permissoes.${p.key}`} render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                       <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} />
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingSelfPermissions} />
                       </FormControl>
                       <FormLabel className="font-normal text-sm">{p.label}</FormLabel>
                     </FormItem>
