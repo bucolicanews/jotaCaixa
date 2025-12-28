@@ -6,11 +6,12 @@ import {
   DadosSessao,
   AnyProfile,
   UserRole,
+  UsuarioProfile,
   AdminUsuarioProfile,
+  ClienteProfile,
 } from '@/types/usuario';
 import { SetupStatus } from '@/types/setup';
 import { fetchSetupStatus } from '@/utils/setup-status';
-import { resolveOwnerContext } from '@/utils/owner'; // IMPORTADO
 
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
@@ -23,27 +24,56 @@ const DEFAULT_SETUP_STATUS: SetupStatus = {
   missingSteps: [],
 };
 
-const DEFAULT_SESSION_STATE: DadosSessao = {
-  usuario: null,
-  perfil: null,
-  role: null,
-  carregando: true,
-  setupStatus: DEFAULT_SETUP_STATUS,
-  ownerId: null,
-  ownerType: 'Unknown',
-  sourceProfileId: null,
+const resolveOwnerId = (
+  role: UserRole,
+  perfil: AnyProfile,
+  usuario: User | null,
+): string | null => {
+  if (!role || !usuario) return null;
+
+  if (role === 'Admin') {
+    return usuario.id;
+  }
+
+  if (role === 'Cliente') {
+    return (perfil as ClienteProfile)?.id || usuario.id;
+  }
+
+  if (role === 'Usuario' && perfil) {
+    const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
+
+    if ('cliente_id' in userProfile && userProfile?.cliente_id) {
+      return userProfile.cliente_id;
+    }
+
+    if ('admin_id' in userProfile && (userProfile as AdminUsuarioProfile)?.admin_id) {
+      return (userProfile as AdminUsuarioProfile).admin_id;
+    }
+  }
+
+  return null;
 };
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [estado, setEstado] = useState<DadosSessao>(DEFAULT_SESSION_STATE);
+  const [estado, setEstado] = useState<DadosSessao>({
+    usuario: null,
+    perfil: null,
+    role: null,
+    carregando: true,
+    setupStatus: DEFAULT_SETUP_STATUS,
+    ownerId: null,
+  });
   const navigate = useNavigate();
 
   const buscarDadosAdicionais = useCallback(async (user: User | null) => {
     if (!user) {
-      // Define o estado para o padrão, mas garante que o carregamento seja finalizado
       setEstado({
-        ...DEFAULT_SESSION_STATE,
+        usuario: null,
+        perfil: null,
+        role: null,
         carregando: false,
+        setupStatus: DEFAULT_SETUP_STATUS,
+        ownerId: null,
       });
       return;
     }
@@ -65,7 +95,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // 1. Buscar Admin
     const adminData = await fetchProfile('tbl_admins');
-    console.log('[SessionContext] Tentativa de carregar perfil Admin:', adminData);
     if (adminData) {
       perfil = adminData;
       role = 'Admin';
@@ -101,12 +130,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
     
-    const { ownerId, ownerType, sourceProfileId } = resolveOwnerContext(role, perfil);
+    const ownerId = resolveOwnerId(role, perfil, user);
     const setupStatus = await fetchSetupStatus(ownerId);
-    
-    console.log('[SessionContext] Sessão Finalizada:', { role, ownerId, ownerType, setupStatus });
 
-    setEstado({ usuario: user, perfil, role, carregando: false, setupStatus, ownerId, ownerType, sourceProfileId });
+    setEstado({ usuario: user, perfil, role, carregando: false, setupStatus, ownerId });
   }, []);
 
   const refetch = useCallback(async () => {

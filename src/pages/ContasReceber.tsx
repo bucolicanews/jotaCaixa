@@ -52,9 +52,8 @@ interface ParcelaParaPagamento {
 
 
 const ContasReceber = () => {
-  const { usuario, carregando: carregandoSessao, setupStatus } = useSessao();
-  const { ownerId, ownerType } = useOwner();
-  const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+  const { usuario, perfil, role, carregando: carregandoSessao, setupStatus } = useSessao();
+  const { ownerId, ownerType } = useOwner(); // USANDO useOwner
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -70,14 +69,21 @@ const ContasReceber = () => {
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos');
-  const [filtroTexto, setFiltroTexto] = useState('');
-  const filtroTextoDebounced = useDebounce(filtroTexto, 500);
+  const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
 
-  const proprietarioId = ownerId;
-  const isSupervisao = ownerType === 'Admin' || ownerType === 'AdminUsuario';
-  const isClienteContext = ownerType === 'Cliente' || ownerType === 'ClienteUsuario';
+  const isAdmin = role === 'Admin';
   
-  const shouldBlockSetup = isClienteContext && setupStatus && !setupStatus.isComplete;
+  const proprietarioId = ownerId; // USANDO ownerId
+  const isClientUser =
+    role === 'Usuario' &&
+    perfil &&
+    'cliente_id' in perfil &&
+    Boolean((perfil as UsuarioProfile)?.cliente_id);
+  const shouldBlockSetup =
+    (role === 'Cliente' || isClientUser) &&
+    setupStatus &&
+    !setupStatus.isComplete;
 
   const buscarDados = useCallback(async () => {
     if (!proprietarioId || shouldBlockSetup) {
@@ -87,18 +93,20 @@ const ContasReceber = () => {
     
     setCarregandoDados(true);
     
-    const tabelaContasReceber = isSupervisao ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isSupervisao ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-    const tabelaRecebimentos = isSupervisao ? 'admin_recebimentos' : 'recebimentos'; // Assumindo que cliente tenha
-    const tabelaClientes = isSupervisao ? 'tbl_clientes' : 'clientes';
-    const ownerKey = isSupervisao ? 'admin_id' : 'proprietario_id';
+    // Determina a tabela e a chave de filtro
+    const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
+    const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
+    // --- 1. Buscar Contas Sintéticas ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
         .select(`*`)
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true });
         
+    // Aplica filtros de período
     if (filtroPeriodo?.from) {
         contasQuery = contasQuery.gte('data_vencimento', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
@@ -108,16 +116,37 @@ const ContasReceber = () => {
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
+      
+      // --- 2. Buscar Parcelas (Analítico) - Sem JOIN automático de clientes ---
       supabase
         .from(tabelaParcelasReceber)
-        .select(`*, contas_receber: ${tabelaContasReceber} (id, descricao, cliente_id, origem)`)
+        .select(`
+          *,
+          contas_receber: ${tabelaContasReceber} (
+            id,
+            descricao,
+            cliente_id,
+            origem
+          )
+        `)
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true }),
-      supabase
-        .from(tabelaRecebimentos)
-        .select(`*, saldo_contas ( nome ), ${tabelaParcelasReceber} ( numero_parcela, ${tabelaContasReceber} ( id, descricao, origem, cliente_id ) )`)
-        .eq(ownerKey, proprietarioId)
-        .order('data_recebimento', { ascending: false }),
+        
+      // --- 3. Buscar Recebimentos (Histórico) ---
+      (ownerType === 'Admin' || ownerType === 'AdminUsuario') ? supabase
+        .from('admin_recebimentos')
+        .select(`
+          *,
+          saldo_contas ( nome ),
+          admin_parcelas_receber (
+            numero_parcela,
+            admin_contas_receber ( id, descricao, origem, cliente_id )
+          )
+        `)
+        .eq('admin_id', proprietarioId)
+        .not('cliente_id', 'is', null)
+        .order('data_recebimento', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (contasRes.error) {
@@ -125,56 +154,109 @@ const ContasReceber = () => {
         setCarregandoDados(false);
         return;
     }
+    
     if (parcelasRes.error) {
         showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
         setCarregandoDados(false);
         return;
     }
-     if (recebimentosRes.error) {
-        showError('Erro ao carregar recebimentos: ' + recebimentosRes.error.message);
-     }
     
     let fetchedContas = contasRes.data as ContaReceberComProgresso[];
     let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
         
-    const clienteIds = [...new Set([
-        ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
-        ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
-    ])];
+        // --- Buscar nomes dos clientes da tabela correta ---
+        const clienteIds = [...new Set([
+            ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
+            ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
+        ])];
         
-    let clienteMap: Record<string, string> = {};
-    if (clienteIds.length > 0) {
-        const { data: clientesData } = await supabase.from(tabelaClientes).select('id, nome').in('id', clienteIds);
-        if (clientesData) {
-            clienteMap = clientesData.reduce((acc, c) => { acc[c.id] = c.nome; return acc; }, {} as Record<string, string>);
-            fetchedContas = fetchedContas.map(conta => ({ ...conta, clientes: conta.cliente_id && clienteMap[conta.cliente_id] ? { nome: clienteMap[conta.cliente_id] } as any : conta.clientes }));
-            fetchedParcelas = fetchedParcelas.map(parcela => ({ ...parcela, contas_receber: parcela.contas_receber ? { ...parcela.contas_receber, clientes: parcela.contas_receber.cliente_id && clienteMap[parcela.contas_receber.cliente_id] ? { nome: clienteMap[parcela.contas_receber.cliente_id] } : null } : null }));
+        let clienteMap: Record<string, string> = {};
+        if (clienteIds.length > 0) {
+            const { data: clientesData } = await supabase
+                .from(tabelaClientes)
+                .select('id, nome')
+                .in('id', clienteIds);
+                
+            if (clientesData) {
+                clienteMap = clientesData.reduce((acc, c) => {
+                    acc[c.id] = c.nome;
+                    return acc;
+                }, {} as Record<string, string>);
+                
+                // Merge dos nomes dos clientes nas contas
+                fetchedContas = fetchedContas.map(conta => ({
+                    ...conta,
+                    clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
+                        ? { nome: clienteMap[conta.cliente_id] } as any
+                        : conta.clientes
+                }));
+                
+                // Merge dos nomes dos clientes nas parcelas
+                fetchedParcelas = fetchedParcelas.map(parcela => ({
+                    ...parcela,
+                    contas_receber: parcela.contas_receber ? {
+                        ...parcela.contas_receber,
+                        clientes: parcela.contas_receber.cliente_id && clienteMap[parcela.contas_receber.cliente_id]
+                            ? { nome: clienteMap[parcela.contas_receber.cliente_id] }
+                            : null
+                    } : null
+                }));
+            }
         }
-    }
         
-    const parcelasPorConta = fetchedParcelas.reduce((acc, p) => {
-        acc[p.conta_receber_id] = acc[p.conta_receber_id] || [];
-        acc[p.conta_receber_id].push(p);
-        return acc;
-    }, {} as Record<string, ExtendedParcelaDetalhada[]>);
+        // --- Lógica para calcular progresso de pagamento ---
+        const parcelasPorConta = fetchedParcelas.reduce((acc, p) => {
+            acc[p.conta_receber_id] = acc[p.conta_receber_id] || [];
+            acc[p.conta_receber_id].push(p);
+            return acc;
+        }, {} as Record<string, ExtendedParcelaDetalhada[]>);
         
-    fetchedContas = fetchedContas.map(conta => {
-        const parcelas = parcelasPorConta[conta.id] || [];
-        const pagas = parcelas.filter(p => p.status === 'paga').length;
-        return { ...conta, parcelas_pagas: pagas, parcelas_total: parcelas.length };
-    });
+        fetchedContas = fetchedContas.map(conta => {
+            const parcelas = parcelasPorConta[conta.id] || [];
+            const pagas = parcelas.filter(p => p.status === 'paga').length;
+            return {
+                ...conta,
+                parcelas_pagas: pagas,
+                parcelas_total: parcelas.length,
+            };
+        });
         
-    if (filtroTextoDebounced) {
-        const termo = filtroTextoDebounced.toLowerCase();
-        fetchedContas = fetchedContas.filter(c => c.id.toLowerCase().includes(termo) || c.clientes?.nome?.toLowerCase().includes(termo) || c.descricao.toLowerCase().includes(termo));
-    }
+        // FILTRAGEM DE TEXTO NO FRONTEND (para clientes.nome e id)
+        if (filtroTextoDebounced) {
+            const termo = filtroTextoDebounced.toLowerCase();
+            fetchedContas = fetchedContas.filter(c => 
+                c.id.toLowerCase().includes(termo) ||
+                c.clientes?.nome?.toLowerCase().includes(termo) ||
+                c.descricao.toLowerCase().includes(termo)
+            );
+        }
         
     setContas(fetchedContas);
     setParcelas(fetchedParcelas);
-    setRecebimentos((recebimentosRes.data as AdminRecebimento[]) || []);
-    setClienteNomeMap(clienteMap);
+    
+    if ((ownerType === 'Admin' || ownerType === 'AdminUsuario') && recebimentosRes.data) {
+        setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
+        
+        // Atualiza o mapa de nomes de clientes para recebimentos
+        const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
+        
+        // 1. Buscar nomes dos clientes (tbl_clientes)
+        const { data: clientesData } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome')
+            .in('id', clienteIds);
+            
+        if (clientesData) {
+            const map = clientesData.reduce((acc, c) => {
+                acc[c.id] = c.nome;
+                return acc;
+            }, {} as Record<string, string>);
+            setClienteNomeMap(map);
+        }
+    }
+
     setCarregandoDados(false);
-  }, [proprietarioId, ownerType, isSupervisao, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
+  }, [proprietarioId, ownerType, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -193,22 +275,37 @@ const ContasReceber = () => {
     buscarDados();
   };
 
+  // CORREÇÃO: Implementação da função handleEdit
   const handleEdit = (conta: ContaReceberComProgresso) => {
+    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
     const baseConta: ContaReceber = {
-        ...conta,
-        empresa_id: proprietarioId!,
+        id: conta.id,
+        empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
+        cliente_id: conta.cliente_id,
+        origem: conta.origem,
+        descricao: conta.descricao,
+        valor_total: conta.valor_total,
+        data_emissao: conta.data_emissao,
+        data_vencimento: conta.data_vencimento,
+        status: conta.status,
+        tipo_receita: conta.tipo_receita,
+        clientes: conta.clientes,
+        created_at: conta.created_at,
+        updated_at: conta.updated_at,
+        historico_id: conta.historico_id,
+        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
     };
     setContaSelecionada(baseConta);
     setDialogAberto(true);
   };
 
   const handleDelete = async (contaId: string) => {
-    if (!proprietarioId) return;
     setCarregandoDados(true);
-    const tabelaContasReceber = isSupervisao ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isSupervisao ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     try {
+      // 1. Verificar se existem parcelas vinculadas
       const { count: parcelasCount, error: countError } = await supabase
           .from(tabelaParcelasReceber)
           .select('*', { count: 'exact', head: true })
@@ -222,9 +319,11 @@ const ContasReceber = () => {
         return;
       }
       
+      // 2. Buscar a descrição da conta sintética antes de deletar
       const contaToDelete = contas.find(c => c.id === contaId);
       const descricaoBusca = contaToDelete?.descricao || '';
       
+      // 3. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
       if (descricaoBusca) {
           const { error: deleteLancamentosError } = await supabase
               .from('lancamentos')
@@ -235,7 +334,9 @@ const ContasReceber = () => {
           if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
       }
       
+      // 4. Deletar a conta sintética
       const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
+      
       if (error) throw error;
       
       showSuccess('Conta excluída com sucesso.');
@@ -246,18 +347,38 @@ const ContasReceber = () => {
     }
   };
   
+  // CORREÇÃO: Atualiza handleOpenParcelas para aceitar ContaReceberComProgresso
   const handleOpenParcelas = (conta: ContaReceberComProgresso) => {
+    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
     const baseConta: ContaReceber = {
-        ...conta,
-        empresa_id: proprietarioId!,
+        id: conta.id,
+        empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
+        cliente_id: conta.cliente_id,
+        origem: conta.origem,
+        descricao: conta.descricao,
+        valor_total: conta.valor_total,
+        data_emissao: conta.data_emissao,
+        data_vencimento: conta.data_vencimento,
+        status: conta.status,
+        tipo_receita: conta.tipo_receita,
+        clientes: conta.clientes,
+        created_at: conta.created_at,
+        updated_at: conta.updated_at,
+        historico_id: conta.historico_id,
+        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
     };
     setContaSelecionada(baseConta);
     setParcelasDialogOpen(true);
   };
   
   const handleOpenPagamento = (parcela: any) => {
-    const contaReceber = parcela.contas_receber;
-    const clienteId: string | null = contaReceber?.cliente_id || null; 
+    const isMyLaunch = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+    
+    const contaReceber = isMyLaunch 
+        ? (parcela as ExtendedParcelaDetalhada).contas_receber
+        : (parcela as ExtendedParcelaDetalhada).contas_receber;
+        
+    let clienteId: string | null = (contaReceber?.cliente_id as string | null) || null; 
         
     const mappedParcela: ParcelaParaPagamento = {
         id: parcela.id,

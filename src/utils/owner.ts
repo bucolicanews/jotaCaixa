@@ -1,4 +1,4 @@
-import { AnyProfile, UserRole, AdminUsuarioProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
+import { AnyProfile, UserRole, AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 type OwnerType = 'Admin' | 'Cliente' | 'AdminUsuario' | 'ClienteUsuario' | 'Unknown';
 
@@ -17,20 +17,17 @@ const hasClienteId = (perfil: AnyProfile): perfil is UsuarioProfile =>
 const isClienteProfile = (perfil: AnyProfile): perfil is ClienteProfile =>
   !!perfil && 'limite_usuarios' in perfil && typeof perfil.id === 'string';
 
-const isAdminProfile = (perfil: AnyProfile): perfil is AdminProfile =>
-  !!perfil && 'plano' in perfil && typeof perfil.id === 'string';
-
 /**
  * Resolve o ID do proprietário (Admin ou Cliente) que deve ser usado para consultas
- * multi-tenant. Garante que funcionários vinculados a um Admin/Cliente utilizem o ID do proprietário.
- * ESTA É A ÚNICA FONTE DE VERDADE PARA A LÓGICA DE PROPRIETÁRIO.
+ * multi-tenant. Garante que funcionários vinculados a um Admin utilizem o admin_id.
  */
 export const resolveOwnerContext = (
   role: UserRole,
   perfil: AnyProfile,
+  usuarioId?: string | null,
 ): OwnerContext => {
-  if (role === 'Admin' && isAdminProfile(perfil)) {
-    return { ownerId: perfil.id, ownerType: 'Admin', sourceProfileId: perfil.id };
+  if (role === 'Admin') {
+    return { ownerId: usuarioId ?? null, ownerType: 'Admin', sourceProfileId: usuarioId ?? null };
   }
 
   if (role === 'Cliente' && isClienteProfile(perfil)) {
@@ -48,7 +45,5 @@ export const resolveOwnerContext = (
     }
   }
 
-  // Fallback para garantir que um ID de usuário não se torne um ownerId por engano.
-  const sourceId = perfil?.id ?? null;
-  return { ownerId: null, ownerType: 'Unknown', sourceProfileId: sourceId };
+  return { ownerId: null, ownerType: 'Unknown', sourceProfileId: usuarioId ?? null };
 };

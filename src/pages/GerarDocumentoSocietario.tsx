@@ -71,11 +71,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [searchParams] = useSearchParams();
   const documentoId = searchParams.get('documentoId');
   const navigate = useNavigate();
-  const { perfil, carregando: carregandoSessao } = useSessao();
-  const { ownerId, ownerType } = useOwner();
-
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
-  const [documentoInicial, setDocumentoInicial] = useState<DocumentoSocietarioGerado | null>(null);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
@@ -87,17 +85,33 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [previewTitle, setPreviewTitle] = useState('');
   
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
+  const [empresaLogada, setEmpresaLogada] = useState<any>(null);
   
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
-  const isSupervisaoContext = ownerType === 'Admin' || ownerType === 'AdminUsuario';
 
+  const isAdmin = role === 'Admin';
+  const isClient = role === 'Cliente';
+  
+  const getOwnerIdLogado = () => {
+    if (isAdmin) return usuario?.id || null;
+    if (isClient) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') {
+      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+      if ('admin_id' in user && user.admin_id) return user.admin_id;
+      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
+    return null;
+  };
+  
+  const ownerIdLogado = getOwnerIdLogado();
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         titulo_documento: '',
         cliente_id: '',
-        proprietario_documento_id: ownerId || '',
+        proprietario_documento_id: '',
         tipo_conteudo: 'html',
         valores_tags: {},
     },
@@ -107,114 +121,45 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const clienteSelecionadoId = watch('cliente_id');
   const proprietarioDocumentoId = watch('proprietario_documento_id');
+  const tituloDocumento = watch('titulo_documento');
+  const tipoConteudo = watch('tipo_conteudo');
   const valoresTags = watch('valores_tags') || {};
 
-  const fetchDependentData = useCallback(async (targetOwnerId: string) => {
-    if (!targetOwnerId) return;
+  // Cliente selecionado (para preenchimento de tags)
+  const clienteSelecionado = useMemo(() => {
+      return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
+  }, [clientesCR, clienteSelecionadoId]);
 
-    const { data: tagsData } = await supabase
-        .from('contrato_tags')
-        .select('*')
-        .eq('proprietario_id', targetOwnerId);
-    setTagsCustomizadas(tagsData || []);
+  // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
+  const empresaLogadaMemo = useMemo(() => {
+    if (!perfil) return null;
+    const profile = perfil as AdminProfile | ClienteProfile;
     
-    const { data: ownerProfile } = await supabase
-        .from('tbl_admins')
-        .select('id')
-        .eq('id', targetOwnerId)
-        .maybeSingle();
-        
-    const isTargetAdmin = !!ownerProfile;
+    const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
+    const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
+    
+    return {
+        nome: profile.nome, 
+        email: profile.email, 
+        documento: isAdmin ? documentoAdmin : documentoCliente,
+        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile)?.cpf, 
+        cnpj: (profile as AdminProfile).cnpj, 
+        rg: (profile as AdminProfile).rg || (profile as ClienteProfile)?.rg, 
+        telefone: (profile as AdminProfile).telefone || (profile as ClienteProfile)?.telefone,
+        cep: (profile as AdminProfile).cep || (profile as ClienteProfile)?.cep, 
+        endereco: (profile as AdminProfile).endereco || (profile as ClienteProfile)?.endereco, 
+        numero: (profile as AdminProfile).numero || (profile as ClienteProfile)?.numero, 
+        complemento: (profile as AdminProfile).complemento || (profile as ClienteProfile)?.complemento,
+        bairro: (profile as AdminProfile).bairro || (profile as ClienteProfile)?.bairro, 
+        cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
+        estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
+    };
+  }, [perfil, isAdmin, isClient]);
 
-    let clientesDataSource;
-    if (isTargetAdmin) {
-      clientesDataSource = await supabase
-        .from('tbl_clientes')
-        .select('*')
-        .eq('admin_id', targetOwnerId)
-        .eq('aprovado', true)
-        .order('nome');
-    } else {
-      clientesDataSource = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', targetOwnerId)
-        .order('nome');
-    }
-    
-    const { data: clientesData } = clientesDataSource;
-    const uniqueClients = clientesData ? Array.from(new Map(clientesData.map(item => [item.id, item])).values()) : [];
-    setClientesCR(uniqueClients as ClienteCRCompleto[]);
-  }, []);
-
-  const buscarDadosIniciais = useCallback(async () => {
-    if (!ownerId) return;
-    setCarregandoDados(true);
-    
-    let currentModelo: DocumentoSocietarioModelo | null = null;
-    let initialProprietarioId = ownerId;
-    let initialValoresTags: Record<string, string> = {};
-    let initialClienteId = '';
-    
-    if (documentoId) {
-        const { data: doc, error } = await supabase.from('documentos_societarios_gerados').select('*').eq('id', documentoId).single();
-        if (error || !doc) {
-            showError('Documento para edição não encontrado.');
-            navigate('/documentos-societarios', { replace: true });
-            return;
-        }
-        setDocumentoInicial(doc);
-        initialProprietarioId = doc.proprietario_id;
-        initialClienteId = doc.cliente_id || '';
-        initialValoresTags = doc.valores_tags_preenchidos || {};
-        const { data: modeloData } = await supabase.from('modelos_societarios').select('*').eq('id', doc.modelo_id).single();
-        currentModelo = modeloData as DocumentoSocietarioModelo;
-    } else if (modeloId) {
-        const { data: modeloData, error } = await supabase.from('modelos_societarios').select('*').eq('id', modeloId).single();
-        if (error || !modeloData) {
-            showError('Modelo não encontrado.');
-            navigate('/documentos-societarios/modelos', { replace: true });
-            return;
-        }
-        currentModelo = modeloData as DocumentoSocietarioModelo;
-        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = currentModelo.conteudo_template;
-    }
-    
-    setModelo(currentModelo);
-
-    if (isSupervisaoContext) {
-        const { data: clientesData } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true).order('nome');
-        const adminOption: EmpresaContrato = { id: ownerId, nome: 'Meus Documentos (Admin)' };
-        setEmpresasContrato([adminOption, ...(clientesData as EmpresaContrato[] || [])]);
-    }
-    
-    await fetchDependentData(initialProprietarioId);
-    
-    form.reset({
-        titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
-        cliente_id: initialClienteId,
-        proprietario_documento_id: initialProprietarioId,
-        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
-        valores_tags: initialValoresTags,
-    });
-    
-    setCarregandoDados(false);
-  }, [documentoId, modeloId, ownerId, isSupervisaoContext, navigate, fetchDependentData, form]);
-
-  useEffect(() => {
-    if (!carregandoSessao) {
-      buscarDadosIniciais();
-    }
-  }, [carregandoSessao, buscarDadosIniciais]);
-  
-  useEffect(() => {
-    if (proprietarioDocumentoId && !carregandoDados) {
-      fetchDependentData(proprietarioDocumentoId);
-    }
-  }, [proprietarioDocumentoId, fetchDependentData, carregandoDados]);
-
+  // --- Lógica de Preenchimento de Tags (Refatorada para ser chamada apenas na inicialização) ---
   const allAvailableTags = useMemo(() => {
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+      
       const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
           acc[tag.nome_tag] = tag;
           return acc;
@@ -222,48 +167,219 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
-      return Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => customTagsMap[tagKey] || tagsNaoFinanceiras.find(t => t.nome_tag === tagKey))
+      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => {
+              const customTag = customTagsMap[tagKey];
+              const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
+              return customTag || defaultTag;
+          })
           .filter((t): t is any => !!t)
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+          
+      return uniqueTags;
   }, [tagsCustomizadas]);
 
-  const empresaLogadaMemo = useMemo(() => {
-    if (!perfil) return null;
-    const p = perfil as any;
-    return {
-        nome: p.nome, email: p.email, documento: p.documento || p.cnpj || p.cpf,
-        cpf: p.cpf, cnpj: p.cnpj, rg: p.rg, telefone: p.telefone, cep: p.cep,
-        endereco: p.endereco, numero: p.numero, complemento: p.complemento,
-        bairro: p.bairro, cidade: p.cidade, estado: p.estado,
-    };
-  }, [perfil]);
-
-  const clienteSelecionado = useMemo(() => 
-      clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId)
-  , [clientesCR, clienteSelecionadoId]);
-
-  useEffect(() => {
-    const newTags: Record<string, string> = {};
-    allAvailableTags.forEach(tag => {
-        const tagKey = tag.nome_tag;
-        let tagValue: string | null = null;
-        if (tag.origem_dado) {
-            const [sourceTable, sourceField] = tag.origem_dado.split('.');
-            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogadaMemo) {
-                tagValue = (empresaLogadaMemo as any)[sourceField];
-            } else if (sourceTable === 'clientes' && clienteSelecionado) {
-                tagValue = (clienteSelecionado as any)[sourceField];
-            }
-        }
-        newTags[tagKey] = tagValue || getValues('valores_tags')?.[tagKey] || '';
+  const applyTagsToForm = useCallback((
+      currentTags: Record<string, string>, 
+      cliente: ClienteCRCompleto | undefined, 
+      empresa: any, 
+      modeloTemplate: string
+  ) => {
+      const newTags: Record<string, string> = {};
+      
+      allAvailableTags.forEach(tag => {
+          const tagKey = tag.nome_tag;
+          let tagValue: string | null = null;
+          
+          if (tag.origem_dado) {
+              const [sourceTable, sourceField] = tag.origem_dado.split('.');
+              
+              // Mapeamento de dados da Empresa Logada (Contratante)
+              if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresa) {
+                  const empresaData = empresa as any;
+                  if (empresaData && empresaData[sourceField]) {
+                      tagValue = String(empresaData[sourceField]);
+                  }
+              } 
+              
+              // Mapeamento de dados do Cliente Selecionado (Contratado)
+              else if (sourceTable === 'clientes' && cliente) {
+                  const clienteData = cliente as any;
+                  if (clienteData && clienteData[sourceField]) {
+                      tagValue = String(clienteData[sourceField]);
+                  }
+              } 
+          }
+          
+          if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
+              newTags[tagKey] = tagValue;
+          } else {
+              // Mantém o valor digitado anteriormente (se existir)
+              newTags[tagKey] = currentTags[tagKey] || '';
+          }
+      });
+      
+      // Garante que o CONTEUDO_PRINCIPAL seja mantido ou inicializado
+      newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modeloTemplate || '';
+      
+      // Atualiza o campo de tags no RHF
+      setValue('valores_tags', newTags, { shouldDirty: true });
+  }, [allAvailableTags, setValue]);
+  
+  // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
+  const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
+    if (!targetEmpresaId || !ownerIdLogado) return;
+    
+    // 1. Buscar Tags Customizadas ATIVAS
+    const { data: tagsData } = await supabase
+        .from('contrato_tags')
+        .select('*')
+        .eq('empresa_id', targetEmpresaId)
+        .order('nome_tag', { ascending: true });
+        
+    if (tagsData) {
+        const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+        const allTags = [...tagsNaoFinanceiras, ...tagsData]
+            .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
+            .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+        setTagsCustomizadas(allTags);
+    }
+    
+    // 2. Buscar Clientes (Contratados)
+    let queryClients = supabase
+        .from('tbl_clientes')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+        .eq('admin_id', targetEmpresaId)
+        .eq('aprovado', true)
+        .neq('id', targetEmpresaId)
+        .order('nome');
+        
+    const { data: clientesSistemaData } = await queryClients;
+    
+    // 3. Buscar Clientes CR (que não são clientes do sistema)
+    const { data: clientesCRData } = await supabase
+        .from('clientes')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+        .eq('proprietario_id', targetEmpresaId)
+        .order('nome');
+        
+    // 4. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
+    const combinedClientsMap = new Map<string, ClienteCRCompleto>();
+    
+    // Adiciona clientes do sistema (tbl_clientes)
+    (clientesSistemaData || []).forEach(c => {
+        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
     });
+    
+    // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
+    (clientesCRData || []).forEach(c => {
+        if (!combinedClientsMap.has(c.id)) {
+            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+        }
+    });
+        
+    setClientesCR(Array.from(combinedClientsMap.values()));
+    
+  }, [ownerIdLogado]);
 
-    const currentContent = getValues('valores_tags')?.['{{CONTEUDO_PRINCIPAL}}'];
-    newTags['{{CONTEUDO_PRINCIPAL}}'] = currentContent || modelo?.conteudo_template || '';
 
-    setValue('valores_tags', newTags, { shouldDirty: false });
-  }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, modelo, setValue, getValues]);
+  // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
+  const buscarDados = useCallback(async () => {
+    if ((!modeloId && !documentoId) || !ownerIdLogado) {
+        setCarregandoDados(false);
+        return;
+    }
+    
+    setCarregandoDados(true);
+    
+    let initialProprietarioDocumentoId = ownerIdLogado;
+    let currentModelo: DocumentoSocietarioModelo | null = null;
+    let initialValoresTags: Record<string, string> = {};
+    let initialClienteId = '';
+    
+    // 1. Carregar Documento Inicial (se for edição)
+    if (documentoId) {
+        const { data: doc, error: docLoadError } = await supabase
+            .from('documentos_societarios_gerados')
+            .select('*, modelos_societarios(tipo_conteudo)')
+            .eq('id', documentoId)
+            .single();
+            
+        if (docLoadError) {
+            showError('Documento para edição não encontrado ou acesso negado.');
+            navigate('/documentos-societarios', { replace: true });
+            return;
+        }
+        
+        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
+        setDocumentoInicial(documento);
+        initialProprietarioDocumentoId = documento.proprietario_id;
+        initialClienteId = documento.cliente_id || '';
+        initialValoresTags = documento.valores_tags_preenchidos || {};
+        
+        // 1.1. Buscar Modelo associado (apenas para ter o objeto completo)
+        const { data: modeloData } = await supabase
+            .from('modelos_societarios')
+            .select('*, tipo_conteudo')
+            .eq('id', documento.modelo_id)
+            .single();
+        currentModelo = modeloData as DocumentoSocietarioModelo;
+        
+    } else if (modeloId) {
+        // 2. Buscar Modelo (se for criação)
+        const { data: modeloData, error: modeloError } = await supabase
+            .from('modelos_societarios')
+            .select('*, tipo_conteudo')
+            .eq('id', modeloId)
+            .single();
+            
+        if (modeloError) {
+            showError('Modelo não encontrado ou acesso negado.');
+            navigate('/documentos-societarios', { replace: true });
+            return;
+        }
+        currentModelo = modeloData as DocumentoSocietarioModelo;
+        
+        // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = currentModelo.conteudo_template;
+    }
+    
+    setModelo(currentModelo);
+    
+    // 3. Configurar Empresas Contratantes (Apenas Admin)
+    let empresasContratoList: EmpresaContrato[] = [];
+    if (isAdmin) {
+        const { data: clientesData } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome')
+            .eq('aprovado', true)
+            .order('nome');
+            
+        if (clientesData) {
+            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
+            empresasContratoList = [adminOption, ...(clientesData as EmpresaContrato[])];
+            if (!documentoId) initialProprietarioDocumentoId = empresasContratoList[0].id;
+        }
+    }
+    setEmpresasContrato(empresasContratoList);
+    
+    // 4. Carregar dados dependentes (clientes e tags)
+    await fetchDependentData(initialProprietarioDocumentoId || ownerIdLogado);
+    
+    // 5. Resetar o formulário com os dados carregados (USANDO VARIÁVEIS LOCAIS)
+    form.reset({
+        titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
+        cliente_id: initialClienteId,
+        proprietario_documento_id: initialProprietarioDocumentoId || '',
+        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
+        valores_tags: initialValoresTags,
+    });
+    
+    setEmpresaLogada(empresaLogadaMemo);
+    setCarregandoDados(false);
+    
+  // Removi `documentoInicial` das dependências para evitar loop
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form, fetchDependentData]);
   
   // Efeito para monitorar a mudança do proprietário do documento (para recarregar clientes e tags)
   useEffect(() => {

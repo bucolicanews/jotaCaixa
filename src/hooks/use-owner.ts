@@ -1,11 +1,9 @@
+import { useMemo } from 'react';
 import { useSessao } from './use-sessao';
+import { resolveOwnerContext } from '@/utils/owner';
 
-/**
- * Hook para acessar o contexto do proprietário (owner) resolvido a partir da sessão.
- * Fornece o `ownerId` que deve ser usado em todas as consultas de dados multi-tenant.
- */
 export const useOwner = () => {
-  const { ownerId, ownerType, sourceProfileId } = useSessao();
+  const { usuario, perfil, role } = useSessao();
 
-  return { ownerId, ownerType, sourceProfileId };
+  return useMemo(() => resolveOwnerContext(role, perfil, usuario?.id), [role, perfil, usuario?.id]);
 };

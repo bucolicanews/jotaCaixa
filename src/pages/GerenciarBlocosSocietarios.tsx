@@ -17,31 +17,40 @@ import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietari
 import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 const GerenciarBlocosSocietarios: React.FC = () => {
-  const { carregando: carregandoSessao } = useSessao();
-  const { ownerId, ownerType } = useOwner();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // USANDO useOwner
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [blocoSelecionado, setBlocoSelecionado] = useState<BlocoSocietario | null>(null);
   const [activeTab, setActiveTab] = useState('meus_blocos');
 
-  const isSupervisaoContext = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  
+  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarBlocos = useCallback(async () => {
-    if (!ownerId) {
+    if (!proprietarioId && !isAdmin) {
+        setBlocos([]);
         setCarregando(false);
         return;
     }
     
     setCarregando(true);
     
-    let query = supabase.from('blocos_societarios').select('*');
+    let query = supabase
+      .from('blocos_societarios')
+      .select('*')
+      .order('titulo', { ascending: true });
       
-    if (ownerType === 'Cliente' || ownerType === 'ClienteUsuario') {
-        query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
+    // Se for Cliente/Usuário, busca apenas os seus blocos (ownerId) e blocos globais (proprietario_id is null)
+    if (!isAdmin && proprietarioId) {
+        query = query.or(`proprietario_id.eq.${proprietarioId},proprietario_id.is.null`);
     }
+    // Se for Admin, a RLS permite ver todos os blocos (seus e dos clientes)
 
-    const { data, error } = await query.order('titulo', { ascending: true });
+    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar blocos: ' + error.message);
@@ -50,13 +59,13 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       setBlocos(data as BlocoSocietario[]);
     }
     setCarregando(false);
-  }, [ownerId, ownerType]);
+  }, [proprietarioId, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao) {
+    if (!carregandoSessao && (isAdmin || proprietarioId)) {
       buscarBlocos();
     }
-  }, [carregandoSessao, buscarBlocos]);
+  }, [carregandoSessao, isAdmin, proprietarioId, buscarBlocos]);
   
   const handleSaveComplete = () => {
       setDialogOpen(false);
@@ -93,26 +102,30 @@ const GerenciarBlocosSocietarios: React.FC = () => {
   };
   
   const blocosFiltrados = useMemo(() => {
-      if (!isSupervisaoContext) {
+      if (!isAdmin) {
+          // Cliente/Usuário só vê seus próprios blocos
           return { meusBlocos: blocos, blocosClientes: [] };
       }
       
-      const meusBlocos = blocos.filter(b => b.proprietario_id === ownerId || b.proprietario_id === null);
-      const blocosClientes = blocos.filter(b => b.proprietario_id !== ownerId && b.proprietario_id !== null);
+      // Admin: Separa blocos próprios (proprietario_id = ownerId) e blocos de clientes (proprietario_id != ownerId)
+      const meusBlocos = blocos.filter(b => b.proprietario_id === proprietarioId || b.proprietario_id === null);
+      const blocosClientes = blocos.filter(b => b.proprietario_id !== proprietarioId && b.proprietario_id !== null);
       
       return { meusBlocos, blocosClientes };
-  }, [blocos, isSupervisaoContext, ownerId]);
+  }, [blocos, isAdmin, proprietarioId]);
   
-  const blocosParaExibir = isSupervisaoContext && activeTab === 'blocos_clientes' 
+  const blocosParaExibir = isAdmin && activeTab === 'blocos_clientes' 
       ? blocosFiltrados.blocosClientes 
       : blocosFiltrados.meusBlocos;
       
-  const isModoSupervisao = isSupervisaoContext && activeTab === 'blocos_clientes';
+  const isSupervisao = isAdmin && activeTab === 'blocos_clientes';
 
+  // Helper para renderizar a lista de blocos
   const renderBlocosList = (list: BlocoSocietario[], isSupervisao: boolean) => (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {list.map((bloco: BlocoSocietario) => {
-              const canManage = !isSupervisao && (bloco.proprietario_id === ownerId || bloco.proprietario_id === null);
+              // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
+              const canEditOrDelete = bloco.proprietario_id === proprietarioId || isAdmin && !isSupervisao;
               
               return (
                   <BlocoSocietarioCard 
@@ -120,12 +133,13 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                       bloco={bloco} 
                       onEdit={() => handleEdit(bloco)}
                       onDelete={() => handleDelete(bloco.id)}
-                      canManage={canManage}
+                      canManage={canEditOrDelete}
                   />
               );
           })}
       </div>
   );
+
 
   if (carregandoSessao) {
     return (
@@ -137,7 +151,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId) {
+  if (!carregandoSessao && !proprietarioId && !isAdmin) {
       return (
           <LayoutPrincipal>
               <Card><CardContent className="p-6">Você não tem permissão para gerenciar blocos de conteúdo.</CardContent></Card>
@@ -178,21 +192,21 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                   <FormBlocoSocietario
                       blocoInicial={blocoSelecionado}
                       onSaveComplete={handleSaveComplete}
-                      ownerId={ownerId}
+                      ownerId={proprietarioId}
                   />
               </DialogContent>
           </Dialog>
       </div>
 
-      <Tabs value={isSupervisaoContext ? activeTab : 'meus_blocos'} onValueChange={setActiveTab} className="w-full">
-        {isSupervisaoContext && (
+      <Tabs value={isAdmin ? activeTab : 'meus_blocos'} onValueChange={setActiveTab} className="w-full">
+        {isAdmin && (
             <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="meus_blocos">Meus Blocos ({blocosFiltrados.meusBlocos.length})</TabsTrigger>
                 <TabsTrigger value="blocos_clientes">Blocos dos Clientes ({blocosFiltrados.blocosClientes.length})</TabsTrigger>
             </TabsList>
         )}
         
-        {isModoSupervisao && (
+        {isAdmin && activeTab === 'blocos_clientes' && (
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4 mb-4">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
                     <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Blocos de clientes são apenas para visualização.
@@ -200,7 +214,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
             </div>
         )}
 
-        <TabsContent value={isSupervisaoContext ? activeTab : 'meus_blocos'} className="mt-0">
+        <TabsContent value={isAdmin ? activeTab : 'meus_blocos'} className="mt-0">
             <Card>
                 <CardHeader>
                     <CardTitle className="text-xl">
@@ -215,7 +229,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                     ) : blocosParaExibir.length === 0 ? (
                         <p className="text-center text-muted-foreground py-8">Nenhum bloco de conteúdo encontrado.</p>
                     ) : (
-                        renderBlocosList(blocosParaExibir, isModoSupervisao)
+                        renderBlocosList(blocosParaExibir, isSupervisao)
                     )}
                 </CardContent>
             </Card>

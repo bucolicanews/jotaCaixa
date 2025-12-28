@@ -9,15 +9,14 @@ import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 import React from 'react';
 import SetupBlocker from '@/components/SetupBlocker';
 import FormCapitalSocial from '@/components/formularios/FormCapitalSocial'; // NOVO IMPORT
-import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes'; // Importando PERMISSOES_DISPONIVEIS
 
 type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
 const Painel = () => {
-  const { role, perfil, carregando, setupStatus, refetch, ownerType } = useSessao();
+  const { role, perfil, carregando, setupStatus, refetch } = useSessao();
 
   const isClient = role === 'Cliente';
-  const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+  const isAdmin = role === 'Admin';
   const isUsuario = role === 'Usuario';
 
   const isUsuarioDoAdmin = 
@@ -27,10 +26,7 @@ const Painel = () => {
     (perfil as AdminUsuarioProfile).admin_id !== null;
 
   const getPermissoes = (): Record<string, boolean> => {
-    if (isAdmin) {
-        // Se for Admin, retorna todas as permissões como true
-        return PERMISSOES_DISPONIVEIS.reduce((acc, p) => ({ ...acc, [p.key]: true }), {});
-    }
+    if (isAdmin) return {};
     if (isUsuarioDoAdmin) {
       return (perfil as AdminUsuarioProfile)?.permissoes || {};
     }
