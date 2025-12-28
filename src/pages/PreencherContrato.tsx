@@ -78,21 +78,12 @@ const PreencherContrato: React.FC = () => {
 
   const fetchDependentData = useCallback(async (targetId: string) => {
     if (!targetId) return;
-    
-    // 1. Busca Tags Customizadas
-    const { data: tagsData } = await supabase
-      .from('contrato_tags')
-      .select('*')
-      .eq('empresa_id', targetId);
-      
+    const { data: tagsData } = await supabase.from('contrato_tags').select('*').eq('empresa_id', targetId);
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    // 2. Busca Clientes
-    const { data: adminCheck } = await supabase.from('tbl_admins').select('id').eq('id', targetId).maybeSingle();
-    const isTargetAdmin = !!adminCheck;
-
     let finalClientList: any[] = [];
-    if (isTargetAdmin) {
+    const { data: adminCheck } = await supabase.from('tbl_admins').select('id').eq('id', targetId).maybeSingle();
+    if (adminCheck) {
         const { data: dataSistema } = await supabase.from('tbl_clientes').select('*').eq('admin_id', targetId).eq('aprovado', true).order('nome');
         finalClientList = dataSistema || [];
     } else {
@@ -104,21 +95,15 @@ const PreencherContrato: React.FC = () => {
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
-    
     if (modeloId) {
       const { data } = await supabase.from('contrato_modelos').select('*').eq('id', modeloId).single();
-      if (data) {
-        setModelo(data);
-        setTituloDocumento(data.titulo);
-      }
+      if (data) setModelo(data);
     }
-    
     if (isAdmin && ownerIdLogado) {
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('admin_id', ownerIdLogado).eq('aprovado', true);
       const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
     }
-    
     let currentPropId = ownerIdLogado;
     if (contratoId) {
         const { data: contratoExistente } = await supabase.from('contratos_gerados').select('*').eq('id', contratoId).single();
@@ -135,14 +120,11 @@ const PreencherContrato: React.FC = () => {
                 setDataVencimentoUnico(d);
                 setDataPrimeiroVencimento(d);
             }
-            if (contratoExistente.valores_tags_preenchidos) {
-                setValoresTags(contratoExistente.valores_tags_preenchidos as Record<string, string>);
-            }
+            if (contratoExistente.valores_tags_preenchidos) setValoresTags(contratoExistente.valores_tags_preenchidos as Record<string, string>);
         }
     } else {
         setProprietarioContratoId(ownerIdLogado);
     }
-    
     if (currentPropId) await fetchDependentData(currentPropId);
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, isAdmin, fetchDependentData, contratoId]);
@@ -151,33 +133,52 @@ const PreencherContrato: React.FC = () => {
     if (!carregandoSessao && ownerIdLogado) buscarDados();
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
-  // --- LÓGICA DE PREENCHIMENTO DE TAGS (REESTRUTURADA PARA EVITAR LOOP) ---
+  const empresaLogadaData = useMemo(() => {
+    if (!perfil) return null;
+    const p = perfil as any;
+    return {
+        nome: p.nome || p.razao_social || '',
+        cnpj: p.cnpj || p.documento || '',
+        endereco: p.endereco || '',
+        numero: p.numero || '',
+        bairro: p.bairro || '',
+        cidade: p.cidade || '',
+        estado: p.estado || '',
+        cep: p.cep || '',
+        email: p.email || '',
+    };
+  }, [perfil]);
+
+  // --- LÓGICA DE PREENCHIMENTO DE TAGS (REESTRUTURADA) ---
   useEffect(() => {
       if (carregandoDados || !ownerIdLogado) return;
 
       const newSystemTags: Record<string, string> = {};
       const cliente = clientesCR.find(c => c.id === clienteSelecionadoId);
-      const p = perfil as any;
 
-      // 1. Tags do Cliente
       if (cliente) {
           newSystemTags['{{CLIENTE_NOME}}'] = cliente.nome || '';
+          newSystemTags['{{CLIENTE_RAZAO_SOCIAL}}'] = cliente.razao_social || cliente.nome || '';
           newSystemTags['{{CLIENTE_DOCUMENTO}}'] = cliente.documento || cliente.cpf || cliente.cnpj || '';
-          newSystemTags['{{CLIENTE_EMAIL}}'] = cliente.email || '';
-          newSystemTags['{{CLIENTE_TELEFONE}}'] = cliente.telefone || '';
-          newSystemTags['{{CLIENTE_ENDERECO}}'] = cliente.endereco || '';
+          newSystemTags['{{CLIENTE_NUMERO}}'] = cliente.numero || '';
+          newSystemTags['{{CLIENTE_BAIRRO}}'] = cliente.bairro || '';
+          newSystemTags['{{CLIENTE_CEP}}'] = cliente.cep || '';
           newSystemTags['{{CLIENTE_CIDADE}}'] = cliente.cidade || '';
           newSystemTags['{{CLIENTE_ESTADO}}'] = cliente.estado || '';
       }
 
-      // 2. Tags da Empresa
-      if (p) {
-          newSystemTags['{{EMPRESA_NOME}}'] = p.nome || '';
-          newSystemTags['{{EMPRESA_DOCUMENTO}}'] = p.documento || p.cnpj || p.cpf || '';
-          newSystemTags['{{EMPRESA_EMAIL}}'] = p.email || '';
+      if (empresaLogadaData) {
+          newSystemTags['{{EMPRESA_NOME}}'] = empresaLogadaData.nome;
+          newSystemTags['{{EMPRESA_CNPJ}}'] = empresaLogadaData.cnpj;
+          newSystemTags['{{EMPRESA_ENDERECO}}'] = empresaLogadaData.endereco;
+          newSystemTags['{{EMPRESA_NUMERO}}'] = empresaLogadaData.numero;
+          newSystemTags['{{EMPRESA_BAIRRO}}'] = empresaLogadaData.bairro;
+          newSystemTags['{{EMPRESA_CIDADE}}'] = empresaLogadaData.cidade;
+          newSystemTags['{{EMPRESA_ESTADO}}'] = empresaLogadaData.estado;
+          newSystemTags['{{EMPRESA_CEP}}'] = empresaLogadaData.cep;
+          newSystemTags['{{EMPRESA_EMAIL}}'] = empresaLogadaData.email;
       }
 
-      // 3. Tags Financeiras
       let valContrato = valorTotal;
       let valParcela = valorTotal;
       let dataVenc = '';
@@ -198,18 +199,20 @@ const PreencherContrato: React.FC = () => {
       newSystemTags['{{PRIMEIRO_VENCIMENTO}}'] = dataVenc;
       newSystemTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
 
-      // Mescla com os valores atuais, preservando o que for manual
       setValoresTags(prev => {
-          const merged = { ...prev, ...newSystemTags };
-          return merged;
+          // Só atualiza se houver mudanças reais para evitar loops
+          const updated = { ...prev, ...newSystemTags };
+          return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
       });
 
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, carregandoDados, clientesCR, perfil]);
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, carregandoDados, clientesCR, empresaLogadaData]);
 
   const renderConteudo = useCallback(() => {
     let html = modelo?.conteudo_template || '';
-    Object.keys(valoresTags).forEach(tag => {
-      // Escape especial para a regex não quebrar com chaves
+    // Ordena tags por tamanho (maiores primeiro) para evitar substituições parciais
+    const keys = Object.keys(valoresTags).sort((a, b) => b.length - a.length);
+    
+    keys.forEach(tag => {
       const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedTag, 'g');
       html = html.replace(regex, valoresTags[tag] || '');
@@ -229,14 +232,12 @@ const PreencherContrato: React.FC = () => {
         showError('Lançamento de Capital Social obrigatório para ativar contratos.');
         return;
     }
-    
     if (!clienteSelecionadoId || !proprietarioContratoId || valorTotal <= 0) {
         showError('Preencha os campos obrigatórios.');
         return;
     }
 
     setIsSubmitting(true);
-    
     try {
         const { data: configData } = await supabase.from('configuracao_contratos').select('id_conta_clientes_receber, id_conta_receita_contrato').eq('proprietario_id', proprietarioContratoId).single();
         const contaPatrimonialId = configData?.id_conta_clientes_receber || null;
@@ -311,6 +312,10 @@ const PreencherContrato: React.FC = () => {
       const allTags = [...TAGS_PADRAO, ...tagsCustomizadas];
       return allTags.filter(t => !t.nome_tag.startsWith('{{CLIENTE_') && !t.nome_tag.startsWith('{{EMPRESA_') && !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}'].includes(t.nome_tag)).map(t => t.nome_tag);
   }, [tagsCustomizadas]);
+
+  const handleTagChange = (tag: string, value: string) => {
+    setValoresTags(prev => ({ ...prev, [tag]: value }));
+  };
 
   if (carregandoSessao || carregandoDados || carregandoCapital) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
