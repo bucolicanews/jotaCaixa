@@ -338,8 +338,8 @@ const PreencherContrato: React.FC = () => {
   }, [modelo, valoresTags]);
 
   const handleSalvarContrato = async (status: string) => {
-    if (!temCapitalSocial) {
-        showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos.');
+    if (!temCapitalSocial && status !== 'rascunho') {
+        showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber.');
         return;
     }
     
@@ -547,7 +547,7 @@ const PreencherContrato: React.FC = () => {
         <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting || carregandoCapital}>
             <Save className="mr-2 h-4 w-4"/> Rascunho
         </Button>
-        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting || carregandoCapital}>
+        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting || carregandoCapital || !temCapitalSocial}>
             Gerar e Enviar
         </Button>
       </div>
