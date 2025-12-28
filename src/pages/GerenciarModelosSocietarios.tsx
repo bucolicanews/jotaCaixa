@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, FileText, Trash2, Edit, ChevronLeft, Building2 } from 'lucide-react';
+import { Loader2, Plus, FileText, Trash2, Edit, Tag, ArrowRight, Building2, ChevronLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -47,9 +47,11 @@ const GerenciarModelosSocietarios: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente/Usuário, busca apenas os seus modelos (ownerId) e modelos globais (nulos)
-    if (!isAdmin && proprietarioId) {
-        query = query.or(`proprietario_id.eq.${proprietarioId},proprietario_id.is.null`);
+    // Se for Cliente ou Admin, busca seus próprios modelos E modelos globais (proprietario_id is null)
+    if (proprietarioId) {
+        // Construção segura da cláusula OR
+        const orClause = `proprietario_id.eq.${proprietarioId},proprietario_id.is.null`;
+        query = query.or(orClause);
     }
     // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
 
@@ -111,9 +113,8 @@ const GerenciarModelosSocietarios: React.FC = () => {
           return { meusModelos: modelos, modelosClientes: [] };
       }
       
-      // Admin: Separa modelos próprios (proprietario_id = ownerId) e modelos globais (proprietario_id is null)
+      // Admin: Separa modelos próprios (proprietario_id = ownerId) e modelos de clientes (proprietario_id != ownerId)
       const meusModelos = modelos.filter(m => m.proprietario_id === proprietarioId || m.proprietario_id === null);
-      // Modelos de clientes (proprietario_id != ownerId e não é null)
       const modelosClientes = modelos.filter(m => m.proprietario_id !== proprietarioId && m.proprietario_id !== null);
       
       return { meusModelos, modelosClientes };
@@ -127,9 +128,9 @@ const GerenciarModelosSocietarios: React.FC = () => {
 
   const renderModelosList = (list: DocumentoSocietarioModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
-          {list.map((modelo: DocumentoSocietarioModelo) => {
+          {list.map((modelo) => {
               // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-              const isOwner = modelo.proprietario_id === proprietarioId || modelo.proprietario_id === null || isAdmin && !isSupervisao;
+              const isOwner = modelo.proprietario_id === proprietarioId || (isAdmin && !isSupervisao);
 
               return (
                 <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
@@ -236,7 +237,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
                   ) : modelosParaExibir.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">Nenhum modelo de documento societário encontrado.</p>
                   ) : (
-                      renderBlocosList(modelosParaExibir, isSupervisao)
+                      renderModelosList(modelosParaExibir, isSupervisao)
                   )}
               </CardContent>
           </Card>
@@ -258,7 +259,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
 
       {isAdmin && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="meus_modelos">Meus Modelos ({modelosFiltrados.meusModelos.length})</TabsTrigger>
                   <TabsTrigger value="modelos_clientes">Modelos dos Clientes ({modelosFiltrados.modelosClientes.length})</TabsTrigger>
               </TabsList>
