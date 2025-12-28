@@ -117,11 +117,7 @@ const ContasReceber = () => {
         contasQuery = contasQuery.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
     }
     
-    // REMOVIDO: Filtro de texto no backend para evitar erro de operador em UUID
-    // if (filtroTextoDebounced) {
-    //     const termo = `%${filtroTextoDebounced}%`;
-    //     contasQuery = contasQuery.ilike('descricao', termo);
-    // }
+    // REMOVIDO FILTRO DE TEXTO DO BACKEND AQUI
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
