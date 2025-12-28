@@ -14,6 +14,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { useOwner } from '@/hooks/use-owner';
 
 interface FluxoData {
     receber: number;
@@ -39,6 +40,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 const DashboardFinanceiro: React.FC = () => {
     const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+    const { ownerId, ownerType } = useOwner();
     const navigate = useNavigate();
     
     const [filtroContaId, setFiltroContaId] = useState('todos'); // 'todos' ou ID da conta
@@ -58,21 +60,6 @@ const DashboardFinanceiro: React.FC = () => {
 
     const isAdmin = role === 'Admin';
     
-    // Determina o ID do proprietário (Admin ID ou Cliente ID)
-    const getOwnerId = () => {
-        if (isAdmin) return usuario?.id || null;
-        if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-        if (role === 'Usuario') {
-            const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-            // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
-            if ('admin_id' in user && user.admin_id) return user.admin_id;
-            if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-        }
-        return null;
-    };
-    
-    const ownerId = getOwnerId();
-
     // Hook para buscar saldos de contas (Ativo/Passivo)
     const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
     
@@ -81,6 +68,22 @@ const DashboardFinanceiro: React.FC = () => {
         if (filtroContaId === 'todos') return contas;
         return contas.filter(c => c.id === filtroContaId);
     }, [contas, filtroContaId]);
+
+    // Helper para determinar tabelas
+    const getTables = (type: 'CR' | 'CP') => {
+        const isOwnerAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+        if (type === 'CR') {
+            return {
+                tabelaParcelas: isOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber',
+                ownerKey: isOwnerAdmin ? 'admin_id' : 'empresa_id',
+            };
+        } else {
+            return {
+                tabelaParcelas: isOwnerAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar',
+                ownerKey: isOwnerAdmin ? 'admin_id' : 'empresa_id',
+            };
+        }
+    };
 
     const fetchContaMensalData = useCallback(async (contaId: string) => {
         if (!ownerId) return;
@@ -104,7 +107,7 @@ const DashboardFinanceiro: React.FC = () => {
                 
             if (lError) throw lError;
             
-            const safeLancamentos = lancamentosData || [];
+            const safeLancamentos = (lancamentosData || []).filter(l => !l.origem.includes('estorno'));
             
             const entradas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
             const saidas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
@@ -112,14 +115,14 @@ const DashboardFinanceiro: React.FC = () => {
             // 2. Calcular Saldo Inicial (antes do mês atual)
             const { data: lancamentosAnteriores, error: laError } = await supabase
                 .from('lancamentos')
-                .select('valor, tipo')
+                .select('valor, tipo, origem')
                 .eq('proprietario_id', ownerId)
                 .eq('conta_bancaria_id', contaId)
                 .lt('data_movimentacao', startOfMonthISO);
                 
             if (laError) console.error('Erro ao buscar lançamentos anteriores:', laError);
             
-            const safeLancamentosAnteriores = lancamentosAnteriores || [];
+            const safeLancamentosAnteriores = (lancamentosAnteriores || []).filter(l => !l.origem.includes('estorno'));
             
             const entradasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
             const saidasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
@@ -158,17 +161,13 @@ const DashboardFinanceiro: React.FC = () => {
         const start = format(startOfMonth(new Date()), 'yyyy-MM-dd');
         const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
         
-        const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-        const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
-        const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
+        const { tabelaParcelas: tabelaParcelasReceber, ownerKey: ownerKeyCR } = getTables('CR');
+        const { tabelaParcelas: tabelaParcelasPagar, ownerKey: ownerKeyCP } = getTables('CP');
         
         try {
             // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
             
-            // CRÍTICO: Filtra apenas lançamentos que têm conta_bancaria_id (movimentação de caixa/banco)
             const contaIds = contas.map(c => c.id);
-            
             let lancamentosData: any[] | null = null;
             
             if (contaIds.length > 0) {
@@ -188,7 +187,7 @@ const DashboardFinanceiro: React.FC = () => {
                 lancamentosData = data;
             }
             
-            const safeLancamentos = lancamentosData || [];
+            const safeLancamentos = (lancamentosData || []).filter(l => !l.origem.includes('estorno'));
             
             const entradasRealizadas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
             const saidasRealizadas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
@@ -227,7 +226,7 @@ const DashboardFinanceiro: React.FC = () => {
         } finally {
             setLoadingFluxo(false);
         }
-    }, [ownerId, isAdmin, contas]);
+    }, [ownerId, ownerType, contas]);
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
@@ -235,10 +234,8 @@ const DashboardFinanceiro: React.FC = () => {
         const today = format(new Date(), 'yyyy-MM-dd');
         const thirtyDaysLater = format(addDays(new Date(), 30), 'yyyy-MM-dd');
         
-        const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-        const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
-        const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
+        const { tabelaParcelas: tabelaParcelasReceber, ownerKey: ownerKeyCR } = getTables('CR');
+        const { tabelaParcelas: tabelaParcelasPagar, ownerKey: ownerKeyCP } = getTables('CP');
         
         try {
             // Total a Receber (próximos 30 dias)
@@ -269,7 +266,7 @@ const DashboardFinanceiro: React.FC = () => {
         } catch (e) {
             console.error('❌ DASHBOARD ERROR (fetchKPIs):', e);
         }
-    }, [ownerId, isAdmin]);
+    }, [ownerId, ownerType]);
 
     useEffect(() => {
         if (ownerId) {
