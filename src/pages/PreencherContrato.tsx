@@ -97,7 +97,7 @@ const PreencherContrato: React.FC = () => {
             .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
             .eq('admin_id', targetId)
             .eq('aprovado', true)
-            .neq('id', targetId)
+            .neq('id', targetId) // Exclui o próprio Admin se ele estiver na tbl_clientes
             .order('nome');
         
         (dataSistema || []).forEach(c => {
@@ -148,6 +148,7 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Carregar Empresas (Se Admin)
     if (isAdmin && ownerIdLogado) {
+      // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('admin_id', ownerIdLogado).eq('aprovado', true);
       const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
@@ -334,7 +335,7 @@ const PreencherContrato: React.FC = () => {
   ]);
 
   // Filtro para mostrar tags manuais na UI
-  const tagsParaPreenchimentoManual = useMemo(() => {
+  const tagsManuaisDisponiveis = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
     return combined
         .filter(tag => 
@@ -449,7 +450,7 @@ const PreencherContrato: React.FC = () => {
         // 2. Inserir/Atualizar Contrato Gerado
         const contratoPayload = {
             modelo_id: modelo?.id,
-            cliente_id: values.cliente_id,
+            cliente_id: clienteSelecionadoId,
             proprietario_id: values.proprietario_documento_id,
             status: status,
             valor_total: valorTotalFinal,
@@ -559,28 +560,22 @@ const PreencherContrato: React.FC = () => {
   };
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
+  const tagsParaPreenchimentoManual = tagsManuaisDisponiveis.filter(tagKey => {
       // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
-      if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
+      if (tagKey.startsWith('{{EMPRESA_') && valoresTags[tagKey]) return false;
       
       // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
-      if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
+      if (tagKey.startsWith('{{CLIENTE_') && valoresTags[tagKey]) return false;
       
       // Exclui a tag de conteúdo principal
-      if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
+      if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return false;
       
       // Inclui tags que não têm valor preenchido
-      return !valoresTags[tag.nome_tag];
-  }).map(tag => tag.nome_tag); // Mapeia para retornar apenas a string do nome da tag
+      return !valoresTags[tagKey];
+  });
 
-  if (carregandoSessao || carregandoDados) {
-    return (
-      <LayoutPrincipal>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutPrincipal>
-    );
+  if (carregandoSessao || carregandoDados || carregandoCapital) {
+    return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
   }
   
   if (!modelo) {

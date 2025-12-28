@@ -76,7 +76,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
-  
+  const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -88,6 +88,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [empresaLogada, setEmpresaLogada] = useState<any>(null);
   
   const isEditing = !!documentoId;
+  const documentoInicial = null; // Variável removida do escopo global
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
   const isAdmin = role === 'Admin';
@@ -230,7 +231,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId || !ownerIdLogado) return;
     
-    // 1. Buscar Tags Customizadas ATIVAS
+    // 1. Busca Tags Customizadas ATIVAS
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
@@ -245,42 +246,58 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTagsCustomizadas(allTags);
     }
     
-    // 2. Buscar Clientes (Contratados)
-    let queryClients = supabase
-        .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
-        .eq('admin_id', targetEmpresaId)
-        .eq('aprovado', true)
-        .neq('id', targetEmpresaId)
-        .order('nome');
+    // 2. Busca Clientes: A lista de clientes deve ser estritamente filtrada pelo proprietário.
+    let clientesCRData: any[] | null = null;
+    let clientesSistemaData: any[] | null = null;
+
+    // Se o proprietário do documento for o Admin logado (ou Sub-Admin)
+    if (isAdmin && targetEmpresaId === ownerIdLogado) {
+        // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
+        const { data: dataSistema } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+            .eq('admin_id', targetEmpresaId)
+            .eq('aprovado', true)
+            .neq('id', targetEmpresaId)
+            .order('nome');
+        clientesSistemaData = dataSistema;
         
-    const { data: clientesSistemaData } = await queryClients;
+        // Busca clientes CR (clientes) que o Admin criou
+        const { data: dataCR } = await supabase
+            .from('clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+            .eq('proprietario_id', targetEmpresaId)
+            .order('nome');
+        clientesCRData = dataCR;
+        
+    } else {
+        // Se o proprietário do documento for um Cliente (ou Usuário de Cliente), busca apenas da tabela 'clientes'
+        const { data: dataCR } = await supabase
+            .from('clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+            .eq('proprietario_id', targetEmpresaId)
+            .order('nome');
+        clientesCRData = dataCR;
+    }
     
-    // 3. Buscar Clientes CR (que não são clientes do sistema)
-    const { data: clientesCRData } = await supabase
-        .from('clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
-        .eq('proprietario_id', targetEmpresaId)
-        .order('nome');
-        
-    // 4. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
-    const combinedClientsMap = new Map<string, ClienteCRCompleto>();
+    // 3. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
+    const combinedClientsMap = new Map<string, any>();
     
     // Adiciona clientes do sistema (tbl_clientes)
     (clientesSistemaData || []).forEach(c => {
-        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId });
     });
     
     // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
     (clientesCRData || []).forEach(c => {
         if (!combinedClientsMap.has(c.id)) {
-            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId });
         }
     });
         
     setClientesCR(Array.from(combinedClientsMap.values()));
     
-  }, [ownerIdLogado]);
+  }, [ownerIdLogado, isAdmin]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -312,7 +329,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
         
         const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
-        setDocumentoInicial(documento);
+        // setDocumentoInicial(documento); // Removido para evitar erro de variável não definida
         initialProprietarioDocumentoId = documento.proprietario_id;
         initialClienteId = documento.cliente_id || '';
         initialValoresTags = documento.valores_tags_preenchidos || {};
@@ -348,10 +365,11 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
     let empresasContratoList: EmpresaContrato[] = [];
-    if (isAdmin) {
+    if (isAdmin && ownerIdLogado) {
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
+            .eq('admin_id', ownerIdLogado)
             .eq('aprovado', true)
             .order('nome');
             
@@ -364,7 +382,9 @@ const GerarDocumentoSocietario: React.FC = () => {
     setEmpresasContrato(empresasContratoList);
     
     // 4. Carregar dados dependentes (clientes e tags)
-    await fetchDependentData(initialProprietarioDocumentoId || ownerIdLogado);
+    if (initialProprietarioDocumentoId) {
+        await fetchDependentData(initialProprietarioDocumentoId);
+    }
     
     // 5. Resetar o formulário com os dados carregados (USANDO VARIÁVEIS LOCAIS)
     form.reset({
@@ -417,7 +437,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 1. Substituição de Tags de Dados (Primeira Passagem)
     Object.keys(tags).forEach(tagKey => {
         const regex = new RegExp(tagKey, 'g');
-        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey]);
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey] || '');
     });
     
     return conteudoRenderizado;
@@ -497,19 +517,16 @@ const GerarDocumentoSocietario: React.FC = () => {
   };
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
-      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
-      if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
-      
-      // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
-      if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
-      
-      // Exclui a tag de conteúdo principal
-      if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
-      
-      // Inclui tags que não têm valor preenchido
-      return !valoresTags[tag.nome_tag];
-  }).map(tag => tag.nome_tag); // Mapeia para retornar apenas a string do nome da tag
+  const tagsParaPreenchimentoManual = useMemo(() => {
+    const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+    return combined
+        .filter(tag => 
+            !tag.nome_tag.startsWith('{{CLIENTE_') && 
+            !tag.nome_tag.startsWith('{{EMPRESA_') &&
+            !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}', '{{CONTEUDO_PRINCIPAL}}'].includes(tag.nome_tag)
+        )
+        .map(t => t.nome_tag);
+  }, [tagsCustomizadas]);
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -625,7 +642,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   <SelectContent>
                                       {clientesCR.map(c => (
                                           <SelectItem key={c.id} value={c.id}>
-                                              {c.nome}
+                                              {c.nome} {c.documento ? `(${c.documento})` : ''}
                                           </SelectItem>
                                       ))}
                                   </SelectContent>
