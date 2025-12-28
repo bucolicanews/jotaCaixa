@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2, AlertTriangle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2, AlertTriangle, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
@@ -149,7 +149,7 @@ const PreencherContrato: React.FC = () => {
     };
   }, [perfil]);
 
-  // --- LÓGICA DE PREENCHIMENTO DE TAGS (REESTRUTURADA) ---
+  // --- LÓGICA DE PREENCHIMENTO DE TAGS ---
   useEffect(() => {
       if (carregandoDados || !ownerIdLogado) return;
 
@@ -200,18 +200,16 @@ const PreencherContrato: React.FC = () => {
       newSystemTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
 
       setValoresTags(prev => {
-          // Só atualiza se houver mudanças reais para evitar loops
-          const updated = { ...prev, ...newSystemTags };
-          return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
+          const merged = { ...prev, ...newSystemTags };
+          // Compara para evitar atualizações infinitas se os valores forem idênticos
+          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
       });
 
   }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, carregandoDados, clientesCR, empresaLogadaData]);
 
   const renderConteudo = useCallback(() => {
     let html = modelo?.conteudo_template || '';
-    // Ordena tags por tamanho (maiores primeiro) para evitar substituições parciais
     const keys = Object.keys(valoresTags).sort((a, b) => b.length - a.length);
-    
     keys.forEach(tag => {
       const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedTag, 'g');
@@ -339,55 +337,103 @@ const PreencherContrato: React.FC = () => {
           <Button onClick={() => handleSalvarContrato('pendente_assinatura')} className="flex-1 h-12" disabled={isSubmitting || !clienteSelecionadoId}>{isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} {isEditing ? 'Salvar Alterações' : 'Gerar para Assinatura'}</Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 h-fit">
-          <CardHeader><CardTitle className="text-xl">1. Dados e Tags</CardTitle></CardHeader>
-          <CardContent className="space-y-6">
-            {isAdmin && (
-                <div className="space-y-2"><Label>Proprietário do Contrato</Label>
-                    <Select value={proprietarioContratoId || ''} onValueChange={setProprietarioContratoId}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{empresasContrato.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</SelectContent></Select>
+      <div className="space-y-6">
+        {/* SEÇÃO 1: DADOS DO DOCUMENTO */}
+        <Card>
+            <CardHeader><CardTitle className="text-xl">1. Dados do Documento</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {isAdmin && (
+                        <div className="space-y-2"><Label>Proprietário do Contrato</Label>
+                            <Select value={proprietarioContratoId || ''} onValueChange={setProprietarioContratoId}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{empresasContrato.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</SelectContent></Select>
+                        </div>
+                    )}
+                    <div className="space-y-2"><Label>Título</Label><Input value={tituloDocumento} onChange={e => setTituloDocumento(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Cliente</Label>
+                        <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}><SelectTrigger><SelectValue placeholder="Selecione o Cliente" /></SelectTrigger><SelectContent>{clientesCR.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent></Select>
+                    </div>
                 </div>
-            )}
-            <div className="space-y-4">
-                <div className="space-y-2"><Label>Título</Label><Input value={tituloDocumento} onChange={e => setTituloDocumento(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{clientesCR.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent></Select>
+
+                <Separator />
+                
+                <h3 className="font-semibold">Preenchimento de Tags</h3>
+                <p className="text-sm text-muted-foreground">Preencha as informações que não foram encontradas automaticamente no perfil.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {manualTags.map(tag => (
+                        <div key={tag} className="space-y-1"><Label className="text-xs font-semibold">{tag}</Label><Input value={valoresTags[tag] || ''} onChange={e => handleTagChange(tag, e.target.value)} /></div>
+                    ))}
                 </div>
-            </div>
-            <Separator />
-            <div className="space-y-4">
-                <h3 className="font-semibold">Tags Manuais</h3>
-                {manualTags.map(tag => (
-                    <div key={tag} className="space-y-1"><Label className="text-xs font-semibold">{tag}</Label><Input value={valoresTags[tag] || ''} onChange={e => handleTagChange(tag, e.target.value)} /></div>
-                ))}
-            </div>
-          </CardContent>
+            </CardContent>
         </Card>
 
-        <div className="lg:col-span-2 space-y-6">
-            <Card>
-                <CardHeader><CardTitle className="text-xl">2. Financeiro</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
-                    <RadioGroup value={tipoLancamento} onValueChange={v => setTipoLancamento(v as TipoLancamento)} className="flex space-x-4">
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="u" /><Label htmlFor="u">Único</Label></div>
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="r" /><Label htmlFor="r">Repetir</Label></div>
-                        <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="p" /><Label htmlFor="p">Parcelar</Label></div>
-                    </RadioGroup>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2"><Label>Valor</Label><Input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(parseFloat(e.target.value) || 0)} /></div>
-                        {tipoLancamento === 'unico' ? (
-                            <div className="space-y-2 md:col-span-2"><Label>Vencimento</Label><Popover><PopoverTrigger asChild><Button variant="outline" className="w-full text-left">{dataVencimentoUnico ? format(dataVencimentoUnico, "dd/MM/yyyy") : 'Data'}</Button></PopoverTrigger><PopoverContent className="p-0"><Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} locale={ptBR} /></PopoverContent></Popover></div>
-                        ) : (
-                            <>
-                                <div className="space-y-2"><Label>Nº Parcelas</Label><Input type="number" value={numeroParcelas} onChange={e => setNumeroParcelas(parseInt(e.target.value) || 1)} /></div>
-                                <div className="space-y-2"><Label>1º Venc.</Label><Popover><PopoverTrigger asChild><Button variant="outline" className="w-full text-left">{dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "dd/MM/yyyy") : 'Data'}</Button></PopoverTrigger><PopoverContent className="p-0"><Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} locale={ptBR} /></PopoverContent></Popover></div>
-                            </>
-                        )}
+        {/* SEÇÃO 2: CONFIGURAÇÃO DO FATURAMENTO */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-xl flex items-center">
+                    <DollarSign className="w-5 h-5 mr-2" /> 2. Configuração do Faturamento
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <RadioGroup value={tipoLancamento} onValueChange={v => setTipoLancamento(v as TipoLancamento)} className="flex space-x-4">
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="u" /><Label htmlFor="u">Único</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="r" /><Label htmlFor="r">Repetir Valor</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="p" /><Label htmlFor="p">Parcelar Valor Total</Label></div>
+                </RadioGroup>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                        <Label>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</Label>
+                        <Input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(parseFloat(e.target.value) || 0)} />
                     </div>
-                </CardContent>
-            </Card>
-            <Card><CardHeader><CardTitle className="text-xl">3. Prévia do Contrato</CardTitle></CardHeader><CardContent><div className="border rounded-md p-4 bg-background max-h-[500px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: renderConteudo() || 'Preencha os dados para ver a prévia.' }} /></CardContent></Card>
-        </div>
+                    
+                    {tipoLancamento === 'unico' ? (
+                        <div className="space-y-2 md:col-span-2">
+                            <Label>Data de Vencimento</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full text-left">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dataVencimentoUnico ? format(dataVencimentoUnico, "dd/MM/yyyy") : 'Selecione a data'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="p-0">
+                                    <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} locale={ptBR} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="space-y-2">
+                                <Label>Nº de Parcelas</Label>
+                                <Input type="number" value={numeroParcelas} onChange={e => setNumeroParcelas(parseInt(e.target.value) || 1)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Data do 1º Vencimento</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full text-left">
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "dd/MM/yyyy") : 'Selecione a data'}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0">
+                                        <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} locale={ptBR} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* SEÇÃO 3: PRÉVIA RÁPIDA */}
+        <Card>
+            <CardHeader><CardTitle className="text-xl">3. Prévia do Conteúdo</CardTitle></CardHeader>
+            <CardContent>
+                <div className="border rounded-md p-4 bg-background max-h-[500px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: renderConteudo() || 'Preencha os dados acima para visualizar a prévia aqui.' }} />
+            </CardContent>
+        </Card>
       </div>
 
       <ContratoPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} conteudoHtml={renderConteudo()} titulo={tituloDocumento || modelo?.titulo || 'Contrato'} isHtml={true} />
