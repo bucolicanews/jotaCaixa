@@ -10,10 +10,15 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children }) => {
-  const { role, perfil, carregando, usuario } = useSessao();
+  const { role, perfil, carregando, usuario, setupStatus } = useSessao();
 
   const permissoes = useMemo<Record<string, boolean> | null>(() => {
-    if (role !== 'Usuario' || !perfil) return null;
+    if (!perfil) return null;
+
+    // Admin e Cliente usam o perfil diretamente
+    if (role === 'Admin' || role === 'Cliente') {
+        return (perfil as any).permissoes || {};
+    }
 
     // Usuario do Admin
     if ('admin_id' in perfil) {
@@ -37,38 +42,40 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children
     return <Navigate to="/login" replace />;
   }
 
-  const isUsuarioAdmin = role === 'Usuario' && !!(perfil as any)?.admin_id;
-
-  // 🔓 Admin e Clientes passam diretamente
-  if (role === 'Admin' || role === 'Cliente') {
+  // 🔓 1. Admin sempre tem acesso total
+  if (role === 'Admin') {
     return <>{children}</>;
   }
-
-  // 🔐 Lógica para Role 'Usuario' (agora inclui AdminUsuario)
-  if (role === 'Usuario') {
-    // Se for um usuário de admin, ele precisa de permissões específicas
-    if (isUsuarioAdmin) {
-      // Se não for necessária uma permissão específica, permite o acesso (ex: /perfil)
-      if (!permissionKey) {
-        return <>{children}</>;
-      }
-      // Se for necessária uma permissão, verifica se o usuário a possui
-      if (!permissoes || !permissoes[permissionKey]) {
-        // Redireciona para o painel se não tiver permissão
-        return <Navigate to="/painel" replace />;
-      }
-    } else {
-      // Lógica para usuários de cliente (se houver alguma diferenciação no futuro)
-      if (!permissionKey) {
-        return <>{children}</>;
-      }
-      if (!permissoes || !permissoes[permissionKey]) {
-        return <Navigate to="/painel" replace />;
-      }
-    }
+  
+  // 🔓 2. Se não houver chave de permissão, permite o acesso (ex: /perfil)
+  if (!permissionKey) {
+      return <>{children}</>;
   }
 
-  return <>{children}</>;
+  // 🔐 3. Se for Cliente ou Usuário, verifica a permissão
+  if (role === 'Cliente' || role === 'Usuario') {
+    
+    // Se o setup não estiver completo, permite acesso apenas ao /painel (que lida com o setup blocker)
+    if (role === 'Cliente' && !setupStatus.isComplete) {
+        // Se a rota não for o painel, redireciona para o painel
+        if (window.location.pathname !== '/painel') {
+            return <Navigate to="/painel" replace />;
+        }
+        // Se for o painel, permite o acesso para mostrar o blocker
+        return <>{children}</>;
+    }
+    
+    // Verifica se a permissão necessária está ativa
+    if (permissoes && permissoes[permissionKey] === true) {
+      return <>{children}</>;
+    }
+    
+    // Se não tiver a permissão, redireciona para o painel
+    return <Navigate to="/painel" replace />;
+  }
+
+  // Fallback para qualquer outro caso (deve ser raro)
+  return <Navigate to="/painel" replace />;
 };
 
 export default ProtectedRoute;
