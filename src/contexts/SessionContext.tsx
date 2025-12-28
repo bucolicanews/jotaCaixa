@@ -65,6 +65,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // 1. Buscar Admin
     const adminData = await fetchProfile('tbl_admins');
+    console.log('[SessionContext] Tentativa de carregar perfil Admin:', adminData);
     if (adminData) {
       perfil = adminData;
       role = 'Admin';
@@ -102,6 +103,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     const { ownerId, ownerType, sourceProfileId } = resolveOwnerContext(role, perfil);
     const setupStatus = await fetchSetupStatus(ownerId);
+    
+    console.log('[SessionContext] Sessão Finalizada:', { role, ownerId, ownerType, setupStatus });
 
     setEstado({ usuario: user, perfil, role, carregando: false, setupStatus, ownerId, ownerType, sourceProfileId });
   }, []);
