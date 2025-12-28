@@ -347,6 +347,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     
     setIsSubmitting(true);
     
+    // Adiciona a verificação para bloquear edição de permissões pelo próprio usuário
+    const isSelfEditing = isEditing && usuarioInicial?.id === criadorPerfil?.id;
+    
     // Determina o proprietarioId baseado no role do criador
     let proprietarioId: string | null = null;
     let isAdminContext = false; // Flag para saber se estamos no contexto de Admin
