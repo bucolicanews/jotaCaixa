@@ -108,7 +108,7 @@ const PreencherContrato: React.FC = () => {
     const { data: clientesData } = await clientesDataSource;
       
     if (clientesData) {
-        // A desduplicação continua útil para o caso de 'clientes'
+        // CRÍTICO: Desduplicação por ID
         const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
         setClientesCR(uniqueClients);
     } else {

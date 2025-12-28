@@ -74,10 +74,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
-  const [documentoInicial, setDocumentoInicial] = useState<DocumentoSocietarioGerado | null>(null);
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
-  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -229,7 +228,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
-    if (!targetEmpresaId) return;
+    if (!targetEmpresaId || !ownerIdLogado) return;
     
     // 1. Buscar Tags Customizadas ATIVAS
     const { data: tagsData } = await supabase
@@ -249,26 +248,39 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Buscar Clientes (Contratados)
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
         .neq('id', targetEmpresaId)
         .order('nome');
         
-    const { data: clientesCRData } = await queryClients;
-        
-    if (clientesCRData) {
-        const mappedClients = (clientesCRData as any[]).map(c => ({
-            ...c,
-            proprietario_id: targetEmpresaId,
-            telefone_fixo: null,
-            data_nascimento: null,
-        })) as ClienteCRCompleto[];
-        
-        setClientesCR(mappedClients);
-    }
+    const { data: clientesSistemaData } = await queryClients;
     
-  }, []);
+    // 3. Buscar Clientes CR (que não são clientes do sistema)
+    const { data: clientesCRData } = await supabase
+        .from('clientes')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+        .eq('proprietario_id', targetEmpresaId)
+        .order('nome');
+        
+    // 4. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
+    const combinedClientsMap = new Map<string, ClienteCRCompleto>();
+    
+    // Adiciona clientes do sistema (tbl_clientes)
+    (clientesSistemaData || []).forEach(c => {
+        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+    });
+    
+    // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
+    (clientesCRData || []).forEach(c => {
+        if (!combinedClientsMap.has(c.id)) {
+            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+        }
+    });
+        
+    setClientesCR(Array.from(combinedClientsMap.values()));
+    
+  }, [ownerIdLogado]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -612,7 +624,9 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   </FormControl>
                                   <SelectContent>
                                       {clientesCR.map(c => (
-                                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                          <SelectItem key={c.id} value={c.id}>
+                                              {c.nome}
+                                          </SelectItem>
                                       ))}
                                   </SelectContent>
                               </Select>
