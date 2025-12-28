@@ -18,3 +18,4 @@
 18-build
 19- correção do lançamnetos contabeis do contrato
 20 - acesso do usuario ( obs)
+21 - contrato e painel ajustado
