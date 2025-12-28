@@ -86,34 +86,60 @@ const PreencherContrato: React.FC = () => {
       
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    // 2. Busca Clientes com a nova lógica
+    // 2. Busca Clientes: A lista de clientes deve ser estritamente filtrada pelo proprietário.
     let clientesDataSource: Promise<any>;
+    let clientesCRData: any[] | null = null;
+    let clientesSistemaData: any[] | null = null;
 
-    // Se o admin estiver selecionando "Meus Contratos", a lista de clientes vem de tbl_clientes (empresas do sistema)
+    // Se o proprietário do contrato for o Admin logado (ou Sub-Admin)
     if (isAdmin && targetId === ownerIdLogado) {
-      clientesDataSource = supabase
-        .from('tbl_clientes')
-        .select('*') // Garante que todos os campos, incluindo endereço, sejam carregados
-        .eq('aprovado', true)
-        .order('nome');
+        // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
+        const { data: dataSistema } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+            .eq('admin_id', targetId)
+            .eq('aprovado', true)
+            .neq('id', targetId) // Exclui o próprio Admin se ele estiver na tbl_clientes
+            .order('nome');
+        clientesSistemaData = dataSistema;
+        
+        // Busca clientes CR (clientes) que o Admin criou
+        const { data: dataCR } = await supabase
+            .from('clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+            .eq('proprietario_id', targetId)
+            .order('nome');
+        clientesCRData = dataCR;
+        
     } else {
-      // Para todos os outros casos (cliente logado, ou admin selecionando uma empresa), busca da tabela 'clientes'
-      clientesDataSource = supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', targetId)
-        .order('nome');
+        // Se o proprietário do contrato for um Cliente (ou Usuário de Cliente)
+        clientesDataSource = supabase
+            .from('clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+            .eq('proprietario_id', targetId)
+            .order('nome');
+        
+        const { data: dataCR } = await clientesDataSource;
+        clientesCRData = dataCR;
     }
     
-    const { data: clientesData } = await clientesDataSource;
-      
-    if (clientesData) {
-        // CRÍTICO: Desduplicação por ID
-        const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
-        setClientesCR(uniqueClients);
-    } else {
-        setClientesCR([]); // Limpa a lista se nada for encontrado
-    }
+    // 3. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
+    const combinedClientsMap = new Map<string, any>();
+    
+    // Adiciona clientes do sistema (tbl_clientes)
+    (clientesSistemaData || []).forEach(c => {
+        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetId });
+    });
+    
+    // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
+    (clientesCRData || []).forEach(c => {
+        if (!combinedClientsMap.has(c.id)) {
+            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetId });
+        }
+    });
+        
+    setClientesCR(Array.from(combinedClientsMap.values()));
+    
   }, [isAdmin, ownerIdLogado]);
 
   const buscarDados = useCallback(async () => {
@@ -130,13 +156,13 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Carregar Empresas (Se Admin)
     if (isAdmin && ownerIdLogado) {
-      const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
+      // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
+      const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('admin_id', ownerIdLogado).eq('aprovado', true);
       const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
     }
     
     // Define o proprietário inicial como o usuário logado
-    // Se for edição, isso será sobrescrito logo abaixo
     let currentProprietarioId = ownerIdLogado;
     setProprietarioContratoId(currentProprietarioId);
     
