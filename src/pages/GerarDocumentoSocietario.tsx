@@ -1,3 +1,4 @@
+// src/pages/GerarDocumentoSocietario.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,7 +76,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
-  
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -123,7 +123,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const proprietarioDocumentoId = watch('proprietario_documento_id');
   const tituloDocumento = watch('titulo_documento');
   const tipoConteudo = watch('tipo_conteudo');
-  const valoresTags = watch('valores_tags') || {}; // USANDO WATCH AQUI
+  const valoresTags = watch('valores_tags') || {};
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
@@ -227,14 +227,14 @@ const GerarDocumentoSocietario: React.FC = () => {
   }, [allAvailableTags, setValue]);
   
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
-  const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
-    if (!targetEmpresaId || !ownerIdLogado) return;
+  const fetchDependentData = useCallback(async (targetId: string) => {
+    if (!targetId || !ownerIdLogado) return;
     
     // 1. Busca Tags Customizadas ATIVAS
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
-        .eq('empresa_id', targetEmpresaId)
+        .eq('empresa_id', targetId)
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
@@ -245,58 +245,45 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTagsCustomizadas(allTags);
     }
     
-    // 2. Busca Clientes: A lista de clientes deve ser estritamente filtrada pelo proprietário.
-    let clientesCRData: any[] | null = null;
-    let clientesSistemaData: any[] | null = null;
-
-    // Se o proprietário do documento for o Admin logado (ou Sub-Admin)
-    if (isAdmin && targetEmpresaId === ownerIdLogado) {
-        // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
-        const { data: dataSistema } = await supabase
+    // 2. Busca Clientes: Lógica de roteamento estrita baseada no ROLE do usuário logado
+    let finalClientList: any[] = [];
+    
+    // Se o usuário logado é Admin ou um funcionário de Admin
+    if (isAdmin) {
+        // A lista de clientes (contratados) vem da tabela de clientes do sistema (tbl_clientes)
+        // que são gerenciados pelo Admin logado.
+        const { data: dataSistema, error } = await supabase
             .from('tbl_clientes')
             .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
-            .eq('admin_id', targetEmpresaId)
+            .eq('admin_id', ownerIdLogado) // Filtra pelos clientes do ADMIN LOGADO
             .eq('aprovado', true)
-            .neq('id', targetEmpresaId)
             .order('nome');
-        clientesSistemaData = dataSistema;
         
-        // Busca clientes CR (clientes) que o Admin criou
-        const { data: dataCR } = await supabase
-            .from('clientes')
-            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
-            .eq('proprietario_id', targetEmpresaId)
-            .order('nome');
-        clientesCRData = dataCR;
-        
-    } else {
-        // Se o proprietário do documento for um Cliente (ou Usuário de Cliente), busca apenas da tabela 'clientes'
-        const { data: dataCR } = await supabase
-            .from('clientes')
-            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
-            .eq('proprietario_id', targetEmpresaId)
-            .order('nome');
-        clientesCRData = dataCR;
-    }
-    
-    // 3. Combinar e Desduplicar (Prioriza tbl_clientes se houver duplicidade de ID)
-    const combinedClientsMap = new Map<string, any>();
-    
-    // Adiciona clientes do sistema (tbl_clientes)
-    (clientesSistemaData || []).forEach(c => {
-        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId });
-    });
-    
-    // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
-    (clientesCRData || []).forEach(c => {
-        if (!combinedClientsMap.has(c.id)) { // Prioriza tbl_clientes
-            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId });
+        if (error) {
+            showError('Erro ao buscar clientes do sistema: ' + error.message);
+        } else {
+            finalClientList = dataSistema || [];
         }
-    });
         
-    setClientesCR(Array.from(combinedClientsMap.values()));
+    } else { // Se for um Cliente (ou Usuário de Cliente)
+        // A lista de clientes (contratados) vem da tabela 'clientes' (clientes CR)
+        // que são de propriedade do Cliente logado.
+        const { data: dataCR, error } = await supabase
+            .from('clientes')
+            .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+            .eq('proprietario_id', ownerIdLogado) // Filtra pelos clientes CR do CLIENTE LOGADO
+            .order('nome');
+            
+        if (error) {
+            showError('Erro ao buscar clientes: ' + error.message);
+        } else {
+            finalClientList = dataCR || [];
+        }
+    }
+        
+    setClientesCR(finalClientList);
     
-  }, [ownerIdLogado, isAdmin]);
+  }, [isAdmin, ownerIdLogado]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -515,8 +502,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  // Filtro para mostrar tags manuais na UI
-  const manualTagsKeys = useMemo(() => {
+  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
+  const tagsParaPreenchimentoManual = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
     return combined
         .filter(tag => 
@@ -656,10 +643,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                           <h3 className="font-semibold text-lg">Tags Manuais</h3>
                           <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
                           
-                          {manualTagsKeys.length === 0 ? (
+                          {tagsParaPreenchimentoManual.length === 0 ? (
                               <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
                           ) : (
-                              manualTagsKeys.map(tagKey => (
+                              tagsParaPreenchimentoManual.map(tagKey => (
                                   <FormField
                                       key={tagKey}
                                       control={form.control}
@@ -744,7 +731,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
-        titulo={tituloDocumento || modelo?.titulo || 'Documento'}
+        titulo={previewTitle}
         isHtml={tipoConteudo === 'html'}
       />
     </LayoutPrincipal>
