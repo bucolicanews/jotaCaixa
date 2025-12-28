@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { usePermissoesUsuario } from '@/hooks/use-permissoes-usuario';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 import { Loader2, Plus, Search, Trash2, Edit, Filter, Users as UsersIcon, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,8 @@ interface EmpresaFiltro {
 
 const GerenciarUsuarios: React.FC = () => {
   const { usuario, perfil, role, carregando } = useSessao();
-  const { hasPermissao, carregando: carregandoPermissoes } = usePermissoesUsuario();
+  const { ownerId, ownerType } = useOwner(); // USANDO O PADRÃO DO CONTAS A RECEBER
+  
   const [usuarios, setUsuarios] = useState<UsuarioComEmpresa[]>([]);
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -36,7 +37,7 @@ const GerenciarUsuarios: React.FC = () => {
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
-  const [isSendingInvite, setIsSendingInvite] = useState<string | null>(null); // NOVO ESTADO
+  const [isSendingInvite, setIsSendingInvite] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState('meus_funcionarios');
 
@@ -44,15 +45,8 @@ const GerenciarUsuarios: React.FC = () => {
   const isCliente = role === 'Cliente';
   const isUsuario = role === 'Usuario';
   
-  const canManageUsers = hasPermissao('cadastrar_usuarios');
-  
-  // Determina se o usuário é funcionário do Admin (admin_usuario)
-  const isAdminUsuario = isUsuario && !!(perfil as AdminUsuarioProfile)?.admin_id;
-  const adminIdDoUsuario = isAdminUsuario ? (perfil as AdminUsuarioProfile)?.admin_id : null;
+  const isAdminUsuario = ownerType === 'AdminUsuario';
   const usuarioId = usuario?.id || null;
-  const clientePerfil = isCliente && perfil ? (perfil as ClienteProfile) : null;
-  const clientePerfilId = clientePerfil?.id || null;
-  const clientePerfilNome = clientePerfil?.nome || 'Minha Empresa';
 
   // Efeito para definir a aba ativa inicial
   useEffect(() => {
@@ -61,9 +55,9 @@ const GerenciarUsuarios: React.FC = () => {
       }
   }, [carregando, isAdmin, isCliente]);
 
-
   const fetchDados = useCallback(async () => {
-    if (!usuarioId || !role) {
+    // ATUALIZAÇÃO: Agora usamos o ownerId vindo do hook
+    if (!usuarioId || !ownerId) {
         setCarregandoDados(false);
         return;
     }
@@ -72,194 +66,119 @@ const GerenciarUsuarios: React.FC = () => {
     
     let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsers: UsuarioComEmpresa[] = [];
-    const creatorId = isAdmin ? usuarioId : isAdminUsuario ? adminIdDoUsuario : clientePerfilId;
 
-    if (isAdmin || (isAdminUsuario && creatorId)) {
-      // 1. Admin ou Sub-Admin: Busca todos os clientes do criador
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('tbl_clientes')
-        .select('id, nome')
-        .eq('admin_id', creatorId);
+    try {
+        // Se for Admin ou Funcionário de Admin
+        if (ownerType === 'Admin' || ownerType === 'AdminUsuario') {
+          // 1. Busca todos os clientes do criador
+          const { data: clientsData } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome')
+            .eq('admin_id', ownerId);
 
-      if (clientsError) {
-        showError('Erro ao carregar clientes para filtro: ' + clientsError.message);
-        setCarregandoDados(false);
-        return;
-      }
-      
-      fetchedClientes = clientsData as EmpresaFiltro[];
-      
-      // Adiciona o próprio Admin/Sub-Admin como um "proprietário"
-      if (creatorId) {
-          const adminOption: EmpresaFiltro = { id: creatorId, nome: 'Meus Usuários (Admin)' };
-          fetchedClientes.unshift(adminOption);
-      }
-      
-      setEmpresasFiltro(fetchedClientes);
+          if (clientsData) {
+            fetchedClientes = clientsData as EmpresaFiltro[];
+            const adminOption: EmpresaFiltro = { id: ownerId, nome: 'Meus Usuários (Admin)' };
+            fetchedClientes.unshift(adminOption);
+            setEmpresasFiltro(fetchedClientes);
+          }
 
-      // Busca Usuários (Funcionários) do Admin/Sub-Admin
-      const { data: adminUsersData, error: adminUsersError } = await supabase
-        .from('admin_usuarios')
-        .select('*, admin_id')
-        .eq('admin_id', creatorId)
-        .order('nome', { ascending: true });
-        
-      if (adminUsersError) console.error('Erro ao carregar usuários do Admin:', adminUsersError);
-      
-      const adminUsers = (adminUsersData || []).map(u => ({ 
-          ...u, 
-          cliente_id: null, // Garante que cliente_id é null
-          is_admin_user: true,
-          cliente_nome: 'Meus Usuários (Admin)' 
-      })) as UsuarioComEmpresa[];
-      
-      fetchedUsers.push(...adminUsers);
-
-      // Busca Usuários (Funcionários) dos Clientes
-      const clientIds = fetchedClientes
-        .filter(c => c.id && c.id !== creatorId)
-        .map(c => c.id as string);
-      const uniqueClientIds = Array.from(new Set(clientIds));
-      
-      if (uniqueClientIds.length > 0) {
-          const chunkSize = 20;
-          const clientUsersRows: UsuarioProfile[] = [];
+          // 2. Busca Funcionários diretos
+          const { data: adminUsersData } = await supabase
+            .from('admin_usuarios')
+            .select('*, admin_id')
+            .eq('admin_id', ownerId)
+            .order('nome', { ascending: true });
           
-          for (let i = 0; i < uniqueClientIds.length; i += chunkSize) {
-              const chunk = uniqueClientIds.slice(i, i + chunkSize);
-              const inFilter = `(${chunk.map(id => `"${id}"`).join(',')})`;
-              
-              const { data: clientUsersData, error: clienteUsersError } = await supabase
+          if (adminUsersData) {
+              fetchedUsers.push(...adminUsersData.map(u => ({ 
+                  ...u, 
+                  cliente_id: null,
+                  is_admin_user: true,
+                  cliente_nome: 'Meus Usuários (Admin)' 
+              })));
+          }
+
+          // 3. Busca Funcionários dos Clientes
+          const clientIds = fetchedClientes.filter(c => c.id !== ownerId).map(c => c.id);
+          if (clientIds.length > 0) {
+              const { data: clientUsersData } = await supabase
                 .from('tbl_usuarios')
                 .select('*')
-                .filter('cliente_id', 'in', inFilter)
+                .in('cliente_id', clientIds)
                 .order('nome', { ascending: true });
               
-              if (clienteUsersError) {
-                  console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
-                  showError('Falha ao carregar usuários das empresas clientes: ' + clienteUsersError.message);
-                  break;
+              if (clientUsersData) {
+                  fetchedUsers.push(...clientUsersData.map(item => {
+                    const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
+                    return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
+                  }));
               }
-              
-              clientUsersRows.push(...((clientUsersData as UsuarioProfile[]) || []));
           }
-          
-          const clientUsers = clientUsersRows.map(item => {
-            const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
-            return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
-          });
-          
-          fetchedUsers.push(...clientUsers);
-      }
-      
-    } else if (isCliente && creatorId) {
-      // CLIENTE: Busca apenas seus próprios Usuários (Funcionários)
-      const { data: usuariosData, error: usuariosError } = await supabase
-        .from('tbl_usuarios')
-        .select('*')
-        .eq('cliente_id', creatorId) 
-        .order('nome', { ascending: true });
+        } else if (ownerType === 'Cliente') {
+          // Se o dono for Cliente, busca apenas os subordinados dele
+          const { data: usuariosData } = await supabase
+            .from('tbl_usuarios')
+            .select('*')
+            .eq('cliente_id', ownerId) 
+            .order('nome', { ascending: true });
 
-      if (usuariosError) {
-        showError('Erro ao carregar usuários: ' + usuariosError.message);
-        setUsuarios([]);
+          if (usuariosData) {
+            fetchedUsers = usuariosData.map(u => ({ ...u, cliente_nome: 'Minha Empresa' })) as UsuarioComEmpresa[];
+          }
+        }
+
+        // ATUALIZAÇÃO: Filtragem final simplificada para evitar que usuários sumam por erro de vínculo
+        setUsuarios(fetchedUsers.filter(u => u.id !== usuarioId));
+    } catch (error) {
+        console.error('Erro na busca:', error);
+    } finally {
         setCarregandoDados(false);
-        return;
-      }
-      
-      fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: clientePerfilNome })) as UsuarioComEmpresa[];
     }
-    
-    // NOVO PASSO: Buscar todos os IDs de Clientes (tbl_clientes) e Admin (tbl_admins) para exclusão
-    const [clientProfilesRes, adminProfilesRes] = await Promise.all([
-        supabase.from('tbl_clientes').select('id'),
-        supabase.from('tbl_admins').select('id'),
-    ]);
-    
-    const clientProfileIds = new Set((clientProfilesRes.data || []).map(c => c.id));
-    const adminProfileIds = new Set((adminProfilesRes.data || []).map(a => a.id));
-    
-    // 3. Filtrar: Excluir o Admin logado E qualquer perfil que seja Cliente ou Admin (para garantir que apenas subordinados fiquem)
-    const filteredUsers = fetchedUsers
-        .filter(u => u.id !== usuarioId) // Exclui o usuário logado
-        .filter(u => !clientProfileIds.has(u.id) && !adminProfileIds.has(u.id)); // Exclui qualquer um que seja Cliente ou Admin
-
-    setUsuarios(filteredUsers);
-    setCarregandoDados(false);
-  }, [usuarioId, role, isAdmin, isCliente, isAdminUsuario, adminIdDoUsuario, clientePerfilId, clientePerfilNome]);
+  }, [usuarioId, ownerId, ownerType]);
 
   useEffect(() => {
-    if (!carregando) {
-        if (usuarioId) {
-            fetchDados();
-        } else {
-            setCarregandoDados(false);
-        }
+    if (!carregando && usuarioId && ownerId) {
+      fetchDados();
+    } else if (!carregando && !usuarioId) {
+      setCarregandoDados(false);
     }
-  }, [carregando, usuarioId, fetchDados]);
+  }, [carregando, usuarioId, ownerId, fetchDados]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFiltro(e.target.value);
   };
 
   // Separação de usuários para as abas
-  // Para admin_usuario, considera o admin_id do Admin como "seu" proprietário
-  const meuProprietarioId = isAdminUsuario ? adminIdDoUsuario : usuarioId;
-  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id === meuProprietarioId || (u as AdminUsuarioProfile)?.admin_id === meuProprietarioId);
-  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id !== meuProprietarioId && (u as AdminUsuarioProfile)?.admin_id !== meuProprietarioId);
+  const meusFuncionarios = usuarios.filter(u => (u as any).is_admin_user || (u as any).admin_id === ownerId);
+  const funcionariosClientes = usuarios.filter(u => !(u as any).is_admin_user && (u as any).cliente_id !== ownerId);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
     return userList.filter(u => {
-        const nomeEmpresa = u.nome_empresa || '';
-        
-        const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
-               u.email.toLowerCase().includes(termoBusca) ||
-               nomeEmpresa.toLowerCase().includes(termoBusca);
-               
+        const textMatch = u.nome.toLowerCase().includes(termoBusca) || u.email.toLowerCase().includes(termoBusca);
         if (!textMatch) return false;
-        
         if (isAdmin && currentTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
-            // Filtra pelo ID do cliente (proprietario_id)
-            const proprietarioId = (u as UsuarioProfile).cliente_id || (u as AdminUsuarioProfile).admin_id;
+            const proprietarioId = (u as any).cliente_id || (u as any).admin_id;
             return proprietarioId === filtroEmpresaId;
         }
-
         return true;
     });
   };
   
   const filteredMeusFuncionarios = filterUsers(meusFuncionarios, 'meus_funcionarios');
   const filteredFuncionariosClientes = filterUsers(funcionariosClientes, 'funcionarios_clientes');
-  
-  // Variável para a visualização de Cliente/Usuário (não Admin)
   const filteredClientUsers = filterUsers(usuarios, 'meus_funcionarios');
 
-
   const handleDelete = async (id: string, nome: string) => {
-    if (!window.confirm(`Tem certeza que deseja deletar a conta de ${nome}? Esta ação é irreversível.`)) return;
-
+    if (!window.confirm(`Tem certeza que deseja deletar a conta de ${nome}?`)) return;
     try {
-      // Determina a tabela de origem
-      const userToDelete = usuarios.find(u => u.id === id);
-      const isMyUser = (userToDelete as UsuarioProfile)?.cliente_id === usuarioId || (userToDelete as AdminUsuarioProfile)?.admin_id === usuarioId;
-      const tabela = isMyUser && isAdmin ? 'admin_usuarios' : 'tbl_usuarios';
-      
-      // Deleta o perfil do usuário na tabela correta
-      const { error: profileError } = await supabase
-        .from(tabela)
-        .delete()
-        .eq('id', id);
-
-      if (profileError) throw profileError;
-      
-      // Deleta o usuário do auth.users (Admin tem permissão para isso)
-      // Nota: Em um ambiente real, isso requer service_role, mas aqui simulamos a exclusão do perfil.
-      
-      showSuccess(`Conta de ${nome} deletada com sucesso.`);
+      const { error } = await supabase.from('admin_usuarios').delete().eq('id', id);
+      if (error) throw error;
+      showSuccess(`Conta deletada.`);
       fetchDados();
     } catch (error: any) {
-      showError('Falha ao deletar conta: ' + error.message);
+      showError('Falha: ' + error.message);
     }
   };
 
@@ -274,49 +193,30 @@ const GerenciarUsuarios: React.FC = () => {
       setIsDialogOpen(true);
   };
   
-  // NOVO HANDLER: Enviar Link de Redefinição de Senha
   const handleResendInvite = async (user: UsuarioComEmpresa) => {
-      if (!user.email) {
-          showError('Email do usuário não encontrado.');
-          return;
-      }
-      
+      if (!user.email) return;
       setIsSendingInvite(user.id);
-      
       try {
-          const { data, error } = await supabase.auth.resetPasswordForEmail(user.email, {
+          const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
               redirectTo: `${BASE_URL}/atualizar-senha`,
           });
-          
           if (error) throw error;
-          
-          const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
-          
-          if (window.confirm(`Link de Acesso Gerado para ${user.nome}. Deseja copiar o link para enviar manualmente?`)) {
-              navigator.clipboard.writeText(resetLink);
-              showSuccess('Link copiado para a área de transferência.');
-          }
-          
-          showSuccess(`Link de redefinição de senha enviado para ${user.email}.`);
+          showSuccess(`Link enviado.`);
       } catch (error: any) {
-          showError('Falha ao enviar link: ' + error.message);
+          showError('Falha: ' + error.message);
       } finally {
           setIsSendingInvite(null);
       }
   };
   
-  // O targetRole é sempre 'Usuario' nesta página
   const targetRole: UserRole = 'Usuario';
   const title = 'Gerenciar Funcionários'; 
   const buttonText = 'Novo Usuário (Funcionário)'; 
   
-  // Helper function to render the table content
   const renderTableContent = (profiles: UsuarioComEmpresa[], currentTab: string) => {
-    
     if (profiles.length === 0) {
-        return <p className="text-center text-muted-foreground">Nenhum funcionário encontrado.</p>;
+        return <p className="text-center text-muted-foreground py-10">Nenhum funcionário encontrado.</p>;
     }
-    
     return (
         <div className="rounded-md border overflow-x-auto">
             <Table>
@@ -330,66 +230,36 @@ const GerenciarUsuarios: React.FC = () => {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {profiles.map((userProfile) => {
-                        const id = userProfile.id;
-                        const nome = userProfile.nome;
-                        const isSending = isSendingInvite === id;
-                        
-                        return (
-                            <TableRow key={id}>
-                                <TableCell className="font-medium">{nome}</TableCell>
-                                <TableCell>{userProfile.email}</TableCell>
-                                {isAdmin && currentTab === 'funcionarios_clientes' && (
-                                    <TableCell className="text-sm text-muted-foreground">{userProfile.cliente_nome || 'N/A'}</TableCell>
-                                )}
-                                <TableCell>
-                                    {userProfile.data_inicio_contrato ? (
-                                        format(parseISO(userProfile.data_inicio_contrato), 'dd/MM/yyyy', { locale: ptBR })
-                                    ) : (
-                                        'N/A'
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-right space-x-2 min-w-[150px]">
-                                    
-                                    {/* NOVO BOTÃO: Enviar Link de Redefinição */}
-                                    <Button 
-                                        variant="outline" 
-                                        size="icon" 
-                                        onClick={() => handleResendInvite(userProfile)}
-                                        title="Enviar Link de Redefinição de Senha"
-                                        disabled={isSending || carregandoDados}
-                                    >
-                                        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                                    </Button>
-                                    
-                                    <Button 
-                                        variant="outline" 
-                                        size="icon" 
-                                        onClick={() => handleOpenDialog(userProfile)}
-                                        disabled={!canManageUsers}
-                                    >
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                        variant="destructive" 
-                                        size="icon" 
-                                        onClick={() => handleDelete(id, nome)}
-                                        disabled={!canManageUsers}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        );
-                    })}
+                    {profiles.map((userProfile) => (
+                        <TableRow key={userProfile.id}>
+                            <TableCell className="font-medium">{userProfile.nome}</TableCell>
+                            <TableCell>{userProfile.email}</TableCell>
+                            {isAdmin && currentTab === 'funcionarios_clientes' && (
+                                <TableCell className="text-sm text-muted-foreground">{userProfile.cliente_nome}</TableCell>
+                            )}
+                            <TableCell>
+                                {userProfile.data_inicio_contrato ? format(parseISO(userProfile.data_inicio_contrato), 'dd/MM/yyyy') : 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-right space-x-2">
+                                <Button variant="outline" size="icon" onClick={() => handleResendInvite(userProfile)} disabled={!!isSendingInvite}>
+                                    {isSendingInvite === userProfile.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                                </Button>
+                                <Button variant="outline" size="icon" onClick={() => handleOpenDialog(userProfile)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="destructive" size="icon" onClick={() => handleDelete(userProfile.id, userProfile.nome)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </TableCell>
+                        </TableRow>
+                    ))}
                 </TableBody>
             </Table>
         </div>
     );
   };
 
-
-  if (carregando || carregandoDados || carregandoPermissoes) {
+  if (carregando || carregandoDados) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -412,8 +282,8 @@ const GerenciarUsuarios: React.FC = () => {
             <Button 
                 onClick={() => handleOpenDialog(null)}
                 className="w-full sm:w-auto"
-                disabled={!canManageUsers}
-                title={!canManageUsers ? 'Você não tem permissão para criar novos usuários.' : buttonText}
+                disabled={isAdminUsuario}
+                title={isAdminUsuario ? 'Apenas o Admin principal pode criar novos usuários.' : buttonText}
             >
               <Plus className="mr-2 h-4 w-4" />
               {buttonText}
@@ -435,7 +305,6 @@ const GerenciarUsuarios: React.FC = () => {
 
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
-          {/* Ajuste: Usando grid-cols-2 para quebrar as abas em mobile */}
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="meus_funcionarios" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Meus Funcionários</TabsTrigger>
             <TabsTrigger value="funcionarios_clientes" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Funcionários dos Clientes</TabsTrigger>
@@ -476,7 +345,6 @@ const GerenciarUsuarios: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                           <SelectItem value="todos">Todas as Empresas</SelectItem>
-                          {/* Filtra a opção 'Meus Usuários (Admin)' para esta aba */}
                           {empresasFiltro.filter(e => e.id !== usuarioId).map(e => (
                               <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                           ))}
@@ -488,7 +356,6 @@ const GerenciarUsuarios: React.FC = () => {
           </TabsContent>
         </Tabs>
       ) : (
-        // Cliente/Usuário (apenas gerencia usuários)
         <>
           <div className="flex flex-col sm:flex-row mb-4 gap-4">
             <div className="relative flex-1">
