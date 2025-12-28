@@ -1,4 +1,3 @@
-// src/pages/GerarDocumentoSocietario.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,7 +75,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
-  // REMOVIDO: const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
+  
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -290,7 +289,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // Adiciona clientes CR (clientes), sobrescrevendo apenas se não for um cliente do sistema
     (clientesCRData || []).forEach(c => {
-        if (!combinedClientsMap.has(c.id)) {
+        if (!combinedClientsMap.has(c.id)) { // Prioriza tbl_clientes
             combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId });
         }
     });
@@ -516,8 +515,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = useMemo(() => {
+  // Filtro para mostrar tags manuais na UI
+  const manualTagsKeys = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
     return combined
         .filter(tag => 
@@ -657,10 +656,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                           <h3 className="font-semibold text-lg">Tags Manuais</h3>
                           <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
                           
-                          {tagsParaPreenchimentoManual.length === 0 ? (
+                          {manualTagsKeys.length === 0 ? (
                               <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
                           ) : (
-                              tagsParaPreenchimentoManual.map(tagKey => (
+                              manualTagsKeys.map(tagKey => (
                                   <FormField
                                       key={tagKey}
                                       control={form.control}
