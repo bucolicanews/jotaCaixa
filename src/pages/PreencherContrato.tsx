@@ -21,8 +21,8 @@ import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog'
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { ptBR } from 'date-fns/locale';
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
-import { useCapitalSocial } from '@/hooks/use-capital-social'; // NOVO IMPORT
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO HOOK
+import { useCapitalSocial } from '@/hooks/use-capital-social'; // NOVO HOOK
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -355,10 +355,248 @@ const PreencherContrato: React.FC = () => {
     });
     return html;
   }, [modelo, valoresTags]);
+  
+  // 🚨 FUNÇÃO handlePreview DEFINIDA AQUI
+  const handlePreview = () => {
+      if (!modelo) return;
+      
+      const conteudoRenderizado = renderConteudo();
+      
+      setConteudoPreview(conteudoRenderizado);
+      setPreviewTitle(tituloDocumento || modelo.titulo);
+      setPreviewOpen(true);
+  };
+  // 🚨 FUNÇÃO handlePreview DEFINIDA AQUI
 
   const handleTagChange = (tag: string, value: string) => {
     setValoresTags(prev => ({ ...prev, [tag]: value }));
   };
+  
+  // 🚨 FUNÇÃO handleSalvarContrato DEFINIDA AQUI
+  const handleSalvarContrato = async (status: ContratoGerado['status']) => {
+    if (!modelo || !clienteSelecionadoId || !proprietarioContratoId || !tituloDocumento || valorTotal <= 0 || !temCapitalSocial) {
+        showError('Preencha todos os campos obrigatórios (Título, Cliente, Valor) e registre o Capital Social.');
+        return;
+    }
+    
+    setIsSubmitting(true);
+    
+    // Determina as tabelas corretas
+    const isProprietarioAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
+    const tabelaContasReceber = isProprietarioAdmin ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = isProprietarioAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const ownerKey = isProprietarioAdmin ? 'admin_id' : 'empresa_id';
+    
+    // 1. Buscar Configurações Contábeis
+    const { data: configCRData } = await supabase
+        .from('configuracao_contratos')
+        .select('id_conta_clientes_receber, id_conta_receita_contrato')
+        .eq('proprietario_id', proprietarioContratoId)
+        .single();
+        
+    const contaPatrimonialId = configCRData?.id_conta_clientes_receber || null;
+    const contaReceitaId = configCRData?.id_conta_receita_contrato || null;
+    
+    const { data: configParcelaData } = await supabase
+        .from('configuracao_contas_receber')
+        .select('conta_contabil_id')
+        .eq('proprietario_id', proprietarioContratoId)
+        .eq('tipo_registro', 'parcela')
+        .single();
+        
+    const contaParcelaId = configParcelaData?.conta_contabil_id || null;
+    
+    const temConfigContabil = contaPatrimonialId && contaReceitaId && contaParcelaId;
+    
+    // 2. Calcular Parcelas
+    let valorFinalContrato = 0;
+    let valorParcela = 0;
+    let numParcelas = 0;
+    let dataInicioContrato: Date;
+    let parcelasParaInserir = [];
+
+    if (tipoLancamento === 'unico') {
+        valorFinalContrato = valorTotal;
+        valorParcela = valorTotal;
+        numParcelas = 1;
+        dataInicioContrato = dataVencimentoUnico!;
+        parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorParcela, data_vencimento: format(dataInicioContrato, 'yyyy-MM-dd'), status: 'aberta' });
+    } else {
+        numParcelas = numeroParcelas;
+        valorParcela = tipoLancamento === 'parcelar' ? valorTotal / numParcelas : valorTotal;
+        valorFinalContrato = tipoLancamento === 'parcelar' ? valorTotal : valorTotal * numParcelas;
+        dataInicioContrato = dataPrimeiroVencimento!;
+        
+        for (let i = 0; i < numParcelas; i++) {
+            parcelasParaInserir.push({ 
+                numero_parcela: i + 1, 
+                valor_parcela: valorParcela, 
+                data_vencimento: format(addDays(dataInicioContrato, i * intervaloDias), 'yyyy-MM-dd'), 
+                status: 'aberta' 
+            });
+        }
+    }
+    
+    // 3. Renderizar Conteúdo Final
+    const conteudoRenderizado = renderConteudo();
+    
+    // 4. Preparar dados do Contrato Gerado
+    const contratoPayload = {
+        modelo_id: modelo.id,
+        cliente_id: clienteSelecionadoId,
+        proprietario_id: proprietarioContratoId,
+        status: status,
+        valor_total: valorFinalContrato,
+        data_inicio: format(dataInicioContrato, 'yyyy-MM-dd'),
+        numero_parcelas: numParcelas,
+        dia_vencimento_parcela: dataInicioContrato.getDate(),
+        valores_tags_preenchidos: { 
+            ...valoresTags, 
+            titulo: tituloDocumento, 
+            tipo_conteudo: 'html', // Força HTML
+        },
+        conteudo_renderizado: conteudoRenderizado,
+        link_assinatura_externo: `${window.location.origin}/contrato-link/${contratoId || uuidv4()}`,
+        // Assinatura do Proprietário (Admin/Cliente)
+        assinatura_proprietario_nome: (perfil as any)?.assinatura_proprietario_nome || (perfil as any)?.nome,
+        assinatura_proprietario_url: (perfil as any)?.assinatura_proprietario_url || (perfil as any)?.logo_url,
+    };
+    
+    let newContratoId = contratoId;
+    let contaReceberId: string | null = null;
+    
+    try {
+        // 5. Inserir/Atualizar Contrato
+        if (isEditing && contratoInicial) {
+            // Se for edição, deletamos as parcelas e lançamentos antigos antes de atualizar
+            
+            // 5.1. Buscar conta a receber antiga
+            const { data: oldContaSintetica } = await supabase
+                .from(tabelaContasReceber)
+                .select('id, descricao')
+                .eq('contrato_gerado_id', contratoInicial.id)
+                .single();
+                
+            if (oldContaSintetica) {
+                // 5.2. Deletar parcelas antigas (CASCADE deve funcionar)
+                await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', oldContaSintetica.id);
+                
+                // 5.3. Deletar lançamentos contábeis antigos (usando a descrição da conta sintética original)
+                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: Contrato: ${oldContaSintetica.descricao} (CR ID: ${oldContaSintetica.id.substring(0, 8)})`;
+                const oldReceitaDescriptionPrefix = `Receita: Contrato: ${oldContaSintetica.descricao} (CR ID: ${oldContaSintetica.id.substring(0, 8)})`;
+                
+                await supabase.from('lancamentos')
+                    .delete()
+                    .eq('origem', 'lancamento_cr')
+                    .eq('proprietario_id', proprietarioContratoId)
+                    .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%,descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+                    
+                // 5.4. Deletar a conta sintética antiga
+                await supabase.from(tabelaContasReceber).delete().eq('id', oldContaSintetica.id);
+            }
+            
+            // 5.5. Atualizar o contrato
+            const { data, error } = await supabase.from('contratos_gerados').update(contratoPayload).eq('id', contratoInicial.id).select('id').single();
+            if (error) throw error;
+            newContratoId = data.id;
+            
+        } else {
+            // 5.1. Inserir novo contrato
+            const { data, error } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
+            if (error) throw error;
+            newContratoId = data.id;
+        }
+        
+        // 6. Criar Conta Sintética (Contas a Receber)
+        const contaReceberPayload = {
+            [ownerKey]: proprietarioContratoId,
+            cliente_id: clienteSelecionadoId,
+            descricao: `Contrato: ${tituloDocumento}`,
+            valor_total: valorFinalContrato,
+            data_emissao: format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento,
+            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+            status: 'aberta',
+            origem: 'contrato',
+            contrato_gerado_id: newContratoId,
+            historico_id: null, // Pode ser adicionado depois
+            id_conta_patrimonial: contaPatrimonialId,
+            id_conta_resultado: contaReceitaId,
+        };
+        
+        const { data: newContaSintetica, error: sinteticaError } = await supabase
+            .from(tabelaContasReceber)
+            .insert(contaReceberPayload)
+            .select('id')
+            .single();
+            
+        if (sinteticaError) throw sinteticaError;
+        contaReceberId = newContaSintetica.id;
+        
+        // 7. Inserir Parcelas
+        const parcelasComId = parcelasParaInserir.map(p => ({ 
+            ...p, 
+            conta_receber_id: contaReceberId, 
+            [ownerKey]: proprietarioContratoId,
+            ...(temConfigContabil && { id_conta_contabil: contaParcelaId })
+        }));
+        
+        const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
+        if (parcelError) throw parcelError;
+        
+        // 8. Lançamentos Contábeis (Partidas Dobradas)
+        if (temConfigContabil) {
+            const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+            const contaReceberIdShort = contaReceberId.substring(0, 8);
+            
+            const idPatrimonial = uuidv4();
+            const idReceita = uuidv4();
+            
+            // Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
+            const lancamentoPatrimonialPayload = {
+                id: idPatrimonial,
+                proprietario_id: proprietarioContratoId,
+                data_movimentacao: dataMovimentacao,
+                descricao: `Lançamento Inicial CR: Contrato: ${tituloDocumento} (CR ID: ${contaReceberIdShort})`,
+                valor: valorFinalContrato,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonialId,
+                origem: 'lancamento_cr',
+                historico_id: null,
+                conta_resultado_id: idReceita, // REFERÊNCIA CRUZADA
+            };
+            
+            // Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
+            const lancamentoReceitaPayload = {
+                id: idReceita,
+                proprietario_id: proprietarioContratoId,
+                data_movimentacao: dataMovimentacao,
+                descricao: `Receita: Contrato: ${tituloDocumento} (CR ID: ${contaReceberIdShort})`,
+                valor: valorFinalContrato,
+                tipo: 'Saida' as const, // Saída (Crédito) na Receita
+                conta_bancaria_id: null,
+                conta_contabil_id: contaReceitaId,
+                origem: 'lancamento_cr',
+                historico_id: null,
+                conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
+            };
+            
+            const { error: lancamentoError } = await supabase.from('lancamentos').insert([lancamentoPatrimonialPayload, lancamentoReceitaPayload]);
+            if (lancamentoError) throw lancamentoError;
+        }
+        
+        // 9. Redireciona para a página de contratos
+        navigate('/contratos');
+        
+    } catch (error: any) {
+        console.error('Erro ao salvar contrato:', error);
+        showError('Falha ao salvar contrato: ' + error.message);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+  // 🚨 FUNÇÃO handleSalvarContrato DEFINIDA AQUI
 
   if (carregandoSessao || carregandoDados || carregandoCapital) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
