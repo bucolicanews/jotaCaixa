@@ -76,7 +76,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
-  const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
+  // REMOVIDO: const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -124,7 +124,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const proprietarioDocumentoId = watch('proprietario_documento_id');
   const tituloDocumento = watch('titulo_documento');
   const tipoConteudo = watch('tipo_conteudo');
-  const valoresTags = watch('valores_tags') || {};
+  const valoresTags = watch('valores_tags') || {}; // USANDO WATCH AQUI
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
@@ -745,7 +745,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
-        titulo={previewTitle}
+        titulo={tituloDocumento || modelo?.titulo || 'Documento'}
         isHtml={tipoConteudo === 'html'}
       />
     </LayoutPrincipal>

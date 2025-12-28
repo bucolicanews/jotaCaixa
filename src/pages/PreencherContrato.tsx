@@ -43,7 +43,7 @@ const PreencherContrato: React.FC = () => {
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<any[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
-  const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
+  // REMOVIDO: const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -148,7 +148,6 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Carregar Empresas (Se Admin)
     if (isAdmin && ownerIdLogado) {
-      // Busca clientes do sistema (tbl_clientes) que o Admin gerencia
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('admin_id', ownerIdLogado).eq('aprovado', true);
       const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
@@ -193,6 +192,7 @@ const PreencherContrato: React.FC = () => {
             }
             
             if (contratoExistente.valores_tags_preenchidos) {
+                // ATUALIZA O ESTADO DE VALORES TAGS
                 setValoresTags(contratoExistente.valores_tags_preenchidos as Record<string, string>);
                 // Se o título estiver salvo nas tags, usa ele
                 if ((contratoExistente.valores_tags_preenchidos as any)['titulo']) {
@@ -335,7 +335,7 @@ const PreencherContrato: React.FC = () => {
   ]);
 
   // Filtro para mostrar tags manuais na UI
-  const tagsManuaisDisponiveis = useMemo(() => {
+  const tagsParaPreenchimentoManual = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
     return combined
         .filter(tag => 
@@ -451,7 +451,7 @@ const PreencherContrato: React.FC = () => {
         const contratoPayload = {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
-            proprietario_id: values.proprietario_documento_id,
+            proprietario_id: proprietarioContratoId,
             status: status,
             valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
@@ -473,7 +473,7 @@ const PreencherContrato: React.FC = () => {
         // 3. Inserir Nova Conta Sintética (Contas a Receber)
         const contaReceberPayload = {
             [ownerKey]: proprietarioContratoId,
-            cliente_id: values.cliente_id, // USANDO O CLIENTE ID DO FORM
+            cliente_id: clienteSelecionadoId, // USANDO O CLIENTE ID DO FORM
             descricao: `Contrato: ${tituloDocumento}`,
             valor_total: valorTotalFinal,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
@@ -559,20 +559,30 @@ const PreencherContrato: React.FC = () => {
     }
   };
   
-  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = tagsManuaisDisponiveis.filter(tagKey => {
-      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
-      if (tagKey.startsWith('{{EMPRESA_') && valoresTags[tagKey]) return false;
-      
-      // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
-      if (tagKey.startsWith('{{CLIENTE_') && valoresTags[tagKey]) return false;
-      
-      // Exclui a tag de conteúdo principal
-      if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return false;
-      
-      // Inclui tags que não têm valor preenchido
-      return !valoresTags[tagKey];
-  });
+  // Filtro para mostrar tags manuais na UI
+  const tagsParaPreenchimentoManual = useMemo(() => {
+    const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+    return combined
+        .filter(tag => 
+            !tag.nome_tag.startsWith('{{CLIENTE_') && 
+            !tag.nome_tag.startsWith('{{EMPRESA_') &&
+            !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}'].includes(tag.nome_tag)
+        )
+        .map(t => t.nome_tag);
+  }, [tagsCustomizadas]);
+
+  const renderConteudo = useCallback(() => {
+    let html = modelo?.conteudo_template || '';
+    Object.keys(valoresTags).forEach(tag => {
+      const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      html = html.replace(regex, valoresTags[tag] || '');
+    });
+    return html;
+  }, [modelo, valoresTags]);
+
+  const handleTagChange = (tag: string, value: string) => {
+    setValoresTags(prev => ({ ...prev, [tag]: value }));
+  };
 
   if (carregandoSessao || carregandoDados || carregandoCapital) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
@@ -597,9 +607,20 @@ const PreencherContrato: React.FC = () => {
             Voltar
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Documento' : 'Gerar Documento'}: {modelo.titulo}
+          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
       </div>
+      
+      {/* Alerta de Capital Social */}
+      {!temCapitalSocial && (
+          <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Lançamento Inicial Obrigatório</AlertTitle>
+              <AlertDescription>
+                  É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber. Salve como rascunho ou complete o lançamento em <Link to="/lancamentos" className="underline">Lançamentos</Link>.
+              </AlertDescription>
+          </Alert>
+      )}
       
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Button 
@@ -609,187 +630,238 @@ const PreencherContrato: React.FC = () => {
               disabled={!modelo || !clienteSelecionadoId}
           >
               <Eye className="mr-2 h-4 w-4" />
-              Pré-visualizar Documento
+              Pré-visualizar Contrato
           </Button>
           <Button 
-              onClick={() => handleSalvarDocumento('finalizado')} 
+              onClick={() => handleSalvarContrato('pendente_assinatura')} 
               className="flex-1 h-12"
               disabled={isSubmitting || !clienteSelecionadoId}
           >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {isEditing ? 'Salvar Alterações' : 'Gerar Documento'}
+              {isEditing ? 'Salvar Alterações' : 'Gerar para Assinatura'}
           </Button>
       </div>
       
-      <FormProvider {...form}>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((values) => handleSalvarDocumento('finalizado'))} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Coluna 1: Dados e Tags */}
-              <Card className="lg:col-span-1 h-fit">
-                  <CardHeader><CardTitle className="text-xl">Dados e Tags</CardTitle></CardHeader>
-                  <CardContent className="space-y-6">
-                      
-                      {isAdmin && (
-                          <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
-                              <FormItem className="space-y-2">
-                                  <FormLabel htmlFor="empresa-documento">Empresa Proprietária</FormLabel>
-                                  <Select 
-                                      value={field.value || ''} 
-                                      onValueChange={field.onChange}
-                                  >
-                                      <FormControl>
-                                          <SelectTrigger id="empresa-documento">
-                                              <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                                              <SelectValue placeholder="Selecione a Empresa" />
-                                          </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                          {empresasContrato.map((e: EmpresaContrato) => (
-                                              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                              </FormItem>
-                          )} />
-                      )}
-                      
-                      <FormField control={form.control} name="titulo_documento" render={({ field }) => (
-                          <FormItem className="space-y-2">
-                              <FormLabel htmlFor="titulo-documento">Título do Documento</FormLabel>
-                              <FormControl>
-                                  <Input 
-                                      id="titulo-documento"
-                                      placeholder={modelo.titulo}
-                                      {...field}
-                                  />
-                              </FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )} />
-                      
-                      <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                          <FormItem className="space-y-2">
-                              <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
-                                  <FormControl>
-                                      <SelectTrigger id="cliente">
-                                          <SelectValue placeholder="Selecione o Cliente" />
-                                      </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      {clientesCR.map(c => (
-                                          <SelectItem key={c.id} value={c.id}>
-                                              {c.nome} {c.documento ? `(${c.documento})` : ''}
-                                          </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                              <FormMessage />
-                          </FormItem>
-                      )} />
-                      
-                      <Separator />
-                      
-                      <div className="space-y-4">
-                          <h3 className="font-semibold text-lg">Tags Manuais</h3>
-                          <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
-                          
-                          {tagsParaPreenchimentoManual.length === 0 ? (
-                              <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
-                          ) : (
-                              tagsParaPreenchimentoManual.map(tagKey => (
-                                  <FormField
-                                      key={tagKey}
-                                      control={form.control}
-                                      name={`valores_tags.${tagKey}`}
-                                      render={({ field }) => (
-                                          <FormItem className="space-y-1">
-                                              <FormLabel htmlFor={tagKey} className="font-semibold">{tagKey}</FormLabel>
-                                              <FormControl>
-                                                  <Input 
-                                                      id={tagKey}
-                                                      placeholder={`Insira o valor para ${tagKey}`}
-                                                      {...field}
-                                                      value={field.value || ''}
-                                                      onChange={(e) => handleTagChange(tagKey, e.target.value)}
-                                                  />
-                                              </FormControl>
-                                              <FormMessage />
-                                          </FormItem>
-                                      )}
-                                  />
-                              ))
-                          )}
-                      </div>
-                  </CardContent>
-              </Card>
-              
-              {/* Coluna 2: Conteúdo Principal (Editável) e Prévia */}
-              <Card className="lg:col-span-2">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                      
-                      {/* Campo de Edição do Conteúdo Principal */}
-                      <FormField
-                          control={form.control}
-                          name={`valores_tags.{{CONTEUDO_PRINCIPAL}}`}
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Conteúdo Principal (Editável)</FormLabel>
-                                  <FormControl>
-                                      <Textarea 
-                                          placeholder="Edite o conteúdo principal do documento aqui..." 
-                                          {...field} 
-                                          rows={15}
-                                          className="font-mono text-sm"
-                                      />
-                                  </FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
-                      
-                      <Separator />
-                      
-                      {/* Prévia Renderizada */}
-                      <div className="space-y-2">
-                          <Label>Prévia Renderizada</Label>
-                          <div className="border rounded-md p-4 bg-background shadow-inner max-h-[400px] overflow-y-auto">
-                              {templateContent ? (
-                                  <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} />
-                              ) : (
-                                  <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
-                              )}
-                          </div>
-                      </div>
-                      
-                  </CardContent>
-              </Card>
-              
+      <Card>
+        <CardHeader><CardTitle className="text-xl">1. Dados Essenciais</CardTitle></CardHeader>
+        <CardContent className="space-y-6">
+            
+            {isAdmin && (
+                <div className="space-y-2">
+                    <Label htmlFor="empresa-contratante">Empresa Contratante (Proprietária do Contrato)</Label>
+                    <Select 
+                        value={proprietarioContratoId || ''} 
+                        onValueChange={setProprietarioContratoId}
+                    >
+                        <SelectTrigger id="empresa-contratante">
+                            <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                            <SelectValue placeholder="Selecione a Empresa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {empresasContrato.map((e: any) => (
+                                <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="titulo-documento">Título do Contrato</Label>
+                    <Input 
+                        id="titulo-documento"
+                        placeholder={modelo.titulo}
+                        value={tituloDocumento}
+                        onChange={(e) => setTituloDocumento(e.target.value)}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="cliente">Cliente (Contratado)</Label>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
+                        <SelectTrigger id="cliente">
+                            <SelectValue placeholder="Selecione o Cliente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {clientesCR.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {c.nome} {c.documento ? `(${c.documento})` : ''}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader><CardTitle className="text-xl">2. Detalhes Financeiros</CardTitle></CardHeader>
+        <CardContent className="space-y-6">
+            <div className="space-y-2">
+                <Label>Tipo de Lançamento</Label>
+                <RadioGroup 
+                    value={tipoLancamento} 
+                    onValueChange={(v: TipoLancamento) => setTipoLancamento(v)} 
+                    className="flex space-x-4 pt-2"
+                >
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="unico" /><Label htmlFor="unico">Único</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="repetir" /><Label htmlFor="repetir">Repetir Valor</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="parcelar" /><Label htmlFor="parcelar">Parcelar Valor</Label></div>
+                </RadioGroup>
             </div>
             
-            <Button type="submit" className="w-full" disabled={isSubmitting || !clienteSelecionadoId}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isEditing ? 'Salvar Alterações' : 'Gerar Documento'}
-            </Button>
-          </form>
-        </Form>
-      </FormProvider>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="valor-total">{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</Label>
+                    <Input 
+                        id="valor-total"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={valorTotal}
+                        onChange={(e) => setValorTotal(parseFloat(e.target.value) || 0)}
+                    />
+                </div>
+                
+                {tipoLancamento === 'unico' && (
+                    <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="data-vencimento">Data de Vencimento</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn("w-full pl-3 text-left font-normal", !dataVencimentoUnico && "text-muted-foreground")}
+                                >
+                                    {dataVencimentoUnico ? format(dataVencimentoUnico, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus locale={ptBR} />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                )}
+                
+                {tipoLancamento !== 'unico' && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="num-parcelas">Nº de Parcelas</Label>
+                            <Input 
+                                id="num-parcelas"
+                                type="number"
+                                min={1}
+                                placeholder="12"
+                                value={numeroParcelas}
+                                onChange={(e) => setNumeroParcelas(parseInt(e.target.value) || 1)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="intervalo-dias">Intervalo (dias)</Label>
+                            <Input 
+                                id="intervalo-dias"
+                                type="number"
+                                min={1}
+                                placeholder="30"
+                                value={intervaloDias}
+                                onChange={(e) => setIntervaloDias(parseInt(e.target.value) || 30)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="data-primeiro-vencimento">1º Vencimento</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn("w-full pl-3 text-left font-normal", !dataPrimeiroVencimento && "text-muted-foreground")}
+                                    >
+                                        {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus locale={ptBR} />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </>
+                )}
+            </div>
+        </CardContent>
+      </Card>
       
-      <DocumentoPreviewDialog
+      <Card>
+        <CardHeader><CardTitle className="text-xl">3. Conteúdo e Tags</CardTitle></CardHeader>
+        <CardContent className="space-y-6">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Tags Automáticas */}
+                <div className="space-y-4">
+                    <h3 className="font-semibold">Tags Automáticas (Perfil)</h3>
+                    <div className="space-y-2 border rounded-md p-4 max-h-64 overflow-y-auto">
+                        {Object.keys(valoresTags).filter(tag => tag.startsWith('{{CLIENTE_') || tag.startsWith('{{EMPRESA_')).map(tagKey => (
+                            <div key={tagKey} className="text-sm">
+                                <p className="font-mono text-xs font-semibold text-primary">{tagKey}</p>
+                                <p className="text-muted-foreground">{valoresTags[tagKey] || 'N/A'}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* Tags Manuais */}
+                <div className="space-y-4">
+                    <h3 className="font-semibold">Tags Manuais</h3>
+                    <div className="space-y-2 border rounded-md p-4 max-h-64 overflow-y-auto">
+                        {tagsParaPreenchimentoManual.map(tagKey => (
+                            <div key={tagKey} className="space-y-1">
+                                <Label htmlFor={tagKey} className="font-semibold text-sm">{tagKey}</Label>
+                                <Input 
+                                    id={tagKey}
+                                    placeholder={`Insira o valor para ${tagKey}`}
+                                    value={valoresTags[tagKey] || ''}
+                                    onChange={(e) => handleTagChange(tagKey, e.target.value)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            
+            <Separator />
+            
+            <div className="space-y-2">
+                <Label>Conteúdo do Contrato (Template)</Label>
+                <div className="border rounded-md p-4 bg-background shadow-inner max-h-[400px] overflow-y-auto">
+                    {templateContent ? (
+                        <div dangerouslySetInnerHTML={{ __html: renderConteudo() }} />
+                    ) : (
+                        <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
+                    )}
+                </div>
+            </div>
+            
+        </CardContent>
+      </Card>
+      
+      <Button 
+          onClick={() => handleSalvarContrato('rascunho')} 
+          variant="secondary" 
+          className="w-full"
+          disabled={isSubmitting}
+      >
+          Salvar como Rascunho
+      </Button>
+      
+      <ContratoPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
-        conteudoHtml={conteudoPreview}
-        titulo={previewTitle}
-        isHtml={tipoConteudo === 'html'}
+        conteudoHtml={renderConteudo()}
+        titulo={tituloDocumento || modelo?.titulo || 'Contrato'}
+        isHtml={true}
       />
     </LayoutPrincipal>
   );
 };
 
-export default GerarDocumentoSocietario;
+export default PreencherContrato;
