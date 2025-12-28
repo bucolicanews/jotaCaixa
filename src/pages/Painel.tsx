@@ -13,10 +13,10 @@ import FormCapitalSocial from '@/components/formularios/FormCapitalSocial'; // N
 type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
 const Painel = () => {
-  const { role, perfil, carregando, setupStatus, refetch } = useSessao();
+  const { role, perfil, carregando, setupStatus, refetch, ownerType } = useSessao();
 
   const isClient = role === 'Cliente';
-  const isAdmin = role === 'Admin';
+  const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
   const isUsuario = role === 'Usuario';
 
   const isUsuarioDoAdmin = 

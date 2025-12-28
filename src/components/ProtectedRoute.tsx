@@ -39,20 +39,32 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children
 
   const isUsuarioAdmin = role === 'Usuario' && !!(perfil as any)?.admin_id;
 
-  // 🔓 Admin, their sub-users, and Clients pass directly
-  if (role === 'Admin' || role === 'Cliente' || isUsuarioAdmin) {
+  // 🔓 Admin e Clientes passam diretamente
+  if (role === 'Admin' || role === 'Cliente') {
     return <>{children}</>;
   }
 
-  // 🔐 Lógica para Role 'Usuario'
+  // 🔐 Lógica para Role 'Usuario' (agora inclui AdminUsuario)
   if (role === 'Usuario') {
-    // Se não for necessária uma permissão específica, permite o acesso
-    if (!permissionKey) {
-      return <>{children}</>;
-    }
-    // Se for necessária uma permissão, verifica se o usuário a possui
-    if (!permissoes || !permissoes[permissionKey]) {
-      return <Navigate to="/painel" replace />;
+    // Se for um usuário de admin, ele precisa de permissões específicas
+    if (isUsuarioAdmin) {
+      // Se não for necessária uma permissão específica, permite o acesso (ex: /perfil)
+      if (!permissionKey) {
+        return <>{children}</>;
+      }
+      // Se for necessária uma permissão, verifica se o usuário a possui
+      if (!permissoes || !permissoes[permissionKey]) {
+        // Redireciona para o painel se não tiver permissão
+        return <Navigate to="/painel" replace />;
+      }
+    } else {
+      // Lógica para usuários de cliente (se houver alguma diferenciação no futuro)
+      if (!permissionKey) {
+        return <>{children}</>;
+      }
+      if (!permissoes || !permissoes[permissionKey]) {
+        return <Navigate to="/painel" replace />;
+      }
     }
   }
 

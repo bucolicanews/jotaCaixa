@@ -185,6 +185,8 @@ export interface AdminUsuarioProfile {
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | AdminUsuarioProfile | null;
 
+export type OwnerType = 'Admin' | 'Cliente' | 'AdminUsuario' | 'ClienteUsuario' | 'Unknown';
+
 export interface DadosSessao {
   usuario: User | null;
   perfil: AnyProfile;
@@ -192,4 +194,6 @@ export interface DadosSessao {
   carregando: boolean;
   setupStatus: SetupStatus;
   ownerId: string | null;
+  ownerType: OwnerType;
+  sourceProfileId: string | null;
 }
