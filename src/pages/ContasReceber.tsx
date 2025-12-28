@@ -21,6 +21,7 @@ import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
 import { useDebounce } from '@/hooks/use-debounce';
 import { formatarData } from '@/utils/formatters';
 import SetupBlocker from '@/components/SetupBlocker';
+import { useSessao } from '@/hooks/use-sessao'; // <-- IMPORTAÇÃO CORRIGIDA
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -116,8 +117,6 @@ const ContasReceber = () => {
     if (filtroPeriodo?.to) {
         contasQuery = contasQuery.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
     }
-    
-    // REMOVIDO FILTRO DE TEXTO DO BACKEND AQUI
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
