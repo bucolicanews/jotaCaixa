@@ -17,3 +17,4 @@
 17 - erstorino dfe contas as pagar correto
 18-build
 19- correção do lançamnetos contabeis do contrato
+20 - acesso do usuario ( obs)
