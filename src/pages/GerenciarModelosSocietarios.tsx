@@ -12,39 +12,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocumentoSocietarioModelo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 // Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
-    tipo_conteudo?: 'html' | 'texto';
+  tipo_conteudo?: 'html' | 'texto';
 }
 
 const GerenciarModelosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
-  const [modelos, setModelos] = useState<DocumentoSocietarioModelo[]>([]);
+  const { ownerId } = useOwner(); // USANDO useOwner
+  const [modelos, setModelos] = useState<ExtendedDocumentoSocietarioModelo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [modeloSelecionado, setModeloSelecionado] = useState<DocumentoSocietarioModelo | null>(null);
+  const [modeloSelecionado, setModeloSelecionado] = useState<ExtendedDocumentoSocietarioModelo | null>(null);
   const [activeTab, setActiveTab] = useState('meus_modelos');
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  // ID do proprietário (Admin ou Cliente)
-  const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') {
-      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-      if ('admin_id' in user && user.admin_id) return user.admin_id;
-      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-    }
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarModelos = useCallback(async () => {
-    if (!ownerId && !isAdmin) {
+    if (!proprietarioId && !isAdmin) {
         setModelos([]);
         setCarregando(false);
         return;
@@ -58,9 +48,9 @@ const GerenciarModelosSocietarios: React.FC = () => {
       .order('titulo', { ascending: true });
       
     // Se for Cliente ou Admin, busca seus próprios modelos E modelos globais (proprietario_id is null)
-    if (isCliente || isAdmin) {
+    if (proprietarioId) {
         // Construção segura da cláusula OR
-        const orClause = `proprietario_id.eq.${ownerId},proprietario_id.is.null`;
+        const orClause = `proprietario_id.eq.${proprietarioId},proprietario_id.is.null`;
         query = query.or(orClause);
     }
     // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
@@ -75,13 +65,13 @@ const GerenciarModelosSocietarios: React.FC = () => {
       setModelos(data as DocumentoSocietarioModelo[]);
     }
     setCarregando(false);
-  }, [ownerId, isAdmin, isCliente]);
+  }, [proprietarioId, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || ownerId)) {
+    if (!carregandoSessao && (isAdmin || proprietarioId)) {
       buscarModelos();
     }
-  }, [carregandoSessao, isAdmin, ownerId, buscarModelos]);
+  }, [carregandoSessao, isAdmin, proprietarioId, buscarModelos]);
   
   const handleSaveComplete = () => {
       setDialogOpen(false);
@@ -119,16 +109,16 @@ const GerenciarModelosSocietarios: React.FC = () => {
   
   const modelosFiltrados = useMemo(() => {
       if (!isAdmin) {
-          // Cliente/Usuário só vê seus próprios modelos
+          // Para usuários comuns, tudo o que retornou da query é "meu modelo"
           return { meusModelos: modelos, modelosClientes: [] };
       }
       
       // Admin: Separa modelos próprios (proprietario_id = ownerId) e modelos de clientes (proprietario_id != ownerId)
-      const meusModelos = modelos.filter(m => m.proprietario_id === ownerId);
-      const modelosClientes = modelos.filter(m => m.proprietario_id !== ownerId);
+      const meusModelos = modelos.filter(m => m.proprietario_id === proprietarioId || m.proprietario_id === null);
+      const modelosClientes = modelos.filter(m => m.proprietario_id !== proprietarioId && m.proprietario_id !== null);
       
       return { meusModelos, modelosClientes };
-  }, [modelos, isAdmin, ownerId]);
+  }, [modelos, isAdmin, proprietarioId]);
   
   const modelosParaExibir = isAdmin && activeTab === 'modelos_clientes' 
       ? modelosFiltrados.modelosClientes 
@@ -136,34 +126,45 @@ const GerenciarModelosSocietarios: React.FC = () => {
       
   const isSupervisao = isAdmin && activeTab === 'modelos_clientes';
 
-  // Helper para renderizar a lista de modelos
   const renderModelosList = (list: DocumentoSocietarioModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
           {list.map((modelo) => {
               // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-              const canEditOrDelete = modelo.proprietario_id === ownerId || isAdmin && !isSupervisao;
-              
+              const isOwner = modelo.proprietario_id === proprietarioId || (isAdmin && !isSupervisao);
+
               return (
-                  <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
-                      <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{modelo.titulo}</p>
-                          {isSupervisao && <p className="text-xs text-muted-foreground">Proprietário ID: {modelo.proprietario_id}</p>}
-                          <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex space-x-2 ml-4">
-                          <Link to={`/documentos-societarios/gerar/${modelo.id}`}>
-                              <Button variant="secondary" size="sm" title="Usar Modelo">
-                                  <ArrowRight className="w-4 h-4 mr-2" /> Gerar
-                              </Button>
-                          </Link>
-                          <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Editar Modelo" : "Apenas visualização"}>
-                              <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Excluir Modelo" : "Apenas visualização"}>
-                              <Trash2 className="w-4 h-4" />
-                          </Button>
-                      </div>
-                  </div>
+                <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{modelo.titulo}</p>
+                        {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.proprietario_id}</p>}
+                        <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex space-x-2 ml-4">
+                        <Link to={`/documentos-societarios/gerar/${modelo.id}`}>
+                            <Button variant="secondary" size="sm" title="Usar Modelo">
+                                <ArrowRight className="w-4 h-4 mr-2" /> Gerar
+                            </Button>
+                        </Link>
+                        <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={() => handleEdit(modelo)} 
+                            disabled={!isOwner} 
+                            title={isOwner ? "Editar Modelo" : "Apenas visualização"}
+                        >
+                            <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                            variant="destructive" 
+                            size="icon" 
+                            onClick={() => handleDelete(modelo.id)} 
+                            disabled={!isOwner} 
+                            title={isOwner ? "Excluir Modelo" : "Apenas visualização"}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
               );
           })}
       </div>
@@ -180,10 +181,10 @@ const GerenciarModelosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
+  if (!carregandoSessao && !proprietarioId && !isAdmin) {
       return (
           <LayoutPrincipal>
-              <Card><CardContent className="p-6">Você não tem permissão para gerenciar modelos de documentos societários.</CardContent></Card>
+              <Card><CardContent className="p-6">Você não tem permissão para acessar esta área ou seu vínculo de empresa não foi encontrado.</CardContent></Card>
           </LayoutPrincipal>
       );
   }
@@ -216,13 +217,14 @@ const GerenciarModelosSocietarios: React.FC = () => {
                               <Plus className="w-4 h-4 mr-2" /> Novo Modelo
                           </Button>
                       </DialogTrigger>
-                      <DialogContent className="w-full sm:max-w-[90vw] max-h-[95vh] overflow-y-auto">
+                      <DialogContent className="w-full sm:max-w-7xl max-h-[95vh] overflow-y-auto">
                           <DialogHeader>
                               <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
                           </DialogHeader>
                           <FormDocumentoSocietarioModelo
                               modeloInicial={modeloSelecionado}
                               onSaveComplete={handleSaveComplete}
+                              ownerId={proprietarioId}
                           />
                       </DialogContent>
                   </Dialog>

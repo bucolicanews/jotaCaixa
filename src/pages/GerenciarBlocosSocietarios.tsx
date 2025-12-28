@@ -14,50 +14,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard'; // Importando o Card
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 const GerenciarBlocosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // USANDO useOwner
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [blocoSelecionado, setBlocoSelecionado] = useState<BlocoSocietario | null>(null);
   const [activeTab, setActiveTab] = useState('meus_blocos');
-  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  useEffect(() => {
-    console.log('[GerenciarBlocos] useEffect para ownerId. Carregando sessão:', carregandoSessao);
-    if (carregandoSessao) return;
-
-    console.log('[GerenciarBlocos] Calculando ownerId com dados da sessão:', { role, perfil, usuario });
-
-    const getOwnerId = () => {
-      if (isAdmin) return usuario?.id || null;
-      if (isCliente) return (perfil as ClienteProfile)?.id;
-      if (role === 'Usuario') {
-        const user = perfil as any;
-        if (user?.admin_id) {
-            console.log('[GerenciarBlocos] ID do proprietário encontrado via user.admin_id:', user.admin_id);
-            return user.admin_id;
-        }
-        if (user?.cliente_id) {
-            console.log('[GerenciarBlocos] ID do proprietário encontrado via user.cliente_id:', user.cliente_id);
-            return user.cliente_id;
-        }
-      }
-      console.warn('[GerenciarBlocos] Não foi possível determinar o ID do proprietário.');
-      return null;
-    };
-
-    const calculatedOwnerId = getOwnerId();
-    setOwnerId(calculatedOwnerId);
-    console.log('[GerenciarBlocos] ownerId final definido para:', calculatedOwnerId);
-  }, [carregandoSessao, isAdmin, isCliente, role, perfil, usuario]);
+  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarBlocos = useCallback(async () => {
-    if (!ownerId && !isAdmin) {
+    if (!proprietarioId && !isAdmin) {
         setBlocos([]);
         setCarregando(false);
         return;
@@ -70,9 +44,9 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente, busca apenas os seus blocos (ownerId) e blocos globais (proprietario_id is null)
-    if (isCliente) {
-        query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
+    // Se for Cliente/Usuário, busca apenas os seus blocos (ownerId) e blocos globais (proprietario_id is null)
+    if (!isAdmin && proprietarioId) {
+        query = query.or(`proprietario_id.eq.${proprietarioId},proprietario_id.is.null`);
     }
     // Se for Admin, a RLS permite ver todos os blocos (seus e dos clientes)
 
@@ -85,13 +59,13 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       setBlocos(data as BlocoSocietario[]);
     }
     setCarregando(false);
-  }, [ownerId, isAdmin, isCliente]);
+  }, [proprietarioId, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || ownerId)) {
+    if (!carregandoSessao && (isAdmin || proprietarioId)) {
       buscarBlocos();
     }
-  }, [carregandoSessao, isAdmin, ownerId, buscarBlocos]);
+  }, [carregandoSessao, isAdmin, proprietarioId, buscarBlocos]);
   
   const handleSaveComplete = () => {
       setDialogOpen(false);
@@ -134,11 +108,11 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       }
       
       // Admin: Separa blocos próprios (proprietario_id = ownerId) e blocos de clientes (proprietario_id != ownerId)
-      const meusBlocos = blocos.filter(b => b.proprietario_id === ownerId);
-      const blocosClientes = blocos.filter(b => b.proprietario_id !== ownerId);
+      const meusBlocos = blocos.filter(b => b.proprietario_id === proprietarioId || b.proprietario_id === null);
+      const blocosClientes = blocos.filter(b => b.proprietario_id !== proprietarioId && b.proprietario_id !== null);
       
       return { meusBlocos, blocosClientes };
-  }, [blocos, isAdmin, ownerId]);
+  }, [blocos, isAdmin, proprietarioId]);
   
   const blocosParaExibir = isAdmin && activeTab === 'blocos_clientes' 
       ? blocosFiltrados.blocosClientes 
@@ -151,7 +125,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {list.map((bloco: BlocoSocietario) => {
               // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-              const canEditOrDelete = bloco.proprietario_id === ownerId || isAdmin && !isSupervisao;
+              const canEditOrDelete = bloco.proprietario_id === proprietarioId || isAdmin && !isSupervisao;
               
               return (
                   <BlocoSocietarioCard 
@@ -177,7 +151,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     );
   }
   
-  if (!carregandoSessao && !ownerId && !isAdmin) {
+  if (!carregandoSessao && !proprietarioId && !isAdmin) {
       return (
           <LayoutPrincipal>
               <Card><CardContent className="p-6">Você não tem permissão para gerenciar blocos de conteúdo.</CardContent></Card>
@@ -218,7 +192,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                   <FormBlocoSocietario
                       blocoInicial={blocoSelecionado}
                       onSaveComplete={handleSaveComplete}
-                      ownerId={ownerId}
+                      ownerId={proprietarioId}
                   />
               </DialogContent>
           </Dialog>

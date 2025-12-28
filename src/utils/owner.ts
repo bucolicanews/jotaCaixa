@@ -35,11 +35,13 @@ export const resolveOwnerContext = (
   }
 
   if (role === 'Usuario' && perfil) {
-    if (hasClienteId(perfil)) {
-      return { ownerId: perfil.cliente_id, ownerType: 'ClienteUsuario', sourceProfileId: perfil.id };
-    }
+    // Prioridade 1: Usuário de Admin (usa admin_id)
     if (hasAdminId(perfil)) {
       return { ownerId: perfil.admin_id, ownerType: 'AdminUsuario', sourceProfileId: perfil.id };
+    }
+    // Prioridade 2: Usuário de Cliente (usa cliente_id)
+    if (hasClienteId(perfil)) {
+      return { ownerId: perfil.cliente_id, ownerType: 'ClienteUsuario', sourceProfileId: perfil.id };
     }
   }
 

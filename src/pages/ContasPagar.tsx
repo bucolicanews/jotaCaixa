@@ -25,11 +25,14 @@ import LayoutPrincipal from '@/components/LayoutPrincipal'; // Importando Layout
 import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
 import SetupBlocker from '@/components/SetupBlocker';
 import { UsuarioProfile } from '@/types/usuario';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 // O tipo ContaStatus foi movido para utils/badge-variants.ts ou é inferido nos componentes filhos.
 
 const ContasPagar: React.FC = () => {
   const { usuario, role, perfil, setupStatus } = useSessao();
+  const { ownerId, ownerType } = useOwner(); // USANDO useOwner
+  
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   const isClientUser =
@@ -37,7 +40,7 @@ const ContasPagar: React.FC = () => {
     perfil &&
     'cliente_id' in perfil &&
     Boolean((perfil as UsuarioProfile)?.cliente_id);
-  const proprietarioId = usuario?.id;
+  const proprietarioId = ownerId; // USANDO ownerId
   const shouldBlockSetup =
     (isCliente || isClientUser) && setupStatus && !setupStatus.isComplete;
 
@@ -65,14 +68,13 @@ const ContasPagar: React.FC = () => {
     if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
-    const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+    // Determina a tabela e a chave de filtro
+    const tabela = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_pagar' : 'contas_pagar';
+    const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
+    
     let query = supabase.from(tabela).select('*');
     
-    if (!isAdmin) {
-        query = query.eq('empresa_id', proprietarioId);
-    } else {
-        query = query.eq('admin_id', proprietarioId);
-    }
+    query = query.eq(ownerKey, proprietarioId);
     
     // Aplica filtros de período
     if (filtroPeriodo?.from) {
@@ -82,24 +84,18 @@ const ContasPagar: React.FC = () => {
         query = query.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
     }
     
-    // Aplica filtros de origem (apenas para Admin)
-    if (isAdmin && filtroOrigem !== 'todos') {
+    // Aplica filtros de origem (apenas para Admin/AdminUsuario)
+    if ((ownerType === 'Admin' || ownerType === 'AdminUsuario') && filtroOrigem !== 'todos') {
         query = query.eq('origem', filtroOrigem);
     }
     
-    // REMOVIDO: Filtro de texto no backend para evitar erro de operador em UUID
-    // if (filtroTextoDebounced) {
-    //     const termo = `%${filtroTextoDebounced}%`;
-    //     query = query.or(`descricao.ilike.${termo},fornecedor.ilike.${termo}`);
-    // }
-
     const { data, error } = await query.order('data_vencimento', { ascending: true });
 
     if (error) {
       showError('Erro ao carregar contas a pagar: ' + error.message);
       setContasRaw([]);
     } else {
-      const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+      const tabelaParcelasCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
       
       const contasComProgresso = await Promise.all((data as ContaPagarComProgresso[]).map(async (conta) => {
           const { count, error: countError } = await supabase
@@ -123,15 +119,15 @@ const ContasPagar: React.FC = () => {
       setContasRaw(contasComProgresso);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, shouldBlockSetup]);
+  }, [proprietarioId, ownerType, filtroPeriodo, filtroOrigem, shouldBlockSetup]);
   
   const fetchParcelas = useCallback(async () => {
     if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
-    const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-    const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabelaParcelasCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+    const tabelaContasCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_pagar' : 'contas_pagar';
+    const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
     let query = supabase.from(tabelaParcelasCP).select(`
         *,
@@ -172,11 +168,12 @@ const ContasPagar: React.FC = () => {
           const termo = filtroTextoDebounced.toLowerCase();
           const contaPagarId = contaCP?.id || '';
           const descricao = contaCP?.descricao || '';
+          const fornecedor = contaCP?.fornecedor || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
                             descricao.toLowerCase().includes(termo) ||
-                            contaCP?.fornecedor?.toLowerCase().includes(termo);
+                            fornecedor.toLowerCase().includes(termo);
                             
           return origemMatch && textMatch;
       });
@@ -184,19 +181,20 @@ const ContasPagar: React.FC = () => {
       setParcelas(fetchedParcelas);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
+  }, [proprietarioId, ownerType, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
   
   const fetchPagamentos = useCallback(async () => {
     if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
-    const tabelaPagamentosCP = isAdmin ? 'admin_pagamentos' : 'pagamentos';
-    const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-    const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabelaPagamentosCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_pagamentos' : 'pagamentos';
+    const tabelaParcelasCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+    const tabelaContasCP = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_pagar' : 'contas_pagar';
+    const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
     let query = supabase.from(tabelaPagamentosCP).select(`
         *,
+        saldo_contas ( nome ),
         ${tabelaParcelasCP}!parcela_id (
             numero_parcela,
             ${tabelaContasCP} ( id, descricao, origem, fornecedor )
@@ -217,25 +215,10 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar pagamentos: ' + error.message);
       setPagamentos([]);
     } else {
-      const saldoContasIds = [...new Set((data || []).map((p: any) => p.saldo_contas_id).filter(Boolean))];
-      let saldoContasMap: Record<string, string> = {};
-      
-      if (saldoContasIds.length > 0) {
-        const { data: saldoContasData } = await supabase
-          .from('saldo_contas')
-          .select('id, nome')
-          .in('id', saldoContasIds);
-        
-        saldoContasMap = (saldoContasData || []).reduce((acc: Record<string, string>, sc: any) => {
-          acc[sc.id] = sc.nome;
-          return acc;
-        }, {});
-      }
-      
       let fetchedPagamentos = (data || []).map((p: any) => ({
           ...p,
           admin_parcelas_pagar: p[tabelaParcelasCP] || p.admin_parcelas_pagar,
-          saldo_contas: { nome: saldoContasMap[p.saldo_contas_id] || 'N/A' },
+          saldo_contas: p.saldo_contas,
       })) as any[];
       
       // Filtragem de origem e texto no frontend
@@ -247,11 +230,12 @@ const ContasPagar: React.FC = () => {
           const termo = filtroTextoDebounced.toLowerCase();
           const contaPagarId = contaCP?.id || '';
           const descricao = contaCP?.descricao || '';
+          const fornecedor = contaCP?.fornecedor || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
                             descricao.toLowerCase().includes(termo) ||
-                            contaCP?.fornecedor?.toLowerCase().includes(termo);
+                            fornecedor.toLowerCase().includes(termo);
                             
           return origemMatch && textMatch;
       });
@@ -259,7 +243,7 @@ const ContasPagar: React.FC = () => {
       setPagamentos(fetchedPagamentos);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
+  }, [proprietarioId, ownerType, filtroPeriodo, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
 
   useEffect(() => {
     if (shouldBlockSetup) {
@@ -273,7 +257,7 @@ const ContasPagar: React.FC = () => {
     } else if (activeTab === 'pagamentos') {
       fetchPagamentos();
     }
-  }, [activeTab, fetchContas, fetchParcelas, fetchPagamentos]);
+  }, [activeTab, fetchContas, fetchParcelas, fetchPagamentos, shouldBlockSetup]);
 
   // Verificar contas futuras ao carregar (apenas para Cliente)
   const verificarContasFuturas = useCallback(async (abrirModalSeHouver: boolean = true) => {
@@ -332,7 +316,7 @@ const ContasPagar: React.FC = () => {
           const total = ((conta as ContaPagarComProgresso).parcelas_total ?? 0);
           const pagas = ((conta as ContaPagarComProgresso).parcelas_pagas ?? 0);
 
-          const isPago = isAdmin 
+          const isPago = ownerType === 'Admin' || ownerType === 'AdminUsuario'
               ? pagas === total && total > 0
               : conta.status === 'pago';
               
@@ -353,7 +337,7 @@ const ContasPagar: React.FC = () => {
       }
       
       return filtered;
-  }, [contasRaw, filtroStatus, filtroTextoDebounced, isAdmin]);
+  }, [contasRaw, filtroStatus, filtroTextoDebounced, ownerType]);
   // -----------------------------------------------
 
 
@@ -376,8 +360,8 @@ const ContasPagar: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!proprietarioId) return;
     
-    const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-    const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+    const tabela = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_pagar' : 'contas_pagar';
+    const tabelaParcelas = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
     const campoDescricao = 'descricao';
     
     try {

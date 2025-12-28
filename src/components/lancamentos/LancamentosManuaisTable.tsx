@@ -23,7 +23,7 @@ interface LancamentoDetalhado extends Lancamento {
 
 const LancamentosManuaisTable: React.FC = () => {
     const { usuario } = useSessao();
-    const { ownerId } = useOwner();
+    const { ownerId } = useOwner(); // USANDO useOwner
     const [lancamentos, setLancamentos] = useState<LancamentoDetalhado[]>([]);
     const [loading, setLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -42,6 +42,7 @@ const LancamentosManuaisTable: React.FC = () => {
                 historicos:historico_id ( codigo, descricao )
             `)
             .eq('proprietario_id', ownerId)
+            .eq('origem', 'lancamento_manual') // Filtra apenas manuais
             .not('conta_resultado_id', 'is', null)
             .order('data_movimentacao', { ascending: false });
             

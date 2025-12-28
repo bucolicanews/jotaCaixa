@@ -21,7 +21,8 @@ import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
 import { useDebounce } from '@/hooks/use-debounce';
 import { formatarData } from '@/utils/formatters';
 import SetupBlocker from '@/components/SetupBlocker';
-import { useSessao } from '@/hooks/use-sessao'; // <-- IMPORTAÇÃO CORRIGIDA
+import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -52,6 +53,7 @@ interface ParcelaParaPagamento {
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao, setupStatus } = useSessao();
+  const { ownerId, ownerType } = useOwner(); // USANDO useOwner
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -72,14 +74,7 @@ const ContasReceber = () => {
 
   const isAdmin = role === 'Admin';
   
-  const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (role === 'Cliente') return usuario?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+  const proprietarioId = ownerId; // USANDO ownerId
   const isClientUser =
     role === 'Usuario' &&
     perfil &&
@@ -91,23 +86,24 @@ const ContasReceber = () => {
     !setupStatus.isComplete;
 
   const buscarDados = useCallback(async () => {
-    if (!ownerId || shouldBlockSetup) {
+    if (!proprietarioId || shouldBlockSetup) {
       setCarregandoDados(false);
       return;
     }
     
     setCarregandoDados(true);
     
-    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-    const tabelaClientes = isAdmin ? 'tbl_clientes' : 'clientes';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    // Determina a tabela e a chave de filtro
+    const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
+    const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
-    // --- 1. Buscar Contas Sintéticas (sem JOIN automático para evitar ambiguidade) ---
+    // --- 1. Buscar Contas Sintéticas ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
         .select(`*`)
-        .eq(ownerKey, ownerId)
+        .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true });
         
     // Aplica filtros de período
@@ -133,11 +129,11 @@ const ContasReceber = () => {
             origem
           )
         `)
-        .eq(ownerKey, ownerId)
+        .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true }),
         
       // --- 3. Buscar Recebimentos (Histórico) ---
-      isAdmin ? supabase
+      (ownerType === 'Admin' || ownerType === 'AdminUsuario') ? supabase
         .from('admin_recebimentos')
         .select(`
           *,
@@ -147,7 +143,7 @@ const ContasReceber = () => {
             admin_contas_receber ( id, descricao, origem, cliente_id )
           )
         `)
-        .eq('admin_id', ownerId)
+        .eq('admin_id', proprietarioId)
         .not('cliente_id', 'is', null)
         .order('data_recebimento', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
@@ -168,7 +164,7 @@ const ContasReceber = () => {
     let fetchedContas = contasRes.data as ContaReceberComProgresso[];
     let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
         
-        // --- Buscar nomes dos clientes da tabela correta (tbl_clientes para admin, clientes para cliente) ---
+        // --- Buscar nomes dos clientes da tabela correta ---
         const clienteIds = [...new Set([
             ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
             ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
@@ -238,7 +234,7 @@ const ContasReceber = () => {
     setContas(fetchedContas);
     setParcelas(fetchedParcelas);
     
-    if (isAdmin && recebimentosRes.data) {
+    if ((ownerType === 'Admin' || ownerType === 'AdminUsuario') && recebimentosRes.data) {
         setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
         
         // Atualiza o mapa de nomes de clientes para recebimentos
@@ -260,7 +256,7 @@ const ContasReceber = () => {
     }
 
     setCarregandoDados(false);
-  }, [ownerId, isAdmin, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
+  }, [proprietarioId, ownerType, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -305,8 +301,8 @@ const ContasReceber = () => {
 
   const handleDelete = async (contaId: string) => {
     setCarregandoDados(true);
-    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     try {
       // 1. Verificar se existem parcelas vinculadas
@@ -333,7 +329,7 @@ const ContasReceber = () => {
               .from('lancamentos')
               .delete()
               .ilike('descricao', `%${descricaoBusca}%`)
-              .eq('proprietario_id', ownerId);
+              .eq('proprietario_id', proprietarioId);
               
           if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
       }
@@ -376,7 +372,7 @@ const ContasReceber = () => {
   };
   
   const handleOpenPagamento = (parcela: any) => {
-    const isMyLaunch = isAdmin;
+    const isMyLaunch = ownerType === 'Admin' || ownerType === 'AdminUsuario';
     
     const contaReceber = isMyLaunch 
         ? (parcela as ExtendedParcelaDetalhada).contas_receber
@@ -387,7 +383,7 @@ const ContasReceber = () => {
     const mappedParcela: ParcelaParaPagamento = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: ownerId!,
+        empresa_id: proprietarioId!,
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
         cliente_id: clienteId,

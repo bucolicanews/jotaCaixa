@@ -10,26 +10,16 @@ import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import FormMovimentacaoDiretaDialog from '@/components/formularios/FormMovimentacaoDiretaDialog'; // IMPORT ADICIONADO
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 const FluxoCaixa: React.FC = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // USANDO useOwner
   const { logoUrl, ownerName } = useOwnerBranding();
   const [dialogAberto, setDialogAberto] = useState(false);
   
-  const getEmpresaId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') {
-        const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-        // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
-        if ('admin_id' in user && user.admin_id) return user.admin_id;
-        if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-    }
-    return null;
-  };
-  
-  const empresaId = getEmpresaId();
-  
+  const empresaId = ownerId; // USANDO ownerId
+
   // Usamos o hook de saldo calculado para obter todas as contas e o saldo total
   const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado(
       'todos', 

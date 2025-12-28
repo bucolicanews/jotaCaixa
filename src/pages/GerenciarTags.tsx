@@ -15,9 +15,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 const GerenciarTags = () => {
   const { role, perfil,usuario, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // USANDO useOwner
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
@@ -33,24 +35,10 @@ const GerenciarTags = () => {
   const isCliente = role === 'Cliente';
   const isUsuario = role === 'Usuario';
   
-  const getEmpresaId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    //if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
-    // Se for Admin, o proprietário da tag é o próprio Admin logado.
-   
-    if (role === 'Usuario') {
-           const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-                if ('admin_id' in user && user.admin_id) return user.admin_id;
-                if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-              }
-    return null;
-  };
-  
-  const ownerId = getEmpresaId();
+  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarTags = useCallback(async () => {
-    if (!role) return;
+    if (!proprietarioId) return;
     setCarregandoTags(true);
     
     let query = supabase
@@ -62,7 +50,7 @@ const GerenciarTags = () => {
       
     if (isCliente || isUsuarioCliente) {
         // Clientes e Usuários de Clientes veem apenas tags da sua empresa
-        query = query.eq('empresa_id', ownerId);
+        query = query.eq('empresa_id', proprietarioId);
     } else if (isAdmin) {
         // Admin e Usuários de Admin veem o que a RLS permitir
     }
@@ -80,15 +68,15 @@ const GerenciarTags = () => {
       setTags(data as ContratoTag[]);
     }
     setCarregandoTags(false);
-  }, [role, isCliente, isUsuario, isAdmin, ownerId, filtroTextoDebounced]);
+  }, [role, isCliente, isAdmin, proprietarioId, filtroTextoDebounced, perfil]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && ownerId))) {
+    if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && proprietarioId))) {
       buscarTags();
     } else if (!carregandoSessao) {
         setCarregandoTags(false);
     }
-  }, [carregandoSessao, isAdmin, isCliente, isUsuario, ownerId, buscarTags]);
+  }, [carregandoSessao, isAdmin, isCliente, isUsuario, proprietarioId, buscarTags]);
   
   // Limpa a seleção ao recarregar os dados
   useEffect(() => {
@@ -143,8 +131,8 @@ const GerenciarTags = () => {
           return;
       }
       
-      // O ownerId é crucial para a RLS. Se não estiver definido, não podemos prosseguir.
-      if (!ownerId) {
+      // O proprietarioId é crucial para a RLS. Se não estiver definido, não podemos prosseguir.
+      if (!proprietarioId) {
           showError('ID do proprietário não encontrado. Não é possível excluir.');
           return;
       }
@@ -158,7 +146,7 @@ const GerenciarTags = () => {
               .from('contrato_tags')
               .delete()
               .in('id', selectedIds)
-              .eq('empresa_id', ownerId); 
+              .eq('empresa_id', proprietarioId); 
               
           if (error) throw error;
           
@@ -184,7 +172,7 @@ const GerenciarTags = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
+  if (!proprietarioId && !isAdmin) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
   }
 

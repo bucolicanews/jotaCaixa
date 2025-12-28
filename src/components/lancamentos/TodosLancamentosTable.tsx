@@ -28,7 +28,7 @@ interface LancamentoDetalhado extends Lancamento {
 
 const TodosLancamentosTable: React.FC = () => {
     const { usuario } = useSessao();
-    const { ownerId } = useOwner();
+    const { ownerId } = useOwner(); // USANDO useOwner
     const { printContent } = usePrint();
     const { logoUrl, ownerName } = useOwnerBranding();
     

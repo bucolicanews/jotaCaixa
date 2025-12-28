@@ -20,6 +20,7 @@ import { format } from 'date-fns'; // Adicionando importação de format
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 
 // Componente de Formulário Simples (Inline)
 interface FormHistoricoProps {
@@ -98,7 +99,8 @@ const FormHistorico: React.FC<FormHistoricoProps> = ({ historicoInicial, proprie
 
 
 const GerenciarHistoricos: React.FC = () => {
-  const { perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao(); // Removido 'usuario'
+  const { perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
+  const { ownerId } = useOwner(); // USANDO useOwner
   const { printContent } = usePrint();
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
@@ -114,20 +116,10 @@ const GerenciarHistoricos: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
-  const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') {
-      const user = perfil as any;
-      if (user?.admin_id) return user.admin_id;
-      if (user?.cliente_id) return user.cliente_id;
-    }
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarHistoricos = useCallback(async () => {
-    if (!ownerId) {
+    if (!proprietarioId) {
         setCarregandoHistoricos(false);
         return;
     }
@@ -136,7 +128,7 @@ const GerenciarHistoricos: React.FC = () => {
     let query = supabase
       .from('historicos')
       .select('id, proprietario_id, descricao, codigo, criado_em') // Selecionando 'codigo'
-      .eq('proprietario_id', ownerId)
+      .eq('proprietario_id', proprietarioId)
       .order('descricao', { ascending: true });
       
     if (filtroTextoDebounced) {
@@ -152,13 +144,13 @@ const GerenciarHistoricos: React.FC = () => {
       setHistoricos(data as Historico[]);
     }
     setCarregandoHistoricos(false);
-  }, [ownerId, filtroTextoDebounced]);
+  }, [proprietarioId, filtroTextoDebounced]);
 
   useEffect(() => {
-    if (!carregandoSessao && ownerId) {
+    if (!carregandoSessao && proprietarioId) {
       buscarHistoricos();
     }
-  }, [carregandoSessao, ownerId, buscarHistoricos]);
+  }, [carregandoSessao, proprietarioId, buscarHistoricos]);
   
   // Limpa a seleção ao recarregar os dados
   useEffect(() => {
@@ -209,7 +201,7 @@ const GerenciarHistoricos: React.FC = () => {
   };
   
   const handleDeleteSelected = async () => {
-      if (selectedIds.length === 0 || !ownerId) return;
+      if (selectedIds.length === 0 || !proprietarioId) return;
       
       setIsDeletingBulk(true);
       
@@ -218,7 +210,7 @@ const GerenciarHistoricos: React.FC = () => {
               .from('historicos')
               .delete()
               .in('id', selectedIds)
-              .eq('proprietario_id', ownerId); // RLS garante que só deleta os próprios
+              .eq('proprietario_id', proprietarioId); // RLS garante que só deleta os próprios
               
           if (error) throw error;
           
@@ -242,7 +234,7 @@ const GerenciarHistoricos: React.FC = () => {
   };
   
   const handleImport = async () => {
-    if (!importFile || !ownerId) {
+    if (!importFile || !proprietarioId) {
       showError('Selecione um arquivo e garanta que o proprietário esteja definido.');
       return;
     }
@@ -259,7 +251,7 @@ const GerenciarHistoricos: React.FC = () => {
       }
 
       const historicosParaInserir = parsedData.map(h => ({
-        proprietario_id: ownerId,
+        proprietario_id: proprietarioId,
         descricao: h.Descricao.trim(), 
         codigo: h.Código?.trim() || null, // Lendo o novo campo 'Código'
       })).filter(h => h.descricao.length > 0);
@@ -330,7 +322,7 @@ const GerenciarHistoricos: React.FC = () => {
     const printComponent = (
         <div style={{ padding: '20px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>Relatório de Históricos Cadastrados</h1>
-            <p style={{ fontSize: '14px' }}>Proprietário ID: {ownerId}</p>
+            <p style={{ fontSize: '14px' }}>Proprietário ID: {proprietarioId}</p>
             <table className="print-table" style={{ marginTop: '20px' }}>
                 <thead>
                     <tr>
@@ -367,7 +359,7 @@ const GerenciarHistoricos: React.FC = () => {
     );
   }
   
-  if (!ownerId) {
+  if (!proprietarioId) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar históricos.</p></CardContent></Card></LayoutPrincipal>;
   }
 
@@ -391,7 +383,7 @@ const GerenciarHistoricos: React.FC = () => {
               </DialogHeader>
               <FormHistorico 
                 historicoInicial={historicoSelecionado}
-                proprietarioId={ownerId}
+                proprietarioId={proprietarioId}
                 onSaveComplete={handleSaveComplete}
               />
             </DialogContent>
