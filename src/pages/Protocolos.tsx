@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BASE_URL } from '@/config/app-config';
 import { usePrint } from '@/hooks/use-print';
-import { useToast } from '@/hooks/use-toast'; // Importação corrigida para garantir que useToast seja importado
+import { useToast } from '@/hooks/use-toast';
 import ReactDOMServer from 'react-dom/server';
 
 // Definindo os tipos com base nos requisitos
@@ -142,7 +142,7 @@ const ProtocolosPage = () => {
                         <TableRow>
                             <TableHead className="w-[150px]">Nº Protocolo</TableHead>
                             <TableHead className="min-w-[150px]">Cliente</TableHead>
-                            <TableHead className="min-w-[200px]">Responsável</Tablehead>
+                            <TableHead className="min-w-[200px]">Responsável</TableHead>
                             <TableHead className="w-[100px]">Status</TableHead>
                             <TableHead className="w-[100px]">Data Criação</TableHead>
                             <TableHead className="w-[120px] text-right">Ações</TableHead>
