@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BASE_URL } from '@/config/app-config';
 import { usePrint } from '@/hooks/use-print';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast'; // Importação correta
 import ReactDOMServer from 'react-dom/server';
 
 // Definindo os tipos com base nos requisitos
@@ -38,7 +38,7 @@ const ProtocolosPage = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
   const { protocolos, carregando, refetch, filtroTexto, setFiltroTexto, handleUpdateStatus, handleDeleteProtocolo } = useProtocolos();
   const [dialogAberto, setDialogAberto] = useState(false);
-  const { toast } = useToast();
+  const { toast } = useToast(); // Uso do hook
   const { printContent } = usePrint();
 
   const handleSaveComplete = () => {
