@@ -1,4 +1,3 @@
-
 export interface Protocolo {
   id: number;
   cliente_id: number;
@@ -11,7 +10,6 @@ export interface Protocolo {
   // Relationship
   tbl_clientes: {
     nome: string;
-    empresa: string;
   };
 }
 

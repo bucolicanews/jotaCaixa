@@ -1,4 +1,3 @@
-
 import { FC } from 'react';
 import { Protocolo } from '@/types/protocolo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { BASE_URL } from '@/config/app-config';
 
 interface ProtocoloCardProps {
-  protocolo: Protocolo & { tbl_clientes: { nome: string; empresa: string; } | null };
+  protocolo: Protocolo & { tbl_clientes: { nome: string } | null }; // CORRIGIDO: Removido 'empresa'
 }
 
 const ProtocoloCard: FC<ProtocoloCardProps> = ({ protocolo }) => {
@@ -65,7 +64,7 @@ const ProtocoloCard: FC<ProtocoloCardProps> = ({ protocolo }) => {
       <CardContent>
         <div>
           <p className="font-semibold">{protocolo.tbl_clientes?.nome}</p>
-          <p className="text-sm text-gray-500">{protocolo.tbl_clientes?.empresa}</p>
+          <p className="text-sm text-gray-500">{protocolo.tbl_clientes?.nome}</p> {/* Usando nome como fallback */}
         </div>
       </CardContent>
     </Card>

@@ -7,7 +7,7 @@ import { useDebounce } from './use-debounce';
 import { resolveOwnerContext } from '@/utils/owner';
 import { v4 as uuidv4 } from 'uuid';
 
-type ProtocoloComCliente = Protocolo & { tbl_clientes: { nome: string, empresa: string } | null };
+type ProtocoloComCliente = Protocolo & { tbl_clientes: { nome: string } | null }; // REMOVIDO 'empresa'
 export type ProtocoloStatus = Protocolo['status'] | 'todos';
 export type OrdenacaoProtocolos = 'created_at_desc' | 'cliente_asc';
 
@@ -62,7 +62,7 @@ export function useProtocolos(): ProtocolosHook {
         
         let query = supabase
             .from('protocolos')
-            .select('*, tbl_clientes(nome, empresa)');
+            .select('*, tbl_clientes(nome)'); // CORRIGIDO: Removido 'empresa'
             
         // Se for Cliente/Usuário, a RLS já vai filtrar.
         
@@ -97,7 +97,7 @@ export function useProtocolos(): ProtocolosHook {
             if (termoBusca) {
                 fetchedProtocolos = fetchedProtocolos.filter(p => {
                     const clienteNome = p.tbl_clientes?.nome || '';
-                    const clienteEmpresa = p.tbl_clientes?.empresa || '';
+                    const clienteEmpresa = p.tbl_clientes?.nome || ''; // Usando nome como fallback
                     return clienteNome.toLowerCase().includes(termoBusca) ||
                            clienteEmpresa.toLowerCase().includes(termoBusca) ||
                            p.numero_protocolo.toLowerCase().includes(termoBusca) ||
