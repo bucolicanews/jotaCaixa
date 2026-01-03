@@ -16,6 +16,8 @@ import { format } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BASE_URL } from '@/config/app-config';
 import { usePrint } from '@/hooks/use-print';
+import { useToast } from '@/hooks/use-toast'; // IMPORT CORRIGIDO
+import ReactDOMServer from 'react-dom/server';
 
 // Definindo os tipos com base nos requisitos
 interface Protocolo {
