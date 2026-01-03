@@ -10,17 +10,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { useProtocolos } from '@/hooks/use-protocolos';
 import { Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { v4 as uuidv4 } from 'uuid';
 import { useOwner } from '@/hooks/use-owner';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 
 // Zod Schema for validation
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -29,8 +29,8 @@ const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image
 
 const formSchema = z.object({
   id_cliente: z.string().uuid('Selecione um cliente.'),
-  numero_protocolo: z.string().optional(),
-  descrição: z.string().optional(), // NOVO CAMPO
+  numero_protocolo: z.string().optional().or(z.literal('')),
+  descrição: z.string().optional().or(z.literal('')),
   nome_resp_recebimento: z.string().min(3, 'O nome do responsável é obrigatório.'),
   img_protocolo: z
     .instanceof(FileList)
@@ -60,7 +60,6 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSu
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoadingClientes, setIsLoadingClientes] = useState(true);
   const { handleCreateProtocolo } = useProtocolos();
-  const { role, usuario } = useSessao();
   const { ownerId, ownerType } = useOwner();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -115,7 +114,6 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSu
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-        // O handleCreateProtocolo está no hook useProtocolos
         await handleCreateProtocolo(values);
         showSuccess('Protocolo salvo com sucesso!');
         setOpen(false);
