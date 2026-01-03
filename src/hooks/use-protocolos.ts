@@ -7,7 +7,7 @@ import { useDebounce } from './use-debounce';
 import { resolveOwnerContext } from '@/utils/owner';
 import { v4 as uuidv4 } from 'uuid';
 
-type ProtocoloComCliente = Protocolo & { tbl_clientes: { nome: string } | null }; // REMOVIDO 'empresa'
+type ProtocoloComCliente = Protocolo & { tbl_clientes: { nome: string } | null };
 export type ProtocoloStatus = Protocolo['status'] | 'todos';
 export type OrdenacaoProtocolos = 'created_at_desc' | 'cliente_asc';
 
@@ -62,9 +62,9 @@ export function useProtocolos(): ProtocolosHook {
         
         let query = supabase
             .from('protocolos')
-            .select('*, tbl_clientes(nome)'); // CORRIGIDO: Removido 'empresa'
+            .select('*, tbl_clientes(nome)');
             
-        // Se for Cliente/Usuário, a RLS já vai filtrar.
+        // A RLS agora usa id_proprietario, então a consulta é simplificada.
         
         // Aplica ordenação
         let ascending = true;
@@ -158,7 +158,7 @@ export function useProtocolos(): ProtocolosHook {
             descrição: data.descrição || null,
             numero_protocolo: data.numero_protocolo || `PROT-${protocolUUID.substring(0, 8)}`,
             status: 'Impresso',
-            admin_id: ownerId,
+            id_proprietario: ownerId, // USANDO id_proprietario
             img_protocolo: url_img_protocolo,
             nome_resp_recebimento: data.nome_resp_recebimento,
             anexos: anexosUrls.length > 0 ? anexosUrls : null,
