@@ -1,25 +1,36 @@
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { FC, useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
-import { useSessao } from '@/hooks/use-sessao';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { useState } from 'react';
+import { useProtocolos } from '@/hooks/use-protocolos';
+import { Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { v4 as uuidv4 } from 'uuid';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { useOwner } from '@/hooks/use-owner';
 
+// Zod Schema for validation
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'text/plain'];
 
 const formSchema = z.object({
   id_cliente: z.string().uuid('Selecione um cliente.'),
+  numero_protocolo: z.string().optional(),
+  descrição: z.string().optional(), // NOVO CAMPO
   nome_resp_recebimento: z.string().min(3, 'O nome do responsável é obrigatório.'),
   img_protocolo: z
     .instanceof(FileList)
@@ -38,195 +49,193 @@ interface Cliente {
   nome: string;
 }
 
-interface FormProtocoloProps {
-  onSaveComplete: () => void;
+interface ProtocoloFormDialogProps {
+  children: React.ReactNode;
+  protocolo?: any;
+  onSuccess?: () => void;
 }
 
-const FormProtocolo: React.FC<FormProtocoloProps> = ({ onSaveComplete }) => {
-  const { usuario, session, role, perfil } = useSessao();
+const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSuccess }) => {
+  const [open, setOpen] = useState(false);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [isLoadingClientes, setIsLoadingClientes] = useState(true);
+  const { handleCreateProtocolo } = useProtocolos();
+  const { role, usuario } = useSessao();
+  const { ownerId, ownerType } = useOwner();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      nome_resp_recebimento: '',
-    },
+        id_cliente: protocolo?.id_cliente || '',
+        numero_protocolo: protocolo?.numero_protocolo || '',
+        descrição: protocolo?.descrição || '',
+        nome_resp_recebimento: protocolo?.nome_resp_recebimento || '',
+    }
   });
   
   const imgProtocoloRef = form.register('img_protocolo');
   const anexosRef = form.register('anexos');
 
-  const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario' && perfil) {
-      if ('cliente_id' in perfil && (perfil as any).cliente_id) {
-        return (perfil as any).cliente_id;
-      }
-      if ('admin_id' in perfil && (perfil as any).admin_id) {
-        return (perfil as any).admin_id;
-      }
-    }
-    return null;
-  };
-
   const fetchClientes = async () => {
-    const ownerId = getOwnerId();
-    const isUserOfAdmin = role === 'Usuario' && (perfil as UsuarioProfile)?.admin_id;
-    const isAdmin = role === 'Admin' || isUserOfAdmin;
+    if (!ownerId) return;
+    setIsLoadingClientes(true);
+    
+    const isAdminContext = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+    const tabelaClientes = isAdminContext ? 'tbl_clientes' : 'clientes';
+    const ownerKey = isAdminContext ? 'admin_id' : 'proprietario_id';
 
-    let query;
-
-    if (isAdmin) {
-      // Admin ou usuário do Admin: busca na tbl_clientes
-      query = supabase.from('tbl_clientes').select('id, nome');
+    let query = supabase.from(tabelaClientes).select('id, nome');
+    
+    if (isAdminContext) {
+        // Admin/AdminUsuario: Busca todos os clientes do sistema (tbl_clientes)
+        query = query.eq('aprovado', true);
     } else {
-      // Cliente ou usuário do Cliente: busca na tabela 'clientes'
-      if (!ownerId) return [];
-      query = supabase.from('clientes').select('id, nome').eq('proprietario_id', ownerId);
+        // Cliente/Usuario Cliente: Busca clientes CR (clientes)
+        query = query.eq(ownerKey, ownerId);
     }
     
-    const { data, error } = await query;
+    const { data, error } = await query.order('nome', { ascending: true });
+    
     if (error) {
-      showError('Erro ao buscar clientes: ' + error.message);
-      throw new Error(error.message);
+        showError('Erro ao buscar clientes: ' + error.message);
+        setClientes([]);
+    } else {
+        setClientes(data as Cliente[]);
     }
-    return data as Cliente[];
+    setIsLoadingClientes(false);
   };
 
-  const { data: clientes = [], isLoading: isLoadingClientes } = useQuery({
-    queryKey: ['clientesParaProtocolo', role, usuario?.id],
-    queryFn: fetchClientes,
-    enabled: !!session,
-  });
-
-  const uploadFile = async (file: File, bucket: string, path: string) => {
-    const { data, error } = await supabase.storage.from(bucket).upload(path, file);
-    if (error) {
-      throw new Error(`Erro no upload do arquivo ${file.name}: ${error.message}`);
+  useEffect(() => {
+    if (open && ownerId) {
+        fetchClientes();
     }
-    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
-    return publicUrl;
-  };
+  }, [open, ownerId]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      const protocolUUID = uuidv4();
-      const imgProtocoloFile = values.img_protocolo[0];
-      const anexosFiles = values.anexos ? Array.from(values.anexos) : [];
-
-      // 1. Upload da imagem do protocolo
-      const imgExtension = imgProtocoloFile.name.split('.').pop();
-      const imgPath = `${values.id_cliente}/${protocolUUID}/protocolo_assinado.${imgExtension}`;
-      const url_img_protocolo = await uploadFile(imgProtocoloFile, 'protocolos', imgPath);
-
-      // 2. Upload dos anexos
-      const anexosUrls = await Promise.all(
-        anexosFiles.map(file => {
-          const anexoPath = `${values.id_cliente}/${protocolUUID}/${uuidv4()}-${file.name}`;
-          return uploadFile(file, 'protocolos', anexoPath);
-        })
-      );
-      
-      // 3. Inserir no banco de dados
-      const { error: insertError } = await supabase.from('protocolos').insert({
-        id: protocolUUID,
-        id_cliente: values.id_cliente,
-        nome_resp_recebimento: values.nome_resp_recebimento,
-        status: 'Impresso',
-        url_img_protocolo: url_img_protocolo,
-        anexos: anexosUrls.length > 0 ? anexosUrls : null, // Salva como array de URLs
-      });
-
-      if (insertError) throw insertError;
-
-      showSuccess('Protocolo criado com sucesso!');
-      onSaveComplete();
-
-    } catch (error: any) {
-      showError('Erro ao criar protocolo: ' + error.message);
+        // O handleCreateProtocolo está no hook useProtocolos
+        await handleCreateProtocolo(values);
+        showSuccess('Protocolo salvo com sucesso!');
+        setOpen(false);
+        form.reset({ nome_resp_recebimento: '', id_cliente: '', numero_protocolo: '', descrição: '' });
+        if(onSuccess) onSuccess();
+    } catch (error) {
+        showError('Erro ao salvar protocolo');
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="id_cliente"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Cliente</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClientes}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente..." />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {isLoadingClientes ? (
-                    <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                  ) : (
-                    clientes.map(cliente => (<SelectItem key={cliente.id} value={cliente.id}>{cliente.nome}</SelectItem>))
-                  )}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{protocolo ? 'Editar' : 'Novo'} Protocolo</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                    control={form.control}
+                    name="id_cliente"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Cliente</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClientes || isSubmitting}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={isLoadingClientes ? "Carregando..." : "Selecione o cliente..."} />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {clientes.map((cliente) => (
+                                        <SelectItem key={cliente.id} value={cliente.id}>
+                                            {cliente.nome}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                
+                <FormField
+                    control={form.control}
+                    name="numero_protocolo"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Número do Protocolo (Opcional)</FormLabel>
+                            <FormControl><Input placeholder="Ex: PROT-2024-001" {...field} disabled={isSubmitting} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                
+                <FormField
+                    control={form.control}
+                    name="descrição"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Descrição (Opcional)</FormLabel>
+                            <FormControl><Textarea placeholder="Detalhes do documento ou serviço" {...field} disabled={isSubmitting} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
 
-        <FormField
-          control={form.control}
-          name="nome_resp_recebimento"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nome do Responsável pelo Recebimento</FormLabel>
-              <FormControl><Input placeholder="Digite o nome..." {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="img_protocolo"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Foto do Protocolo Assinado (Obrigatório)</FormLabel>
-              <FormControl>
-                <Input type="file" accept="image/jpeg,image/png,image/webp" {...imgProtocoloRef} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="anexos"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Outros Anexos (Opcional)</FormLabel>
-              <FormControl>
-                <Input type="file" multiple {...anexosRef} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormField
+                    control={form.control}
+                    name="nome_resp_recebimento"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Nome do Responsável pelo Recebimento</FormLabel>
+                            <FormControl><Input placeholder="Digite o nome..." {...field} disabled={isSubmitting} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
 
-        <div className="flex justify-end pt-4">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Salvar Protocolo
-          </Button>
-        </div>
-      </form>
-    </Form>
+                <FormField
+                    control={form.control}
+                    name="img_protocolo"
+                    render={() => (
+                        <FormItem>
+                            <FormLabel>Foto do Protocolo Assinado (Obrigatório)</FormLabel>
+                            <FormControl>
+                                <Input type="file" accept="image/jpeg,image/png,image/webp" {...imgProtocoloRef} disabled={isSubmitting} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="anexos"
+                    render={() => (
+                        <FormItem>
+                            <FormLabel>Outros Anexos (Opcional)</FormLabel>
+                            <FormControl>
+                                <Input type="file" multiple {...anexosRef} disabled={isSubmitting} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                <div className="flex justify-end pt-4">
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Salvar Protocolo
+                    </Button>
+                </div>
+            </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 };
 
