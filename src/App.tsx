@@ -57,6 +57,8 @@ import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import Balancete from "./pages/Balancete"; // NOVO IMPORT
 import Razao from "./pages/Razao"; // NOVO IMPORT
 import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
+import Protocolos from "./pages/Protocolos"; // NOVO IMPORT
+import ConfirmarRecebimento from "./pages/ConfirmarRecebimento"; // NOVO IMPORT
 import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
 import Mapeamento from "./pages/Mapeamento";
@@ -95,6 +97,7 @@ const App = () => (
             {/* Rotas de Contrato (Não usam layout) */}
             <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
             <Route path="/contrato-link/:id" element={<ContratoLinkPage />} />
+            <Route path="/protocolo/confirmar/:id" element={<ConfirmarRecebimento />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
            
@@ -148,6 +151,8 @@ const App = () => (
             
             {/* NOVA ROTA: Lançamentos Manuais */}
             <Route path="/lancamentos" element={<ProtectedRoute permissionKey="lancamentos"><Lancamentos /></ProtectedRoute>} />
+
+            <Route path="/protocolos" element={<ProtectedRoute permissionKey="protocolos"><Protocolos /></ProtectedRoute>} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, LogIn, Undo2 } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, LogIn, Undo2, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { BASE_URL } from '@/config/app-config';
 import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 import { Plano } from '@/types/plano';
+import ProtocolosClienteDialog from '@/components/protocolos/ProtocolosClienteDialog';
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -84,7 +85,8 @@ const ClientesPage = () => {
   // Filtros para Admin
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
-  const [filtroNome, setFiltroNome] = useState('');
+    const [filtroNomeCR, setFiltroNomeCR] = useState('');
+  const [filtroNomeSistema, setFiltroNomeSistema] = useState('');
   
   const [activeTab, setActiveTab] = useState('clientes_cr');
   // Removendo activeEmpresaTab e activeCRTab
@@ -184,8 +186,8 @@ const ClientesPage = () => {
         
         if (isAdmin) {
             const filteredEmpresas = systemClientsList.filter(e => 
-                e.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
-                e.email.toLowerCase().includes(filtroNome.toLowerCase())
+                e.nome.toLowerCase().includes(filtroNomeSistema.toLowerCase()) ||
+                e.email.toLowerCase().includes(filtroNomeSistema.toLowerCase())
             );
             setEmpresasSistema(filteredEmpresas);
         }
@@ -218,9 +220,9 @@ const ClientesPage = () => {
       setClientesCR([]);
     } else {
       let fetchedData = (dataCR as Cliente[]).filter(c => 
-        c.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
-        (c.razao_social?.toLowerCase() || '').includes(filtroNome.toLowerCase()) ||
-        (c.documento?.toLowerCase() || '').includes(filtroNome.toLowerCase())
+        c.nome.toLowerCase().includes(filtroNomeCR.toLowerCase()) ||
+        (c.razao_social?.toLowerCase() || '').includes(filtroNomeCR.toLowerCase()) ||
+        (c.documento?.toLowerCase() || '').includes(filtroNomeCR.toLowerCase())
       );
       
       // 2.1. Adicionar status do sistema e contagens
@@ -318,7 +320,7 @@ const ClientesPage = () => {
               const emailKey = clienteComStatus.email.toLowerCase();
               const existing = emailMap[emailKey];
               
-              if (!existing || (clienteComStatus.is_system_client && existing.system_client_status !== 'Ativo')) {
+              if (!existing || (clienteComstatus.is_system_client && existing.system_client_status !== 'Ativo')) {
                   // Se não existe, ou se o novo é um cliente do sistema (e o existente não é Ativo), substitui.
                   emailMap[emailKey] = clienteComStatus;
               } else if (!existing.is_system_client && !clienteComStatus.is_system_client) {
@@ -343,7 +345,7 @@ const ClientesPage = () => {
     }
 
     setCarregandoDados(false);
-  }, [isAdmin, ownerId, filtroEmpresaId, filtroNome, usuario?.id]);
+  }, [isAdmin, ownerId, filtroEmpresaId, filtroNomeCR, filtroNomeSistema, usuario?.id]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -371,7 +373,7 @@ const ClientesPage = () => {
               // Ignora o erro de coluna aqui, pois ele será tratado no useEffect principal
           }
       }
-  }, [filtroEmpresaId, filtroNome, buscarDados, carregandoSessao, usuario]);
+  }, [filtroEmpresaId, filtroNomeCR, filtroNomeSistema, buscarDados, carregandoSessao, usuario]);
 
 
   const handleSaveComplete = () => {
@@ -423,13 +425,15 @@ const ClientesPage = () => {
       const result = data?.[0];
       
       if (result && !result.success) {
-          // Se a despromoção falhou devido a vínculos
-          showError(result.message);
+          // Se a despromoção falhou devido a vínculos, exibir um erro claro
+          showError(`Exclusão Não Permitida: ${result.message}`);
       } else if (result && result.success) {
-          showSuccess(result.message);
+          // A operação foi uma "despromoção", não uma exclusão. Deixar isso claro.
+          showSuccess(`Operação Concluída: ${result.message}`);
           buscarDados();
       } else {
-          showError('Resposta inesperada do servidor.');
+          // Erro genérico
+          showError('Erro na Operação: Resposta inesperada do servidor ao tentar despromover o cliente.');
       }
       
     } catch (error: any) {
@@ -987,6 +991,12 @@ const ClientesPage = () => {
                                             </Button>
                                         )}
                                         
+                                        <ProtocolosClienteDialog clienteId={cliente.id} clienteNome={cliente.nome}>
+                                            <Button variant="ghost" size="icon">
+                                                <FileText className="w-4 h-4" />
+                                            </Button>
+                                        </ProtocolosClienteDialog>
+
                                         {/* BOTÃO DE EDIÇÃO */}
                                         <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
                                             <Edit className="w-4 h-4" />
@@ -1350,8 +1360,8 @@ const ClientesPage = () => {
                     <CardContent className="flex flex-col md:flex-row gap-4">
                         <Input
                             placeholder="Buscar por nome, documento ou razão social..."
-                            value={filtroNome}
-                            onChange={(e) => setFiltroNome(e.target.value)}
+                            value={filtroNomeCR}
+                            onChange={(e) => setFiltroNomeCR(e.target.value)}
                             className="w-full md:max-w-xs"
                         />
                         <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}>
@@ -1382,8 +1392,8 @@ const ClientesPage = () => {
                     <CardContent className="flex flex-col md:flex-row gap-4">
                         <Input
                             placeholder="Buscar por nome ou email da empresa..."
-                            value={filtroNome}
-                            onChange={(e) => setFiltroNome(e.target.value)}
+                            value={filtroNomeSistema}
+                            onChange={(e) => setFiltroNomeSistema(e.target.value)}
                             className="w-full md:max-w-xs"
                         />
                     </CardContent>

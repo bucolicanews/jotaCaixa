@@ -60,23 +60,114 @@ const PreencherContrato: React.FC = () => {
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(new Date());
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null); // NOVO ESTADO PARA EDIÇÃO
+  const [dadosContratada, setDadosContratada] = useState<any>(null);
 
   const isEditing = !!contratoId;
 
-  const ownerIdLogado = useMemo(() => {
-    if (carregandoSessao) return null;
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as any)?.admin_id || (perfil as any)?.cliente_id || null;
-    return null;
-  }, [carregandoSessao, isAdmin, isCliente, role, usuario, perfil]);
+    const [resolvedOwnerId, setResolvedOwnerId] = useState<string | null>(null);
+  
+        useEffect(() => {
+  
+          const resolveOwner = async () => {
+  
+              if (carregandoSessao || !usuario) return;
+  
+      
+  
+              if (isAdmin) {
+  
+                  // The user is the Admin, so they are the owner.
+  
+                  setResolvedOwnerId(usuario.id);
+  
+                  return;
+  
+              }
+  
+      
+  
+              // For other users, first try the direct property on the profile.
+  
+              const adminIdFromProfile = (perfil as any)?.admin_id;
+  
+              if (adminIdFromProfile) {
+  
+                  setResolvedOwnerId(adminIdFromProfile);
+  
+                  return;
+  
+              }
+  
+      
+  
+              // If not on profile, try the lookup table. This should cover 'Cliente' users.
+  
+              const { data, error } = await supabase
+  
+                  .from('admin_user_lookup')
+  
+                  .select('admin_id')
+  
+                  .eq('user_id', usuario.id)
+  
+                  .single();
+  
+              
+  
+              if (data && !error) {
+  
+                  setResolvedOwnerId(data.admin_id);
+  
+                  return;
+  
+              }
+  
+      
+  
+              // If all else fails, show an error.
+  
+              showError('Não foi possível identificar a empresa contratada. Contate o suporte.');
+  
+              console.error('Could not resolve owner ID from profile or lookup table for user:', usuario.id);
+  
+          };
+  
+          resolveOwner();
+  
+        }, [carregandoSessao, usuario, isAdmin, perfil]);  useEffect(() => {
+    const fetchContratadaData = async () => {
+        if (!proprietarioContratoId) {
+            setDadosContratada(null);
+            return;
+        };
+
+        const { data, error } = await supabase
+            .from('tbl_admin')
+            .select('*')
+            .eq('id', proprietarioContratoId)
+            .single();
+
+        if (data && !error) {
+            setDadosContratada(data);
+        } else {
+            // Fallback para o admin logado, para manter o comportamento que já funciona.
+            if (isAdmin && proprietarioContratoId === resolvedOwnerId) {
+                setDadosContratada(perfil);
+            } else {
+                setDadosContratada(null);
+                console.error("Não foi possível carregar os dados da CONTRATADA de tbl_admin:", error?.message);
+            }
+        }
+    };
+    fetchContratadaData();
+  }, [proprietarioContratoId, isAdmin, resolvedOwnerId, perfil]);
 
   // Função auxiliar de formatação de moeda
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const fetchDependentData = useCallback(async (targetId: string) => {
-    if (!targetId || !ownerIdLogado) return;
+    if (!targetId || !resolvedOwnerId) return;
 
     // 1. Busca Tags
     const { data: tagsData } = await supabase
@@ -90,7 +181,7 @@ const PreencherContrato: React.FC = () => {
     let clientesDataSource: Promise<any>;
 
     // Se o admin estiver selecionando "Meus Contratos", a lista de clientes vem de tbl_clientes (empresas do sistema)
-    if (isAdmin && targetId === ownerIdLogado) {
+    if (isAdmin && targetId === resolvedOwnerId) {
       clientesDataSource = supabase
         .from('tbl_clientes')
         .select('*') // Garante que todos os campos, incluindo endereço, sejam carregados
@@ -114,7 +205,7 @@ const PreencherContrato: React.FC = () => {
     } else {
         setClientesCR([]); // Limpa a lista se nada for encontrado
     }
-  }, [isAdmin, ownerIdLogado]);
+  }, [isAdmin, resolvedOwnerId]);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
@@ -129,15 +220,15 @@ const PreencherContrato: React.FC = () => {
     }
     
     // 2. Carregar Empresas (Se Admin)
-    if (isAdmin && ownerIdLogado) {
+    if (isAdmin && resolvedOwnerId) {
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
-      const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
+      const options = [{ id: resolvedOwnerId, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
     }
     
     // Define o proprietário inicial como o usuário logado
     // Se for edição, isso será sobrescrito logo abaixo
-    let currentProprietarioId = ownerIdLogado;
+    let currentProprietarioId = resolvedOwnerId;
     setProprietarioContratoId(currentProprietarioId);
     
     // 3. SE FOR EDIÇÃO: Carregar dados do contrato existente
@@ -190,12 +281,12 @@ const PreencherContrato: React.FC = () => {
     }
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, isAdmin, fetchDependentData, contratoId]);
+  }, [modeloId, resolvedOwnerId, isAdmin, fetchDependentData, contratoId]);
 
   // Carregamento inicial
   useEffect(() => {
-    if (!carregandoSessao && ownerIdLogado) buscarDados();
-  }, [carregandoSessao, ownerIdLogado, buscarDados]);
+    if (!carregandoSessao && resolvedOwnerId) buscarDados();
+  }, [carregandoSessao, resolvedOwnerId, buscarDados]);
 
   // Se o proprietário mudar manualmente (no select do Admin), recarrega clientes
   // Adicionamos uma verificação para não recarregar se já estiver carregando (evita loop na inicialização)
@@ -205,30 +296,7 @@ const PreencherContrato: React.FC = () => {
       }
   }, [proprietarioContratoId, fetchDependentData, carregandoDados]);
 
-  // Dados da Empresa (Contratante) para preenchimento de tags
-  const empresaLogadaData = useMemo(() => {
-    if (!perfil) return null;
-    
-    const p = perfil as ClienteProfile | AdminProfile | UsuarioProfile | AdminUsuarioProfile;
-    const safeGet = (obj: any, key: string) => obj && obj[key] ? obj[key] : '';
-    
-    return {
-        nome: safeGet(p, 'nome') || safeGet(p, 'razao_social'),
-        documento: safeGet(p, 'documento') || safeGet(p, 'cnpj') || safeGet(p, 'cpf'),
-        email: safeGet(p, 'email'),
-        telefone: safeGet(p, 'telefone'),
-        cep: safeGet(p, 'cep'),
-        endereco: safeGet(p, 'endereco'),
-        numero: safeGet(p, 'numero'),
-        complemento: safeGet(p, 'complemento'),
-        bairro: safeGet(p, 'bairro'),
-        cidade: safeGet(p, 'cidade'),
-        estado: safeGet(p, 'estado'),
-        cnpj: safeGet(p, 'cnpj'),
-        cpf: safeGet(p, 'cpf'),
-        rg: safeGet(p, 'rg'),
-    };
-  }, [perfil]);
+
 
   // --- LÓGICA DE PREENCHIMENTO AUTOMÁTICO DAS TAGS ---
   useEffect(() => {
@@ -261,21 +329,21 @@ const PreencherContrato: React.FC = () => {
           newTags['{{CLIENTE_DATA_NASCIMENTO}}'] = cliente.data_nascimento ? format(parseISO(cliente.data_nascimento), 'dd/MM/yyyy') : '';
       }
 
-      // 2. Dados da Empresa
-      if (empresaLogadaData) {
-          newTags['{{EMPRESA_NOME}}'] = empresaLogadaData.nome || '';
-          newTags['{{EMPRESA_DOCUMENTO}}'] = empresaLogadaData.documento || '';
-          newTags['{{EMPRESA_EMAIL}}'] = empresaLogadaData.email || '';
-          newTags['{{EMPRESA_TELEFONE}}'] = empresaLogadaData.telefone || '';
-          newTags['{{EMPRESA_CEP}}'] = empresaLogadaData.cep || '';
-          newTags['{{EMPRESA_ENDERECO}}'] = empresaLogadaData.endereco || '';
-          newTags['{{EMPRESA_NUMERO}}'] = empresaLogadaData.numero || '';
-          newTags['{{EMPRESA_COMPLEMENTO}}'] = empresaLogadaData.complemento || '';
-          newTags['{{EMPRESA_BAIRRO}}'] = empresaLogadaData.bairro || '';
-          newTags['{{EMPRESA_CIDADE}}'] = empresaLogadaData.cidade || '';
-          newTags['{{EMPRESA_ESTADO}}'] = empresaLogadaData.estado || '';
-          newTags['{{EMPRESA_CNPJ}}'] = empresaLogadaData.cnpj || '';
-          newTags['{{EMPRESA_CPF}}'] = empresaLogadaData.cpf || '';
+      // 2. Dados da Empresa (Contratada)
+      if (dadosContratada) {
+          newTags['{{EMPRESA_NOME}}'] = dadosContratada.nome || dadosContratada.razao_social || '';
+          newTags['{{EMPRESA_DOCUMENTO}}'] = dadosContratada.documento || dadosContratada.cnpj || '';
+          newTags['{{EMPRESA_EMAIL}}'] = dadosContratada.email || '';
+          newTags['{{EMPRESA_TELEFONE}}'] = dadosContratada.telefone || '';
+          newTags['{{EMPRESA_CEP}}'] = dadosContratada.cep || '';
+          newTags['{{EMPRESA_ENDERECO}}'] = dadosContratada.endereco || '';
+          newTags['{{EMPRESA_NUMERO}}'] = dadosContratada.numero || '';
+          newTags['{{EMPRESA_COMPLEMENTO}}'] = dadosContratada.complemento || '';
+          newTags['{{EMPRESA_BAIRRO}}'] = dadosContratada.bairro || '';
+          newTags['{{EMPRESA_CIDADE}}'] = dadosContratada.cidade || '';
+          newTags['{{EMPRESA_ESTADO}}'] = dadosContratada.estado || '';
+          newTags['{{EMPRESA_CNPJ}}'] = dadosContratada.cnpj || '';
+          newTags['{{EMPRESA_CPF}}'] = dadosContratada.cpf || '';
       }
 
       // 3. Dados Financeiros
@@ -308,7 +376,7 @@ const PreencherContrato: React.FC = () => {
   }, [
       clienteSelecionadoId, 
       clientesCR, 
-      empresaLogadaData, 
+      dadosContratada, 
       valorTotal, 
       tipoLancamento, 
       numeroParcelas, 

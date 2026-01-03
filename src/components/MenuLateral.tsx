@@ -123,6 +123,13 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
+    },
+    {
+        titulo: 'Protocolos',
+        perfis: ['Admin', 'Cliente', 'Usuario'],
+        itens: [
+            { nome: 'Protocolos', caminho: '/protocolos', icone: Package, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'protocolos' },
+        ]
     }
 ];
 

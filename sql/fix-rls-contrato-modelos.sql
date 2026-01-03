@@ -26,7 +26,7 @@ USING (
   -- Usuários de admin (admin_usuarios) podem ver os modelos do seu admin principal
   (empresa_id IN (SELECT lu.admin_id FROM public.admin_user_lookup lu WHERE lu.id = auth.uid())) OR
   -- Usuários de clientes (tbl_usuarios) podem ver os modelos da sua empresa cliente
-  (empresa_id IN (SELECT u.cliente_id FROM public.tbl_usuarios u WHERE u.id = auth.uid()))
+  (empresa_id = public.get_cliente_id())
 );
 
 -- Política 2: Acesso de GERENCIAMENTO (INSERT, UPDATE, DELETE)
@@ -43,12 +43,12 @@ USING (
   -- Usuários de admin podem gerenciar os modelos do seu admin principal
   (empresa_id IN (SELECT lu.admin_id FROM public.admin_user_lookup lu WHERE lu.id = auth.uid())) OR
   -- Usuários de clientes podem gerenciar os modelos da sua empresa cliente
-  (empresa_id IN (SELECT u.cliente_id FROM public.tbl_usuarios u WHERE u.id = auth.uid()))
+  (empresa_id = public.get_cliente_id())
 )
 WITH CHECK (
   -- A mesma lógica se aplica para garantir que ninguém possa atribuir um modelo a uma empresa à qual não pertence.
   (EXISTS (SELECT 1 FROM public.tbl_admins WHERE id = auth.uid())) OR
   (empresa_id = auth.uid()) OR
   (empresa_id IN (SELECT lu.admin_id FROM public.admin_user_lookup lu WHERE lu.id = auth.uid())) OR
-  (empresa_id IN (SELECT u.cliente_id FROM public.tbl_usuarios u WHERE u.id = auth.uid()))
+  (empresa_id = public.get_cliente_id())
 );

@@ -44,6 +44,7 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   
   // GERAL
   { key: 'documentos_societarios', label: 'Documentos Societarios', path: '/documentos-societarios', grupo: 'geral' },
+  { key: 'protocolos', label: 'Protocolos', path: '/protocolos', grupo: 'geral' },
   { key: 'gestao_suporte', label: 'Gestao de Suporte', path: '/admin/suporte', grupo: 'geral' },
   { key: 'gerenciar_clientes', label: 'Gerenciar Clientes', path: '/clientes', grupo: 'geral' },
 ];

@@ -21,7 +21,7 @@ USING (
   (empresa_id IS NULL) -- Modelos globais
   OR (empresa_id = auth.uid()) -- Proprietários diretos (Clientes, Super Admins)
   OR (empresa_id IN (SELECT admin_id FROM public.admin_user_lookup WHERE id = auth.uid())) -- Usuários de Admin
-  OR (empresa_id IN (SELECT cliente_id FROM public.tbl_usuarios WHERE id = auth.uid())) -- Usuários de Cliente
+  OR (empresa_id = public.get_cliente_id()) -- Usuários de Cliente
 );
 
 
@@ -36,10 +36,10 @@ TO authenticated
 USING (
   (empresa_id = auth.uid())
   OR (empresa_id IN (SELECT admin_id FROM public.admin_user_lookup WHERE id = auth.uid()))
-  OR (empresa_id IN (SELECT cliente_id FROM public.tbl_usuarios WHERE id = auth.uid()))
+  OR (empresa_id = public.get_cliente_id())
 )
 WITH CHECK (
   (empresa_id = auth.uid())
   OR (empresa_id IN (SELECT admin_id FROM public.admin_user_lookup WHERE id = auth.uid()))
-  OR (empresa_id IN (SELECT cliente_id FROM public.tbl_usuarios WHERE id = auth.uid()))
+  OR (empresa_id = public.get_cliente_id())
 );
