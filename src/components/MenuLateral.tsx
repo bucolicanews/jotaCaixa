@@ -58,6 +58,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
             { nome: 'Configuração do Extrato', caminho: '/conciliacao?dialog=nova-configuracao', icone: Link2, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+            { nome: 'Gerenciar Configurações', caminho: '/banco/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'extratos' },
             { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Descrições', caminho: '/banco/descricoes', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Identificadores', caminho: '/banco/identificadores', icone: Hash, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },

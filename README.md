@@ -2766,6 +2766,136 @@ Este padrão foi aplicado a todas as tabelas críticas, garantindo que um funcio
 
 ---
 
+## 👥 Arquitetura Admin vs AdminUsuario (Funcionário do Admin)
+
+Esta seção documenta a relação entre **Admin** (proprietário) e **AdminUsuario** (funcionário do admin), essencial para implementar corretamente o acesso em todos os módulos do sistema.
+
+### Estrutura de Usuários
+
+| Tipo | Tabela de Perfil | Role no Auth | Identificador |
+|:-----|:-----------------|:-------------|:--------------|
+| **Admin** | `tbl_admins` | `Admin` | `usuario.id` é o próprio `admin_id` |
+| **Funcionário do Admin** | `admin_usuarios` | `Usuario` | `perfil.admin_id` aponta para o Admin |
+| **Cliente** | `tbl_clientes` | `Cliente` | `usuario.id` é o próprio `empresa_id` |
+| **Funcionário do Cliente** | `tbl_usuarios` | `Usuario` | `perfil.cliente_id` aponta para o Cliente |
+
+### Detecção de Tipo de Usuário no Frontend
+
+```typescript
+// Em qualquer componente React
+const { role, usuario, perfil } = useSessao();
+
+// Admin direto
+const isDirectAdmin = role === 'Admin';
+
+// Funcionário do Admin (role é 'Usuario' mas tem admin_id no perfil)
+const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+
+// Admin OU funcionário do Admin
+const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
+
+// Cliente direto
+const isDirectCliente = role === 'Cliente';
+
+// Funcionário do Cliente
+const clienteIdFromProfile = (perfil as any)?.cliente_id ?? null;
+const isClienteUsuario = role === 'Usuario' && !!clienteIdFromProfile;
+```
+
+### Resolução do ID do Proprietário
+
+```typescript
+// Para Admin direto: usar o próprio ID
+if (isDirectAdmin) {
+    proprietarioId = usuario.id;
+}
+
+// Para funcionário do Admin: usar o admin_id do perfil
+if (isAdminUsuario) {
+    proprietarioId = (perfil as any).admin_id;
+}
+```
+
+### Tabelas Usadas por Admin vs Cliente
+
+| Módulo | Tabela Admin | Tabela Cliente | Chave de Filtro Admin | Chave de Filtro Cliente |
+|:-------|:-------------|:---------------|:---------------------|:------------------------|
+| **Contas a Receber** | `admin_contas_receber` | `contas_receber` | `admin_id` | `empresa_id` |
+| **Parcelas CR** | `admin_parcelas_receber` | `parcelas_contas_receber` | `admin_id` | `empresa_id` |
+| **Recebimentos** | `admin_recebimentos` | `recebimentos` | `admin_id` | `empresa_id` |
+| **Contas a Pagar** | `admin_contas_pagar` | `contas_pagar` | `admin_id` | `empresa_id` |
+| **Parcelas CP** | `admin_parcelas_pagar` | `parcelas_contas_pagar` | `admin_id` | `empresa_id` |
+| **Pagamentos** | `admin_pagamentos` | `pagamentos` | `admin_id` | `empresa_id` |
+| **Clientes** | `tbl_clientes` | `clientes` | `admin_id` | `proprietario_id` |
+| **Usuários/Funcionários** | `admin_usuarios` | `tbl_usuarios` | `admin_id` | `cliente_id` |
+| **Registros de Ponto** | `admin_registros_ponto` | `registros_ponto` | `admin_id` | `empresa_id` |
+
+### Padrão de Seleção de Tabela no Código
+
+```typescript
+// Determinar se é contexto Admin
+const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
+
+// Selecionar tabelas
+const tabelaContasReceber = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
+const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+const tabelaClientes = isAdminOrEmployee ? 'tbl_clientes' : 'clientes';
+const ownerKey = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
+
+// Determinar o ID do proprietário
+const proprietarioId = isDirectAdmin ? usuario.id : (perfil as any).admin_id;
+
+// Fazer a busca
+const { data } = await supabase
+    .from(tabelaContasReceber)
+    .select('*')
+    .eq(ownerKey, proprietarioId);
+```
+
+### Padrão de RLS para Suporte a AdminUsuario
+
+Todas as tabelas do Admin devem ter políticas RLS que permitam acesso tanto ao Admin direto quanto aos seus funcionários:
+
+```sql
+-- Padrão de RLS para tabelas com admin_id
+CREATE POLICY "tabela_select_policy" ON public.nome_tabela
+FOR SELECT
+USING (
+  admin_id = auth.uid()
+  OR admin_id IN (
+    SELECT admin_usuarios.admin_id 
+    FROM admin_usuarios 
+    WHERE admin_usuarios.id = auth.uid()
+  )
+);
+
+-- Para INSERT/UPDATE adicionar WITH CHECK
+CREATE POLICY "tabela_insert_policy" ON public.nome_tabela
+FOR INSERT
+WITH CHECK (
+  admin_id = auth.uid()
+  OR admin_id IN (
+    SELECT admin_usuarios.admin_id 
+    FROM admin_usuarios 
+    WHERE admin_usuarios.id = auth.uid()
+  )
+);
+```
+
+### Checklist para Novos Módulos
+
+Ao criar um novo módulo que deve funcionar para Admin e seus funcionários:
+
+1. [ ] Usar `useSessao()` para obter `role`, `usuario` e `perfil`
+2. [ ] Detectar `isAdminOrEmployee` com a lógica: `role === 'Admin' || (role === 'Usuario' && perfil.admin_id)`
+3. [ ] Resolver `proprietarioId`: Admin usa `usuario.id`, funcionário usa `perfil.admin_id`
+4. [ ] Selecionar tabela correta: `admin_*` para Admin, tabela normal para Cliente
+5. [ ] Usar `ownerKey` correto: `admin_id` para Admin, `empresa_id` para Cliente
+6. [ ] Verificar RLS da tabela inclui suporte a `admin_usuarios`
+
+---
+
 ## Funcionalidades e Telas
 
 O sistema suporta módulos de **Financeiro**, **Contabilidade**, **RH/Ponto** e **Contratos/Documentos Societários**.

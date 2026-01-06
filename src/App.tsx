@@ -61,6 +61,7 @@ import Protocolos from "./pages/Protocolos"; // NOVO IMPORT
 import ConfirmarRecebimento from "./pages/ConfirmarRecebimento"; // NOVO IMPORT
 import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
+import GerenciarConfiguracoesExtrato from "./pages/GerenciarConfiguracoesExtrato";
 import Mapeamento from "./pages/Mapeamento";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GlobalHandlers from "@/components/GlobalHandlers";
@@ -147,6 +148,7 @@ const App = () => (
             <Route path="/extratos" element={<ProtectedRoute permissionKey="extratos"><Extratos /></ProtectedRoute>} />
             <Route path="/banco/descricoes" element={<ProtectedRoute permissionKey="extratos"><GerenciarDescricoesExtrato /></ProtectedRoute>} />
             <Route path="/banco/identificadores" element={<ProtectedRoute permissionKey="extratos"><GerenciarIdentificadoresExtrato /></ProtectedRoute>} />
+            <Route path="/banco/configuracoes" element={<ProtectedRoute permissionKey="extratos"><GerenciarConfiguracoesExtrato /></ProtectedRoute>} />
             <Route path="/mapeamento" element={<ProtectedRoute permissionKey="conciliacao"><Mapeamento /></ProtectedRoute>} />
             
             {/* NOVA ROTA: Lançamentos Manuais */}

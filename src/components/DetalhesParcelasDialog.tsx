@@ -50,7 +50,7 @@ interface DetalhesParcelasDialogProps {
 }
 
 const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
-  const { role, usuario } = useSessao();
+  const { role, usuario, perfil } = useSessao();
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
@@ -63,11 +63,14 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [isUndoing, setIsUndoing] = useState(false);
   const [isUnlinking, setIsUnlinking] = useState(false);
 
-  // Determina a tabela correta com base na role
-  const isAdmin = role === 'Admin'; // DEFINIÇÃO AQUI
-  const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
-  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+  // Determina a tabela correta com base na role (Admin direto OU funcionário do admin)
+  const isDirectAdmin = role === 'Admin';
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
+  const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  const tabelaRecebimentos = isAdminOrEmployee ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaContasReceber = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
@@ -134,8 +137,8 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const handleDeleteParcela = async (parcelaId: string) => {
       setIsDeleting(true);
       try {
-          // 1. Verificar se há recebimentos associados (apenas Admin)
-          if (isAdmin) {
+          // 1. Verificar se há recebimentos associados (Admin ou funcionário do Admin)
+          if (isAdminOrEmployee) {
               const { count, error: countError } = await supabase
                   .from('admin_recebimentos')
                   .select('id', { count: 'exact', head: true })
@@ -392,7 +395,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         parcela.mapeado_extrato_id,
         parcela.id,
         'CR',
-        isAdmin
+        isAdminOrEmployee
       );
       
       if (!result.success) {
