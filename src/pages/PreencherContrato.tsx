@@ -39,7 +39,9 @@ const PreencherContrato: React.FC = () => {
   
   // Check if user is direct admin OR admin employee
   const isDirectAdmin = role === 'Admin';
-  const isAdminUsuario = role === 'AdminUsuario';
+  // Admin employee has role 'Usuario' but has admin_id in profile (from admin_usuarios table)
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
   const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
   const isCliente = role === 'Cliente'; 
 
@@ -75,30 +77,17 @@ const PreencherContrato: React.FC = () => {
   
               if (carregandoSessao || !usuario) return;
   
-      
-  
-              if (isAdminOrEmployee) {
-  
-                  // The user is the Admin, so they are the owner.
-  
+              // For direct admin: use their own ID
+              if (isDirectAdmin) {
                   setResolvedOwnerId(usuario.id);
-  
                   return;
-  
               }
   
-      
-  
-              // For other users, first try the direct property on the profile.
-  
+              // For admin employee (AdminUsuario): get admin_id from profile or lookup
               const adminIdFromProfile = (perfil as any)?.admin_id;
-  
               if (adminIdFromProfile) {
-  
                   setResolvedOwnerId(adminIdFromProfile);
-  
                   return;
-  
               }
   
       
@@ -137,7 +126,7 @@ const PreencherContrato: React.FC = () => {
   
           resolveOwner();
   
-        }, [carregandoSessao, usuario, isAdminOrEmployee, perfil]);  useEffect(() => {
+        }, [carregandoSessao, usuario, isDirectAdmin, perfil]);  useEffect(() => {
     const fetchContratadaData = async () => {
         if (!proprietarioContratoId) {
             setDadosContratada(null);
@@ -183,15 +172,18 @@ const PreencherContrato: React.FC = () => {
     // 2. Busca Clientes com a nova lógica
     let clientesDataSource: Promise<any>;
 
-    // Se o admin estiver selecionando "Meus Contratos", a lista de clientes vem de tbl_clientes (empresas do sistema)
-    if (isAdminOrEmployee && targetId === resolvedOwnerId) {
+    // Admin users always get clients from tbl_clientes filtered by admin_id
+    // Regular clients get clients from clientes table filtered by proprietario_id
+    if (isAdminOrEmployee) {
+      // For admin or admin employees: get all tbl_clientes where admin_id = targetId (the admin's ID)
       clientesDataSource = supabase
         .from('tbl_clientes')
-        .select('*') // Garante que todos os campos, incluindo endereço, sejam carregados
+        .select('*')
+        .eq('admin_id', targetId) // targetId is the admin_id when selecting "Meus Contratos"
         .eq('aprovado', true)
         .order('nome');
     } else {
-      // Para todos os outros casos (cliente logado, ou admin selecionando uma empresa), busca da tabela 'clientes'
+      // For clients: get from clientes table where proprietario_id = their client ID
       clientesDataSource = supabase
         .from('clientes')
         .select('*')
@@ -222,9 +214,16 @@ const PreencherContrato: React.FC = () => {
       }
     }
     
-    // 2. Carregar Empresas (Se Admin)
+    // 2. Carregar Empresas (Se Admin ou Usuario do Admin)
     if (isAdminOrEmployee && resolvedOwnerId) {
-      const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
+      // Get all approved clients for this admin
+      const { data } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome')
+        .eq('admin_id', resolvedOwnerId) // Filter by admin_id
+        .eq('aprovado', true);
+      
+      // Add "Meus Contratos" option at the top
       const options = [{ id: resolvedOwnerId, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
     }
@@ -424,9 +423,9 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     // Determina as tabelas e chaves
-    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabelaContasReceber = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const ownerKey = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
     
     // Busca as contas contábeis mapeadas
     const { data: configData } = await supabase
@@ -524,8 +523,21 @@ const PreencherContrato: React.FC = () => {
         }
         
         // 3. Inserir Nova Conta Sintética (Contas a Receber)
-        const contaReceberPayload = {
-            [ownerKey]: proprietarioContratoId,
+        const contaReceberPayload = isAdminOrEmployee ? {
+            admin_id: proprietarioContratoId,
+            cliente_id: clienteSelecionadoId,
+            descricao: `Contrato: ${tituloDocumento}`,
+            valor_total: valorTotalFinal,
+            data_emissao: format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento,
+            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+            status: 'aberta',
+            origem: 'contrato',
+            contrato_gerado_id: currentContratoId,
+            id_conta_patrimonial: contaPatrimonialId,
+            id_conta_resultado: contaReceitaId,
+        } : {
+            empresa_id: proprietarioContratoId,
             cliente_id: clienteSelecionadoId,
             descricao: `Contrato: ${tituloDocumento}`,
             valor_total: valorTotalFinal,

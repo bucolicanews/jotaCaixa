@@ -303,7 +303,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   if (!contrato) return null;
   
   // Verifica o tipo de conteúdo salvo no contrato
-  const isHtml = contrato.valores_tags_preenchidas?.tipo_conteudo === 'html';
+  const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
   
   // Conteúdo a ser exibido na aba de prévia
   const contentToDisplay = contrato.conteudo_renderizado ? (
