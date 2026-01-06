@@ -37,7 +37,10 @@ const PreencherContrato: React.FC = () => {
   const { configMap } = useContabilConfig(); // NOVO HOOK
   const { temCapitalSocial, carregando: carregandoCapital } = useCapitalSocial(); // NOVO HOOK
   
-  const isAdmin = role === 'Admin';
+  // Check if user is direct admin OR admin employee
+  const isDirectAdmin = role === 'Admin';
+  const isAdminUsuario = role === 'AdminUsuario';
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
   const isCliente = role === 'Cliente'; 
 
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
@@ -74,7 +77,7 @@ const PreencherContrato: React.FC = () => {
   
       
   
-              if (isAdmin) {
+              if (isAdminOrEmployee) {
   
                   // The user is the Admin, so they are the owner.
   
@@ -134,7 +137,7 @@ const PreencherContrato: React.FC = () => {
   
           resolveOwner();
   
-        }, [carregandoSessao, usuario, isAdmin, perfil]);  useEffect(() => {
+        }, [carregandoSessao, usuario, isAdminOrEmployee, perfil]);  useEffect(() => {
     const fetchContratadaData = async () => {
         if (!proprietarioContratoId) {
             setDadosContratada(null);
@@ -142,7 +145,7 @@ const PreencherContrato: React.FC = () => {
         };
 
         const { data, error } = await supabase
-            .from('tbl_admin')
+            .from('tbl_admins')
             .select('*')
             .eq('id', proprietarioContratoId)
             .single();
@@ -151,7 +154,7 @@ const PreencherContrato: React.FC = () => {
             setDadosContratada(data);
         } else {
             // Fallback para o admin logado, para manter o comportamento que já funciona.
-            if (isAdmin && proprietarioContratoId === resolvedOwnerId) {
+            if (isAdminOrEmployee && proprietarioContratoId === resolvedOwnerId) {
                 setDadosContratada(perfil);
             } else {
                 setDadosContratada(null);
@@ -160,7 +163,7 @@ const PreencherContrato: React.FC = () => {
         }
     };
     fetchContratadaData();
-  }, [proprietarioContratoId, isAdmin, resolvedOwnerId, perfil]);
+  }, [proprietarioContratoId, isAdminOrEmployee, resolvedOwnerId, perfil]);
 
   // Função auxiliar de formatação de moeda
   const formatCurrency = (val: number) => 
@@ -181,7 +184,7 @@ const PreencherContrato: React.FC = () => {
     let clientesDataSource: Promise<any>;
 
     // Se o admin estiver selecionando "Meus Contratos", a lista de clientes vem de tbl_clientes (empresas do sistema)
-    if (isAdmin && targetId === resolvedOwnerId) {
+    if (isAdminOrEmployee && targetId === resolvedOwnerId) {
       clientesDataSource = supabase
         .from('tbl_clientes')
         .select('*') // Garante que todos os campos, incluindo endereço, sejam carregados
@@ -205,7 +208,7 @@ const PreencherContrato: React.FC = () => {
     } else {
         setClientesCR([]); // Limpa a lista se nada for encontrado
     }
-  }, [isAdmin, resolvedOwnerId]);
+  }, [isAdminOrEmployee, resolvedOwnerId]);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
@@ -220,7 +223,7 @@ const PreencherContrato: React.FC = () => {
     }
     
     // 2. Carregar Empresas (Se Admin)
-    if (isAdmin && resolvedOwnerId) {
+    if (isAdminOrEmployee && resolvedOwnerId) {
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
       const options = [{ id: resolvedOwnerId, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
@@ -281,7 +284,7 @@ const PreencherContrato: React.FC = () => {
     }
     
     setCarregandoDados(false);
-  }, [modeloId, resolvedOwnerId, isAdmin, fetchDependentData, contratoId]);
+  }, [modeloId, resolvedOwnerId, isAdminOrEmployee, fetchDependentData, contratoId]);
 
   // Carregamento inicial
   useEffect(() => {
@@ -652,7 +655,7 @@ const PreencherContrato: React.FC = () => {
           <Card>
             <CardHeader><CardTitle>1. Identificação e Cliente</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {isAdmin && (
+              {isAdminOrEmployee && (
                 <div className="space-y-2">
                   <Label>Empresa Contratante</Label>
                   <Select value={proprietarioContratoId || ''} onValueChange={setProprietarioContratoId}>
