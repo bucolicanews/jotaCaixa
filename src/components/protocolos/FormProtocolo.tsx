@@ -8,35 +8,28 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useProtocolos } from '@/hooks/use-protocolos';
+import { useSessao } from '@/hooks/use-sessao';
 import { Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-import { v4 as uuidv4 } from 'uuid';
 import { useOwner } from '@/hooks/use-owner';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Protocolo } from '@/types/protocolo';
 
-// Zod Schema for validation
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'text/plain'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
 const formSchema = z.object({
   id_cliente: z.string().uuid('Selecione um cliente.'),
-  numero_protocolo: z.string().optional().or(z.literal('')),
-  descrição: z.string().optional().or(z.literal('')),
-  nome_resp_recebimento: z.string().min(3, 'O nome do responsável é obrigatório.'),
-  img_protocolo: z
-    .instanceof(FileList)
-    .refine(files => files?.length === 1, 'A foto do protocolo é obrigatória.')
-    .refine(files => files?.[0]?.size <= MAX_FILE_SIZE, `Tamanho máximo de 5MB.`)
-    .refine(files => ALLOWED_IMAGE_TYPES.includes(files?.[0]?.type), 'Apenas formatos JPG, PNG e WEBP são permitidos.'),
+  titulo: z.string().min(3, 'O título é obrigatório.'),
+  descricao: z.string().optional(),
+  link_tarefa: z.string().url('URL inválida').optional().or(z.literal('')),
   anexos: z
     .instanceof(FileList)
     .optional()
@@ -51,29 +44,55 @@ interface Cliente {
 
 interface ProtocoloFormDialogProps {
   children: React.ReactNode;
-  protocolo?: any;
+  protocolo?: Protocolo;
   onSuccess?: () => void;
+  onUpdate?: (protocoloId: string, data: any) => Promise<void>;
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
 }
 
-const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSuccess }) => {
-  const [open, setOpen] = useState(false);
+const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ 
+  children, 
+  protocolo, 
+  onSuccess, 
+  onUpdate,
+  externalOpen,
+  onExternalOpenChange
+}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = onExternalOpenChange || setInternalOpen;
+  
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoadingClientes, setIsLoadingClientes] = useState(true);
   const { handleCreateProtocolo } = useProtocolos();
   const { ownerId, ownerType } = useOwner();
+  const { usuario } = useSessao();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const isEditing = !!protocolo;
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-        id_cliente: protocolo?.id_cliente || '',
-        numero_protocolo: protocolo?.numero_protocolo || '',
-        descrição: protocolo?.descrição || '',
-        nome_resp_recebimento: protocolo?.nome_resp_recebimento || '',
+        id_cliente: protocolo?.cliente_id || '',
+        titulo: protocolo?.titulo || '',
+        descricao: protocolo?.descricao || '',
+        link_tarefa: protocolo?.link_tarefa || '',
     }
   });
   
-  const imgProtocoloRef = form.register('img_protocolo');
+  useEffect(() => {
+    if (open && protocolo) {
+      form.reset({
+        id_cliente: protocolo.cliente_id || '',
+        titulo: protocolo.titulo || '',
+        descricao: protocolo.descricao || '',
+        link_tarefa: protocolo.link_tarefa || '',
+      });
+    }
+  }, [open, protocolo, form]);
+  
   const anexosRef = form.register('anexos');
 
   const fetchClientes = async () => {
@@ -87,10 +106,8 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSu
     let query = supabase.from(tabelaClientes).select('id, nome');
     
     if (isAdminContext) {
-        // Admin/AdminUsuario: Busca todos os clientes do sistema (tbl_clientes)
         query = query.eq('aprovado', true);
     } else {
-        // Cliente/Usuario Cliente: Busca clientes CR (clientes)
         query = query.eq(ownerKey, ownerId);
     }
     
@@ -114,125 +131,139 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({ children, protocolo, onSu
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-        await handleCreateProtocolo(values);
-        showSuccess('Protocolo salvo com sucesso!');
+        if (isEditing && onUpdate && protocolo) {
+            await onUpdate(protocolo.id, values);
+        } else {
+            await handleCreateProtocolo(values);
+            showSuccess('Protocolo salvo com sucesso!');
+        }
         setOpen(false);
-        form.reset({ nome_resp_recebimento: '', id_cliente: '', numero_protocolo: '', descrição: '' });
+        form.reset({ 
+            id_cliente: '', 
+            titulo: '', 
+            descricao: '',
+            link_tarefa: '',
+        });
         if(onSuccess) onSuccess();
-    } catch (error) {
-        showError('Erro ao salvar protocolo');
+    } catch (error: any) {
+        console.error('Erro ao salvar protocolo:', error);
+        showError(`Erro ao salvar protocolo: ${error.message || error}`);
     } finally {
         setIsSubmitting(false);
     }
   };
 
+  const dialogContent = (
+    <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>{isEditing ? 'Editar' : 'Novo'} Protocolo</DialogTitle>
+      </DialogHeader>
+      <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                  control={form.control}
+                  name="id_cliente"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Cliente</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingClientes || isSubmitting}>
+                              <FormControl>
+                                  <SelectTrigger>
+                                      <SelectValue placeholder={isLoadingClientes ? "Carregando..." : "Selecione o cliente..."} />
+                                  </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                  {clientes.map((cliente) => (
+                                      <SelectItem key={cliente.id} value={cliente.id}>
+                                          {cliente.nome}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+              
+              <FormField
+                  control={form.control}
+                  name="titulo"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Título do Protocolo</FormLabel>
+                          <FormControl><Input placeholder="Ex: Entrega de documentos contábeis" {...field} disabled={isSubmitting} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+              
+              <FormField
+                  control={form.control}
+                  name="descricao"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Descrição (Opcional)</FormLabel>
+                          <FormControl><Textarea placeholder="Detalhes sobre o protocolo..." {...field} disabled={isSubmitting} rows={3} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+
+              <FormField
+                  control={form.control}
+                  name="link_tarefa"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Link da Tarefa (Opcional)</FormLabel>
+                          <FormControl><Input placeholder="https://exemplo.com/tarefa/123" {...field} disabled={isSubmitting} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+              
+              <FormField
+                  control={form.control}
+                  name="anexos"
+                  render={() => (
+                      <FormItem>
+                          <FormLabel>{isEditing ? 'Adicionar Anexos (Opcional)' : 'Anexos (Opcional)'}</FormLabel>
+                          <FormControl>
+                              <Input 
+                                  type="file" 
+                                  multiple 
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  {...anexosRef} 
+                                  disabled={isSubmitting} 
+                              />
+                          </FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+
+              <div className="flex justify-end pt-4">
+                  <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isEditing ? 'Atualizar Protocolo' : 'Salvar Protocolo'}
+                  </Button>
+              </div>
+          </form>
+      </Form>
+    </DialogContent>
+  );
+
+  if (externalOpen !== undefined) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        {dialogContent}
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{protocolo ? 'Editar' : 'Novo'} Protocolo</DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                    control={form.control}
-                    name="id_cliente"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Cliente</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClientes || isSubmitting}>
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={isLoadingClientes ? "Carregando..." : "Selecione o cliente..."} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {clientes.map((cliente) => (
-                                        <SelectItem key={cliente.id} value={cliente.id}>
-                                            {cliente.nome}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                
-                <FormField
-                    control={form.control}
-                    name="numero_protocolo"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Número do Protocolo (Opcional)</FormLabel>
-                            <FormControl><Input placeholder="Ex: PROT-2024-001" {...field} disabled={isSubmitting} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                
-                <FormField
-                    control={form.control}
-                    name="descrição"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Descrição (Opcional)</FormLabel>
-                            <FormControl><Textarea placeholder="Detalhes do documento ou serviço" {...field} disabled={isSubmitting} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="nome_resp_recebimento"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Nome do Responsável pelo Recebimento</FormLabel>
-                            <FormControl><Input placeholder="Digite o nome..." {...field} disabled={isSubmitting} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="img_protocolo"
-                    render={() => (
-                        <FormItem>
-                            <FormLabel>Foto do Protocolo Assinado (Obrigatório)</FormLabel>
-                            <FormControl>
-                                <Input type="file" accept="image/jpeg,image/png,image/webp" {...imgProtocoloRef} disabled={isSubmitting} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="anexos"
-                    render={() => (
-                        <FormItem>
-                            <FormLabel>Outros Anexos (Opcional)</FormLabel>
-                            <FormControl>
-                                <Input type="file" multiple {...anexosRef} disabled={isSubmitting} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <div className="flex justify-end pt-4">
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Salvar Protocolo
-                    </Button>
-                </div>
-            </form>
-        </Form>
-      </DialogContent>
+      {dialogContent}
     </Dialog>
   );
 };

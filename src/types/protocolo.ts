@@ -1,21 +1,30 @@
 export interface Protocolo {
-  id: number;
-  cliente_id: number;
+  id: string;
+  cliente_id: string;
   numero_protocolo: string;
-  status: 'Impresso' | 'Trânsito' | 'Entregue' | 'Cancelado' | 'Problema';
-  img_protocolo?: string;
-  nome_resp_recebimento?: string;
+  status: 'Criado' | 'Impresso' | 'Trânsito' | 'Entregue' | 'Cancelado' | 'Problema';
+  img_protocolo: string | null;
+  nome_resp_recebimento: string | null;
   created_at: string;
   admin_id: string;
+  criado_por: string;
+  data_criacao: string;
+  data_impressao: string | null;
+  data_recebimento: string | null;
+  usuario_criador_nome: string | null;
+  anexos: string[] | null;
+  titulo: string | null;
+  descricao: string | null;
+  link_tarefa: string | null;
   // Relationship
   tbl_clientes: {
     nome: string;
-  };
+  } | null;
 }
 
 export interface ProtocoloFile {
-  id: number;
-  protocolo_id: number;
+  id: string;
+  protocolo_id: string;
   file_name: string;
   file_url: string;
   created_at: string;

@@ -28,9 +28,10 @@ interface ProtocolosHook {
     handleDeleteProtocolo: (protocolo: Protocolo) => Promise<void>;
     handleUpdateStatus: (protocoloId: string, status: Protocolo['status']) => Promise<void>;
     handleCreateProtocolo: (data: any) => Promise<any>;
+    handleUpdateProtocolo: (protocoloId: string, data: any) => Promise<void>;
 }
 
-const PROTOCOLO_BUCKET = 'protocolos';
+const PROTOCOLO_BUCKET = 'protocolos_files';
 
 export function useProtocolos(): ProtocolosHook {
     const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -63,8 +64,6 @@ export function useProtocolos(): ProtocolosHook {
         let query = supabase
             .from('protocolos')
             .select('*, tbl_clientes(nome)');
-            
-        // A RLS agora usa id_proprietario, então a consulta é simplificada.
         
         // Aplica ordenação
         let ascending = true;
@@ -122,27 +121,28 @@ export function useProtocolos(): ProtocolosHook {
     }, [carregandoSessao, buscarProtocolos]);
 
     const uploadFile = async (file: File, path: string) => {
-        const { data, error } = await supabase.storage.from(PROTOCOLO_BUCKET).upload(path, file);
+        const { data, error } = await supabase.storage.from(PROTOCOLO_BUCKET).upload(path, file, {
+            cacheControl: '3600',
+            upsert: false
+        });
+        
         if (error) {
+            console.error('Erro no upload:', error);
             throw new Error(`Erro no upload do arquivo ${file.name}: ${error.message}`);
         }
+        
         const { data: { publicUrl } } = supabase.storage.from(PROTOCOLO_BUCKET).getPublicUrl(path);
         return publicUrl;
     };
 
     const handleCreateProtocolo = useCallback(async (data: any) => {
         if (!ownerId) throw new Error("ID do proprietário não encontrado.");
+        if (!usuario) throw new Error("Usuário não encontrado.");
 
         const protocolUUID = uuidv4();
-        const imgProtocoloFile = data.img_protocolo[0];
         const anexosFiles = data.anexos ? Array.from(data.anexos) : [];
 
-        // 1. Upload da imagem do protocolo
-        const imgExtension = imgProtocoloFile.name.split('.').pop();
-        const imgPath = `${data.id_cliente}/${protocolUUID}/protocolo_assinado.${imgExtension}`;
-        const url_img_protocolo = await uploadFile(imgProtocoloFile, imgPath);
-
-        // 2. Upload dos anexos
+        // 1. Upload dos anexos (se houver)
         const anexosUrls = await Promise.all(
             anexosFiles.map((file: File) => {
                 const anexoPath = `${data.id_cliente}/${protocolUUID}/${uuidv4()}-${file.name}`;
@@ -150,36 +150,88 @@ export function useProtocolos(): ProtocolosHook {
             })
         );
         
+        // 2. Gerar número do protocolo automaticamente
+        const timestamp = new Date().getTime();
+        const numeroProtocolo = `PROT-${timestamp.toString().slice(-8)}`;
+        
         // 3. Inserir no banco de dados
         const { error: insertError } = await supabase.from('protocolos').insert({
-            id: protocolUUID,
-            id_cliente: data.id_cliente,
-            titulo: data.numero_protocolo || `Protocolo ${protocolUUID.substring(0, 8)}`,
-            descrição: data.descrição || null,
-            numero_protocolo: data.numero_protocolo || `PROT-${protocolUUID.substring(0, 8)}`,
-            status: 'Impresso',
-            id_proprietario: ownerId, // USANDO id_proprietario
-            img_protocolo: url_img_protocolo,
-            nome_resp_recebimento: data.nome_resp_recebimento,
+            cliente_id: data.id_cliente,
+            numero_protocolo: numeroProtocolo,
+            titulo: data.titulo,
+            descricao: data.descricao || null,
+            link_tarefa: data.link_tarefa || null,
+            status: 'Criado',
+            admin_id: ownerId,
             anexos: anexosUrls.length > 0 ? anexosUrls : null,
+            data_criacao: new Date().toISOString(),
+            usuario_criador_nome: usuario.nome || usuario.email || 'Usuário',
+            // criado_por usa DEFAULT auth.uid() automaticamente
         });
 
         if (insertError) throw insertError;
         
         refetch();
-    }, [ownerId, refetch]);
+    }, [ownerId, usuario, refetch]);
 
     const handleDeleteProtocolo = useCallback(async (protocolo: Protocolo) => {
-        // Implementar a lógica de deleção
-        console.log("Deletar protocolo", protocolo);
-        showSuccess('Protocolo deletado com sucesso.');
-        refetch();
-    }, [refetch]);
+        // Verificar se é Admin
+        if (role !== 'Admin') {
+            showError('Apenas administradores podem excluir protocolos.');
+            return;
+        }
+
+        // Verificar se o protocolo pode ser excluído (apenas Criado ou Impresso)
+        if (protocolo.status !== 'Criado' && protocolo.status !== 'Impresso') {
+            showError('Apenas protocolos com status "Criado" ou "Impresso" podem ser excluídos.');
+            return;
+        }
+
+        setCarregando(true);
+        try {
+            // Deletar arquivos do storage se houver anexos
+            if (protocolo.anexos && protocolo.anexos.length > 0) {
+                const filesToDelete = protocolo.anexos.map(url => {
+                    const urlParts = url.split('/');
+                    const bucketIndex = urlParts.findIndex(part => part === PROTOCOLO_BUCKET);
+                    if (bucketIndex !== -1) {
+                        return urlParts.slice(bucketIndex + 1).join('/');
+                    }
+                    return null;
+                }).filter(Boolean);
+
+                if (filesToDelete.length > 0) {
+                    await supabase.storage.from(PROTOCOLO_BUCKET).remove(filesToDelete as string[]);
+                }
+            }
+
+            // Deletar protocolo do banco
+            const { error } = await supabase.from('protocolos').delete().eq('id', protocolo.id);
+            
+            if (error) throw error;
+            
+            showSuccess('Protocolo deletado com sucesso.');
+            refetch();
+        } catch (error: any) {
+            showError(`Erro ao deletar protocolo: ${error.message}`);
+        } finally {
+            setCarregando(false);
+        }
+    }, [refetch, role]);
 
     const handleUpdateStatus = useCallback(async (protocoloId: string, status: Protocolo['status']) => {
         setCarregando(true);
         try {
-            const { error } = await supabase.from('protocolos').update({ status }).eq('id', protocoloId);
+            const updates: any = { status };
+            
+            // Adicionar timestamps conforme transição de status
+            if (status === 'Impresso') {
+                updates.data_impressao = new Date().toISOString();
+            } else if (status === 'Entregue') {
+                updates.data_recebimento = new Date().toISOString();
+            }
+            
+            const { error } = await supabase.from('protocolos').update(updates).eq('id', protocoloId);
             if (error) throw error;
             showSuccess('Status do protocolo atualizado com sucesso.');
             refetch();
@@ -189,6 +241,53 @@ export function useProtocolos(): ProtocolosHook {
             setCarregando(false);
         }
     }, [refetch]);
+
+    const handleUpdateProtocolo = useCallback(async (protocoloId: string, data: any) => {
+        const protocolo = protocolos.find(p => p.id === protocoloId);
+        
+        if (!protocolo) {
+            showError('Protocolo não encontrado.');
+            return;
+        }
+
+        if (protocolo.status !== 'Criado' && protocolo.status !== 'Impresso') {
+            showError('Apenas protocolos com status "Criado" ou "Impresso" podem ser editados.');
+            return;
+        }
+
+        setCarregando(true);
+        try {
+            const anexosFiles = data.anexos ? Array.from(data.anexos) : [];
+            let anexosUrls = protocolo.anexos || [];
+
+            if (anexosFiles.length > 0) {
+                const newAnexosUrls = await Promise.all(
+                    anexosFiles.map((file: File) => {
+                        const anexoPath = `${data.id_cliente}/${protocoloId}/${uuidv4()}-${file.name}`;
+                        return uploadFile(file, anexoPath);
+                    })
+                );
+                anexosUrls = [...anexosUrls, ...newAnexosUrls];
+            }
+
+            const { error } = await supabase.from('protocolos').update({
+                cliente_id: data.id_cliente,
+                titulo: data.titulo,
+                descricao: data.descricao || null,
+                link_tarefa: data.link_tarefa || null,
+                anexos: anexosUrls.length > 0 ? anexosUrls : null,
+            }).eq('id', protocoloId);
+
+            if (error) throw error;
+            
+            showSuccess('Protocolo atualizado com sucesso.');
+            refetch();
+        } catch (error: any) {
+            showError(`Erro ao atualizar protocolo: ${error.message}`);
+        } finally {
+            setCarregando(false);
+        }
+    }, [protocolos, refetch]);
 
     return {
         protocolos,
@@ -207,5 +306,6 @@ export function useProtocolos(): ProtocolosHook {
         handleDeleteProtocolo,
         handleUpdateStatus,
         handleCreateProtocolo,
+        handleUpdateProtocolo,
     };
 }
