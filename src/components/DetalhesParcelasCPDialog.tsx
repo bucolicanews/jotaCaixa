@@ -24,7 +24,7 @@ interface DetalhesParcelasCPDialogProps {
 }
 
 const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
-  const { usuario, role } = useSessao();
+  const { usuario, role, perfil } = useSessao();
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -32,11 +32,16 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
 
-  const isAdmin = role === 'Admin';
-  const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-  const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
-  const joinTable = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+  // Detectar Admin direto OU funcionário do admin
+  const isDirectAdmin = role === 'Admin';
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
+  
+  const tabelaContasPagar = isAdminOrEmployee ? 'admin_contas_pagar' : 'contas_pagar';
+  const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+  const tabelaPagamentos = isAdminOrEmployee ? 'admin_pagamentos' : 'pagamentos';
+  const joinTable = isAdminOrEmployee ? 'admin_contas_pagar' : 'contas_pagar';
 
   const fetchParcelas = useCallback(async () => {
     if (!usuario?.id) return;
@@ -67,7 +72,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         setParcelas(mappedData as ExtendedParcelaPagar[]);
     }
     setLoading(false);
-  }, [conta.id, usuario?.id, tabelaParcelas, joinTable, isAdmin]);
+  }, [conta.id, usuario?.id, tabelaParcelas, joinTable]);
   
   useEffect(() => {
     if (open) {
@@ -314,7 +319,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         parcela.mapeado_extrato_id,
         parcela.id,
         'CP',
-        isAdmin
+        isAdminOrEmployee
       );
       
       if (!result.success) {

@@ -65,7 +65,7 @@ interface FormContasPagarProps {
 }
 
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
-  const { usuario, role } = useSessao();
+  const { usuario, role, perfil } = useSessao();
   const { configMap } = useContabilConfig();
   const { temCapitalSocial, carregando: carregandoCapital } = useCapitalSocial();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
@@ -77,13 +77,19 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!contaInicial;
 
-  const isAdmin = role === 'Admin';
+  // Detectar Admin direto OU funcionário do admin
+  const isDirectAdmin = role === 'Admin';
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
   const isCliente = role === 'Cliente';
-  const proprietarioId = usuario?.id;
   
-  const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-  const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-  const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+  // Resolver proprietarioId correto
+  const proprietarioId = isDirectAdmin ? usuario?.id : (isAdminUsuario ? adminIdFromProfile : usuario?.id);
+  
+  const tabelaContasPagar = isAdminOrEmployee ? 'admin_contas_pagar' : 'contas_pagar';
+  const tabelaParcelasPagar = isAdminOrEmployee ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+  const ownerKey = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
 
   const fetchMapeamentoContabil = useCallback(async () => {
     if (!proprietarioId) return;
@@ -264,7 +270,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       
       let contaPagarId: string;
       
-      const contaPagarPayload = isAdmin ? {
+      const contaPagarPayload = isAdminOrEmployee ? {
           admin_id: proprietarioId,
           fornecedor: values.fornecedor,
           descricao: values.descricao,

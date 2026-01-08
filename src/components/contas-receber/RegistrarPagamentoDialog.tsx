@@ -358,7 +358,13 @@ export async function saveRecebimentoAndLancamentos({
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
   const { role, usuario, perfil } = useSessao();
   const { configMap } = useContabilConfig();
-  const isAdmin = role === 'Admin';
+
+  // Detectar Admin direto OU funcionário do admin
+  const isDirectAdmin = role === 'Admin';
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
+  const isAdmin = isAdminOrEmployee; // Manter compatibilidade com código existente
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
@@ -376,8 +382,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   // Determina as tabelas de destino
   const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
   
-  // O ID do proprietário da sessão (para RLS e Configurações)
-  const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
+  // Resolver proprietarioId correto
+  const proprietarioDaSessao = isDirectAdmin ? usuario?.id : (isAdminUsuario ? adminIdFromProfile : ((perfil as any)?.cliente_id || (perfil as any)?.id));
 
 
   // Usamos o hook de saldo calculado para obter as contas de destino

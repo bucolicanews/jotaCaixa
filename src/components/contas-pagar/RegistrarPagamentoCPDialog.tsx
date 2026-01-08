@@ -103,7 +103,12 @@ interface RegistrarPagamentoCPDialogProps {
 const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
   const { role, usuario, perfil } = useSessao();
   const { configMap } = useContabilConfig();
-  const isAdmin = role === 'Admin';
+  
+  // Detectar Admin direto OU funcionário do admin
+  const isDirectAdmin = role === 'Admin';
+  const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
+  const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
+  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
   const isCliente = role === 'Cliente';
 
   const [historicos, setHistoricos] = useState<Historico[]>([]);
@@ -119,13 +124,13 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null);
 
-  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
-  const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-  const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
-  const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+  const tabelaPagamentos = isAdminOrEmployee ? 'admin_pagamentos' : 'pagamentos';
+  const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+  const tabelaContasPagar = isAdminOrEmployee ? 'admin_contas_pagar' : 'contas_pagar';
+  const ownerKey = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
 
   const empresaId = (parcela as any)?.empresa_id;
-  const proprietarioId = isAdmin ? usuario?.id : empresaId;
+  const proprietarioId = isAdminOrEmployee ? usuario?.id : empresaId;
 
   const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos', false);
 
@@ -751,7 +756,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 </FormItem>
               )} />
 
-              {(isAdmin || isCliente) && (
+              {(isAdminOrEmployee || isCliente) && (
                 <div className="space-y-2 pt-2 border-t">
                   <FormField control={form.control} name="historico_id" render={({ field }) => (
                     <FormItem>

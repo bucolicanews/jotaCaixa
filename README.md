@@ -2627,13 +2627,13 @@ CREATE POLICY "Admins can delete their own profile" ON public.tbl_admins FOR DEL
 CREATE POLICY "Allow authenticated read of branding fields" ON public.tbl_admins FOR SELECT USING (true);
 CREATE POLICY "service_role_insert_tbl_admins" ON public.tbl_admins FOR INSERT TO service_role WITH CHECK (true);
 
--- RLS para tbl_clientes
+-- RLS para tbl_clientes (Admin + AdminUsuario support)
 ALTER TABLE public.tbl_clientes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "tbl_clientes_select" ON public.tbl_clientes FOR SELECT USING ((id = auth.uid()) OR (admin_id = auth.uid()) OR (get_admin_id_for_current_user() = admin_id));
-CREATE POLICY "tbl_clientes_insert" ON public.tbl_clientes FOR INSERT WITH CHECK (admin_id = auth.uid());
-CREATE POLICY "tbl_clientes_update" ON public.tbl_clientes FOR UPDATE USING (admin_id = auth.uid());
-CREATE POLICY "tbl_clientes_delete" ON public.tbl_clientes FOR DELETE USING (admin_id = auth.uid());
-CREATE POLICY "Clientes can update their own profile" ON public.tbl_clientes FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "tbl_clientes_select" ON public.tbl_clientes FOR SELECT USING ((id = auth.uid()) OR (admin_id = auth.uid()) OR (admin_id IN (SELECT admin_usuarios.admin_id FROM admin_usuarios WHERE admin_usuarios.id = auth.uid())));
+CREATE POLICY "tbl_clientes_insert" ON public.tbl_clientes FOR INSERT WITH CHECK ((admin_id = auth.uid()) OR (admin_id IN (SELECT admin_usuarios.admin_id FROM admin_usuarios WHERE admin_usuarios.id = auth.uid())));
+CREATE POLICY "tbl_clientes_update" ON public.tbl_clientes FOR UPDATE USING ((admin_id = auth.uid()) OR (admin_id IN (SELECT admin_usuarios.admin_id FROM admin_usuarios WHERE admin_usuarios.id = auth.uid()))) WITH CHECK ((admin_id = auth.uid()) OR (admin_id IN (SELECT admin_usuarios.admin_id FROM admin_usuarios WHERE admin_usuarios.id = auth.uid())));
+CREATE POLICY "tbl_clientes_delete" ON public.tbl_clientes FOR DELETE USING ((admin_id = auth.uid()) OR (admin_id IN (SELECT admin_usuarios.admin_id FROM admin_usuarios WHERE admin_usuarios.id = auth.uid())));
+CREATE POLICY "clientes_update_self" ON public.tbl_clientes FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- RLS para tbl_usuarios
 ALTER TABLE public.tbl_usuarios ENABLE ROW LEVEL SECURITY;

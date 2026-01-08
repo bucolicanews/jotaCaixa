@@ -7,6 +7,7 @@ import { useDebounce } from './use-debounce';
 import { resolveOwnerContext } from '@/utils/owner';
 import { v4 as uuidv4 } from 'uuid';
 
+
 type ProtocoloComCliente = Protocolo & { tbl_clientes: { nome: string } | null };
 export type ProtocoloStatus = Protocolo['status'] | 'todos';
 export type OrdenacaoProtocolos = 'created_at_desc' | 'cliente_asc';
@@ -118,7 +119,7 @@ export function useProtocolos(): ProtocolosHook {
         if (!carregandoSessao) {
             buscarProtocolos();
         }
-    }, [carregandoSessao, buscarProtocolos]);
+    }, [carregandoSessao, buscarProtocolos, refreshKey]);
 
     const uploadFile = async (file: File, path: string) => {
         const { data, error } = await supabase.storage.from(PROTOCOLO_BUCKET).upload(path, file, {
@@ -224,7 +225,6 @@ export function useProtocolos(): ProtocolosHook {
         try {
             const updates: any = { status };
             
-            // Adicionar timestamps conforme transição de status
             if (status === 'Impresso') {
                 updates.data_impressao = new Date().toISOString();
             } else if (status === 'Entregue') {
@@ -233,7 +233,8 @@ export function useProtocolos(): ProtocolosHook {
             
             const { error } = await supabase.from('protocolos').update(updates).eq('id', protocoloId);
             if (error) throw error;
-            showSuccess('Status do protocolo atualizado com sucesso.');
+            
+            showSuccess('Status atualizado com sucesso.');
             refetch();
         } catch (error: any) {
             showError('Falha ao atualizar status: ' + error.message);

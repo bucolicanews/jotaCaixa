@@ -322,12 +322,32 @@ export function ProtocoloKanbanView({
                       <div>
                         <div className="text-xs text-muted-foreground">Cliente</div>
                         <div className="font-medium">
-                          {protocolo.cliente_nome || '-'}
+                          {protocolo.tbl_clientes?.nome || '-'}
                         </div>
                       </div>
+                      {protocolo.titulo && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Título</div>
+                          <div className="font-medium text-sm">
+                            {protocolo.titulo.length > 50 
+                              ? protocolo.titulo.substring(0, 50) + '...' 
+                              : protocolo.titulo}
+                          </div>
+                        </div>
+                      )}
+                      {protocolo.descricao && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Descrição</div>
+                          <div className="text-sm text-muted-foreground line-clamp-2">
+                            {protocolo.descricao.length > 80 
+                              ? protocolo.descricao.substring(0, 80) + '...' 
+                              : protocolo.descricao}
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <div className="text-xs text-muted-foreground">Responsável</div>
-                        <div>{protocolo.responsavel_recebimento || '-'}</div>
+                        <div>{protocolo.nome_resp_recebimento || '-'}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Criado em</div>
@@ -455,7 +475,7 @@ export function ProtocoloKanbanView({
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">Cliente</div>
-                  <div className="text-base">{selectedProtocolo.cliente_nome || '-'}</div>
+                  <div className="text-base">{selectedProtocolo.tbl_clientes?.nome || '-'}</div>
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">
@@ -494,6 +514,71 @@ export function ProtocoloKanbanView({
                   </div>
                 </div>
               </div>
+              {(selectedProtocolo.titulo || selectedProtocolo.descricao) && (
+                <div className="space-y-3 border-t pt-4">
+                  {selectedProtocolo.titulo && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Título
+                      </div>
+                      <div className="text-base font-semibold">
+                        {selectedProtocolo.titulo}
+                      </div>
+                    </div>
+                  )}
+                  {selectedProtocolo.descricao && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Descrição
+                      </div>
+                      <div className="text-base whitespace-pre-wrap bg-muted/50 p-3 rounded-md">
+                        {selectedProtocolo.descricao}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedProtocolo.link_tarefa && (
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">
+                    Link da Tarefa
+                  </div>
+                  <a
+                    href={selectedProtocolo.link_tarefa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                  >
+                    {selectedProtocolo.link_tarefa}
+                  </a>
+                </div>
+              )}
+              {selectedProtocolo.anexos && selectedProtocolo.anexos.length > 0 && (
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
+                    Arquivos Anexos ({selectedProtocolo.anexos.length})
+                  </div>
+                  <div className="space-y-2">
+                    {selectedProtocolo.anexos.map((anexo, index) => {
+                      const fileName = anexo.split('/').pop()?.split('-').slice(1).join('-') || `Anexo ${index + 1}`;
+                      return (
+                        <a
+                          key={index}
+                          href={anexo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="break-all">{fileName}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
