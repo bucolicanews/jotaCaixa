@@ -594,9 +594,11 @@ export function ProtocoloKanbanView({
           protocolo={protocoloParaBaixa}
           open={isDarBaixaOpen}
           onOpenChange={setIsDarBaixaOpen}
-          onSuccess={() => {
+          onSuccess={async () => {
             setIsDarBaixaOpen(false);
             setProtocoloParaBaixa(null);
+            // Atualizar status para forçar refetch dos dados
+            await onUpdateStatus(protocoloParaBaixa.id, 'Entregue');
           }}
         />
       )}
