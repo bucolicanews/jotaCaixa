@@ -80,88 +80,25 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
     
     setIsSubmitting(true);
     
-    const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: values.email });
-    if (emailError) {
-      showError('Erro ao verificar email: ' + emailError.message);
-      setIsSubmitting(false);
-      return;
-    }
-    if (!emailDisponivel) {
-      showError('Este email já está cadastrado no sistema. Utilize outro email.');
-      setIsSubmitting(false);
-      return;
-    }
-    
-    const planoSelecionado = planos.find(p => p.id === values.plano_id);
-    if (!planoSelecionado) {
-        showError('Plano não encontrado.');
-        setIsSubmitting(false);
-        return;
-    }
-
     try {
-      let newUserId: string | undefined;
-      
-      // 1. Tentar criar o usuário no Auth (se já existir, o erro será capturado)
-      const tempPassword = Math.random().toString(36).substring(2, 15);
-      
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: values.email,
-        password: tempPassword,
-        options: {
-          data: { 
-            role: 'Cliente', 
-            nome: values.nome, 
-            plano_id: values.plano_id, 
-            permissoes: JSON.stringify(planoSelecionado.permissoes), 
-            aprovado: true, // Já é aprovado
-          }
-        }
+      const { data, error } = await supabase.functions.invoke('create-client', {
+        body: {
+          nome: values.nome,
+          email: values.email,
+          plano_id: values.plano_id,
+          data_fim_acesso: format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z',
+          tipo_cliente: values.tipo_cliente,
+          admin_id: usuario.id,
+        },
       });
 
-      if (signUpError) {
-        if (signUpError.message.includes('already registered')) {
-            // Se já estiver registrado, tentamos obter o usuário para prosseguir com o reset de senha
-            const { data: userData } = await supabase.auth.getUser();
-            newUserId = userData.user?.id;
-            if (!newUserId) throw new Error('Usuário já registrado, mas ID não encontrado.');
-        } else {
-            throw signUpError;
-        }
-      } else {
-          newUserId = signUpData.user?.id;
-      }
-      
-      if (!newUserId) throw new Error('Falha ao criar ou obter ID do usuário no Auth.');
-
-      // 2. Enviar o link de redefinição de senha (que funciona como convite)
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
-          redirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
-      });
-      
-      if (resetError) {
-          // Se o reset falhar, ainda podemos prosseguir com a atualização do perfil
-          console.error('Aviso: Falha ao enviar email de redefinição de senha:', resetError);
+      if (error) {
+        throw new Error(error.message || 'Erro ao comunicar com o servidor');
       }
 
-      // 3. Atualizar tbl_clientes (o trigger já inseriu, mas precisamos garantir os dados avulsos)
-      const dataToUpdate = {
-        nome: values.nome,
-        email: values.email,
-        aprovado: true,
-        limite_usuarios: 5, // Padrão
-        permissoes: planoSelecionado.permissoes,
-        plano_id: values.plano_id,
-        data_fim_acesso: format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-        tipo_cliente: `${values.tipo_cliente}_Avulso`, // Define o tipo avulso
-      };
-
-      const { error: updateError } = await supabase
-        .from('tbl_clientes')
-        .update(dataToUpdate)
-        .eq('id', newUserId);
-
-      if (updateError) throw updateError;
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro desconhecido ao cadastrar cliente');
+      }
 
       showSuccess(`Empresa Avulsa ${values.nome} cadastrada com sucesso! Convite de acesso enviado para ${values.email}.`);
       onSaveComplete();

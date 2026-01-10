@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ExtendedParcelaPagar } from '@/types/contas-pagar';
+import { PagBankTransferStatus } from '@/components/contas-pagar/PagBankTransferStatus';
 
 // Definindo o tipo ContaStatus para incluir os status de parcela para uso no getBadgeVariant
 type ContaStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelada' | 'aberta' | 'parcial' | 'reprogramada';
@@ -18,6 +19,7 @@ interface ParcelasTabProps {
     formatCurrency: (value: number) => string;
     formatarOrigem: (origem: string) => string;
     getBadgeVariant: (status: ContaStatus, dataVencimento: string) => 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning';
+    onRealizarPagamentoPagBank?: (parcela: ExtendedParcelaPagar) => void;
 }
 
 const ParcelasTab: React.FC<ParcelasTabProps> = ({
@@ -29,6 +31,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
     formatCurrency,
     formatarOrigem,
     getBadgeVariant,
+    onRealizarPagamentoPagBank,
 }) => {
     return (
         <div className="space-y-4">
@@ -55,14 +58,15 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                     <TableHead>Status</TableHead>
                                     <TableHead>Data Pagamento</TableHead>
                                     <TableHead>Origem</TableHead>
+                                    <TableHead>PagBank</TableHead>
                                     <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow><TableCell colSpan={9} className="text-center">Carregando...</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={10} className="text-center">Carregando...</TableCell></TableRow>
                                 ) : parcelas.length === 0 ? (
-                                    <TableRow><TableCell colSpan={9} className="text-center">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={10} className="text-center">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                                 ) : (
                                     parcelas.map((p) => {
                                         const statusVariant = getBadgeVariant(p.status as ContaStatus, p.data_vencimento);
@@ -82,6 +86,21 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                                 <TableCell><Badge variant={statusVariant}>{p.status}</Badge></TableCell>
                                                 <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
                                                 <TableCell>{formatarOrigem(origem)}</TableCell>
+                                                <TableCell>
+                                                    {(p as any).pagbank_transfer_id ? (
+                                                        <PagBankTransferStatus status={(p as any).pagbank_status} />
+                                                    ) : p.status === 'aberta' && !isPaga ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => onRealizarPagamentoPagBank?.(p)}
+                                                        >
+                                                            Realizar Pagamento
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     {!isPaga && (
                                                         <Button size="sm" onClick={() => handleOpenPagamento(p, fornecedor)}>

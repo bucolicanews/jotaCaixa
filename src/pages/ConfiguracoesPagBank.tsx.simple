@@ -1,0 +1,9 @@
+export default function ConfiguracoesPagBank() {
+  return (
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold">Configurações PagBank</h1>
+      <p className="text-muted-foreground mt-2">Página carregada com sucesso!</p>
+      <p className="text-sm mt-4">Se você está vendo esta mensagem, a rota está funcionando.</p>
+    </div>
+  );
+}

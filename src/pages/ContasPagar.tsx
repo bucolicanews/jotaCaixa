@@ -10,6 +10,8 @@ import { ContaPagar, ContaPagarComProgresso, AdminParcelaPagar, ExtendedParcelaP
 import FormContasPagarDialog from '@/components/formularios/FormContasPagarDialog';
 import DetalhesParcelasCPDialog from '@/components/DetalhesParcelasCPDialog';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
+import { RealizarPagamentoPagBankDialog } from '@/components/contas-pagar/RealizarPagamentoPagBankDialog';
+import { PagBankTransferStatus } from '@/components/contas-pagar/PagBankTransferStatus';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import ContasFuturasDialog from '@/components/ContasFuturasDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -63,6 +65,8 @@ const ContasPagar: React.FC = () => {
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
   const [contasFuturasOpen, setContasFuturasOpen] = useState(false);
   const [temContasFuturas, setTemContasFuturas] = useState(false);
+  const [pagbankTransferDialogOpen, setPagbankTransferDialogOpen] = useState(false);
+  const [selectedParcelaPagar, setSelectedParcelaPagar] = useState<any>(null);
 
   const fetchContas = useCallback(async () => {
     if (!proprietarioId || shouldBlockSetup) return;
@@ -131,7 +135,10 @@ const ContasPagar: React.FC = () => {
     
     let query = supabase.from(tabelaParcelasCP).select(`
         *,
-        ${tabelaContasCP} ( id, fornecedor, origem, descricao )
+        ${tabelaContasCP} ( id, fornecedor, origem, descricao ),
+        pagbank_transfer_id,
+        pagbank_status,
+        pagbank_updated_at
     `).eq(ownerKey, proprietarioId);
     
     // Aplica filtros de período
@@ -512,6 +519,10 @@ const ContasPagar: React.FC = () => {
                   formatCurrency={formatCurrency}
                   formatarOrigem={formatarOrigem}
                   getBadgeVariant={getBadgeVariant as any}
+                  onRealizarPagamentoPagBank={(parcela) => {
+                    setSelectedParcelaPagar(parcela);
+                    setPagbankTransferDialogOpen(true);
+                  }}
               />
           </TabsContent>
           
@@ -563,6 +574,20 @@ const ContasPagar: React.FC = () => {
             onLancamentoComplete={() => {
               verificarContasFuturas(false);
               fetchContas();
+            }}
+          />
+        )}
+        
+        {selectedParcelaPagar && (
+          <RealizarPagamentoPagBankDialog
+            open={pagbankTransferDialogOpen}
+            onOpenChange={setPagbankTransferDialogOpen}
+            parcelaId={selectedParcelaPagar.id}
+            valorParcela={selectedParcelaPagar.valor_parcela}
+            descricao={selectedParcelaPagar.admin_contas_pagar?.descricao || selectedParcelaPagar.contas_pagar?.descricao || ''}
+            onSuccess={() => {
+              setPagbankTransferDialogOpen(false);
+              fetchParcelas();
             }}
           />
         )}

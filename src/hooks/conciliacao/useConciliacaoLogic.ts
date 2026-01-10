@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters';
 import Papa, { ParseResult } from 'papaparse';
-import { format, parseISO, parse, isValid } from 'date-fns';
+import { format, parseISO, parse, isValid, subDays, addDays } from 'date-fns';
 import { TransacaoExtrato, ConciliacaoRegra } from '@/types/conciliacao';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 
@@ -22,6 +22,7 @@ interface UseConciliacaoLogicProps {
     // Setters/Mutations
     setLoading: (loading: boolean) => void;
     setIsSaving: (saving: boolean) => void;
+    setIsDeletingHistorico: (deleting: boolean) => void;
     setTransacoes: (updater: (prev: TransacaoExtrato[]) => TransacaoExtrato[]) => void;
     setTransacoesRejeitadas: (rejeitadas: TransacaoExtrato[]) => void;
     setFileHash: (hash: string | null) => void;
@@ -41,6 +42,7 @@ export function useConciliacaoLogic({
     fileHash,
     setLoading,
     setIsSaving,
+    setIsDeletingHistorico,
     setTransacoes,
     setTransacoesRejeitadas,
     setFileHash,
@@ -65,6 +67,17 @@ export function useConciliacaoLogic({
             return { ...t, conciliada: false, conta_contabil_id: null };
         });
     }, [regras]);
+
+    const isPagBankTransaction = (descricao: string, origem?: string): boolean => {
+        const descNormalized = normalizeString(descricao);
+        return (
+            origem === 'recebimento_pagbank' ||
+            origem === 'taxa_pagbank' ||
+            descNormalized.includes('parcela_') ||
+            descNormalized.includes('pagbank') ||
+            descNormalized.includes('pag bank')
+        );
+    };
 
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         
@@ -91,6 +104,47 @@ export function useConciliacaoLogic({
         });
         
         return existingKeys;
+    }, []);
+
+    const matchPagBankLancamento = useCallback(async (
+        transacao: TransacaoExtrato, 
+        empresaId: string
+    ): Promise<{ matched: boolean; lancamentoId?: string }> => {
+        if (!isPagBankTransaction(transacao.descricao)) {
+            return { matched: false };
+        }
+
+        const valorTransacao = Math.abs(transacao.valor);
+        const dataTransacao = formatDDMMYYYYToISO(transacao.data);
+        
+        if (!dataTransacao) return { matched: false };
+
+        // Buscar lançamentos PagBank em ±2 dias
+        const dataInicio = format(subDays(parseISO(dataTransacao), 2), 'yyyy-MM-dd');
+        const dataFim = format(addDays(parseISO(dataTransacao), 2), 'yyyy-MM-dd');
+
+        const { data: lancamentos, error } = await supabase
+            .from('lancamentos')
+            .select('id, valor, data_movimentacao, origem, descricao')
+            .eq('proprietario_id', empresaId)
+            .in('origem', ['recebimento_pagbank', 'taxa_pagbank'])
+            .gte('data_movimentacao', dataInicio)
+            .lte('data_movimentacao', dataFim);
+
+        if (error || !lancamentos || lancamentos.length === 0) {
+            return { matched: false };
+        }
+
+        // Match por valor líquido (após taxa)
+        const matchedLancamento = lancamentos.find(l => {
+            const valorLancamento = Math.abs(l.valor);
+            const diferencaValor = Math.abs(valorLancamento - valorTransacao);
+            return diferencaValor < 0.01; // Tolerância de 1 centavo
+        });
+
+        return matchedLancamento 
+            ? { matched: true, lancamentoId: matchedLancamento.id }
+            : { matched: false };
     }, []);
 
     // --- Core Logic / Mutations ---
@@ -283,6 +337,18 @@ export function useConciliacaoLogic({
         setIsSaving(true);
         
         try {
+            // NOVO: Verificar e processar transações PagBank antes do salvamento principal
+            const transacoesPagBank: string[] = [];
+            for (const t of transacoesParaSalvar) {
+                if (isPagBankTransaction(t.descricao)) {
+                    const matchResult = await matchPagBankLancamento(t, proprietarioDaConfiguracao);
+                    if (matchResult.matched && matchResult.lancamentoId) {
+                        transacoesPagBank.push(matchResult.lancamentoId);
+                        console.log(`Transação PagBank identificada e vinculada: ${t.descricao} -> Lançamento ${matchResult.lancamentoId}`);
+                    }
+                }
+            }
+
             // Prepara o payload para a tabela 'lancamentos'
             const lancamentosPayload = transacoesParaSalvar.flatMap(t => {
                 const formattedDate = (() => {
@@ -366,6 +432,20 @@ export function useConciliacaoLogic({
                 .insert(lancamentosPayload);
                 
             if (lancamentoError) throw lancamentoError;
+
+            // 1.1. NOVO: Marcar lançamentos PagBank como conciliados
+            if (transacoesPagBank.length > 0) {
+                const { error: conciliacaoError } = await supabase
+                    .from('lancamentos')
+                    .update({ conciliado: true })
+                    .in('id', transacoesPagBank);
+                
+                if (conciliacaoError) {
+                    console.error('Aviso: Falha ao marcar lançamentos PagBank como conciliados:', conciliacaoError);
+                } else {
+                    console.log(`${transacoesPagBank.length} lançamentos PagBank marcados como conciliados automaticamente.`);
+                }
+            }
             
             // 2. Inserir Extratos (Controle de Duplicidade)
             const { error: extratoError } = await supabase

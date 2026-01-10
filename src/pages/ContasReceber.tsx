@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
@@ -23,6 +23,9 @@ import { formatarData } from '@/utils/formatters';
 import SetupBlocker from '@/components/SetupBlocker';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
+import { GerarLinkPagBankDialog } from '@/components/contas-receber/GerarLinkPagBankDialog';
+import { VisualizarLinkPagBankDialog } from '@/components/contas-receber/VisualizarLinkPagBankDialog';
+import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -71,6 +74,9 @@ const ContasReceber = () => {
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos');
   const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
   const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
+  const [pagbankDialogOpen, setPagbankDialogOpen] = useState(false);
+  const [visualizarPagbankDialogOpen, setVisualizarPagbankDialogOpen] = useState(false);
+  const [selectedParcela, setSelectedParcela] = useState<any>(null);
 
   const isAdmin = role === 'Admin';
   
@@ -127,7 +133,16 @@ const ContasReceber = () => {
             descricao,
             cliente_id,
             origem
-          )
+          ),
+          pagbank_charge_id,
+          pagbank_payment_link,
+          pagbank_checkout_id,
+          pagbank_checkout_link,
+          pagbank_status,
+          pagbank_qr_code,
+          pagbank_qr_code_text,
+          pagbank_payment_method,
+          pagbank_updated_at
         `)
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true }),
@@ -170,24 +185,24 @@ const ContasReceber = () => {
             ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
         ])];
         
-        let clienteMap: Record<string, string> = {};
+        let clienteMap: Record<string, { nome: string; telefone?: string; email?: string }> = {};
         if (clienteIds.length > 0) {
             const { data: clientesData } = await supabase
                 .from(tabelaClientes)
-                .select('id, nome')
+                .select('id, nome, telefone, email')
                 .in('id', clienteIds);
                 
             if (clientesData) {
                 clienteMap = clientesData.reduce((acc, c) => {
-                    acc[c.id] = c.nome;
+                    acc[c.id] = { nome: c.nome, telefone: c.telefone, email: c.email };
                     return acc;
-                }, {} as Record<string, string>);
+                }, {} as Record<string, { nome: string; telefone?: string; email?: string }>);
                 
                 // Merge dos nomes dos clientes nas contas
                 fetchedContas = fetchedContas.map(conta => ({
                     ...conta,
                     clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
-                        ? { nome: clienteMap[conta.cliente_id] } as any
+                        ? { nome: clienteMap[conta.cliente_id].nome } as any
                         : conta.clientes
                 }));
                 
@@ -197,7 +212,7 @@ const ContasReceber = () => {
                     contas_receber: parcela.contas_receber ? {
                         ...parcela.contas_receber,
                         clientes: parcela.contas_receber.cliente_id && clienteMap[parcela.contas_receber.cliente_id]
-                            ? { nome: clienteMap[parcela.contas_receber.cliente_id] }
+                            ? clienteMap[parcela.contas_receber.cliente_id]
                             : null
                     } : null
                 }));
@@ -611,6 +626,14 @@ const ContasReceber = () => {
             formatCurrency={formatCurrency}
             formatDate={formatDate}
             getBadgeVariant={getBadgeVariant}
+            onGerarLinkPagBank={(parcela) => {
+              setSelectedParcela(parcela);
+              setPagbankDialogOpen(true);
+            }}
+            onVisualizarLinkPagBank={(parcela) => {
+              setSelectedParcela(parcela);
+              setVisualizarPagbankDialogOpen(true);
+            }}
           />
         </TabsContent>
         
@@ -638,6 +661,38 @@ const ContasReceber = () => {
         onOpenChange={setPagamentoDialogOpen}
         onSaveComplete={handlePagamentoCompleto}
       />
+      
+      {selectedParcela && (
+        <GerarLinkPagBankDialog
+          open={pagbankDialogOpen}
+          onOpenChange={setPagbankDialogOpen}
+          parcelaId={selectedParcela.id}
+          valorParcela={selectedParcela.valor_parcela}
+          descricao={selectedParcela.contas_receber?.descricao || ''}
+          onSuccess={() => {
+            setPagbankDialogOpen(false);
+            buscarDados();
+          }}
+        />
+      )}
+      
+      {selectedParcela && (
+        <VisualizarLinkPagBankDialog
+          open={visualizarPagbankDialogOpen}
+          onOpenChange={setVisualizarPagbankDialogOpen}
+          paymentLink={selectedParcela.pagbank_payment_link}
+          checkoutLink={selectedParcela.pagbank_checkout_link}
+          qrCode={selectedParcela.pagbank_qr_code}
+          qrCodeText={selectedParcela.pagbank_qr_code_text}
+          valorParcela={selectedParcela.valor_parcela}
+          descricao={selectedParcela.contas_receber?.descricao || ''}
+          status={selectedParcela.pagbank_status}
+          parcelaId={selectedParcela.id}
+          clienteNome={selectedParcela.contas_receber?.clientes?.nome}
+          clienteTelefone={selectedParcela.contas_receber?.clientes?.telefone}
+          clienteEmail={selectedParcela.contas_receber?.clientes?.email}
+        />
+      )}
     </LayoutPrincipal>
   );
 };

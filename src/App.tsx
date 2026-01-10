@@ -63,8 +63,10 @@ import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
 import GerenciarConfiguracoesExtrato from "./pages/GerenciarConfiguracoesExtrato";
 import Mapeamento from "./pages/Mapeamento";
+import ConfiguracoesPagBank from "./pages/ConfiguracoesPagBank";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GlobalHandlers from "@/components/GlobalHandlers";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 
 const queryClient = new QueryClient();
@@ -117,6 +119,7 @@ const App = () => (
             <Route path="/relatorios/razao" element={<ProtectedRoute permissionKey="razao"><Razao /></ProtectedRoute>} />
             <Route path="/relatorios/lancamentos-nao-mapeados" element={<ProtectedRoute permissionKey="lancamentos"><LancamentosNaoMapeados /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute permissionKey="configuracoes"><Configuracoes /></ProtectedRoute>} />
+            <Route path="/configuracoes-pagbank" element={<ProtectedRoute permissionKey="configuracoes"><ErrorBoundary><ConfiguracoesPagBank /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/planos" element={<ProtectedRoute permissionKey=""><GerenciarPlanos /></ProtectedRoute>} />
             <Route path="/plano-contas" element={<ProtectedRoute permissionKey="plano_contas"><PlanoContasPage /></ProtectedRoute>} />
             <Route path="/gerenciar-usuarios" element={<ProtectedRoute permissionKey="cadastrar_usuarios"><GerenciarUsuarios /></ProtectedRoute>} />

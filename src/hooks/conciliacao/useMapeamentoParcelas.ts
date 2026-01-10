@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { parseISO, format, subDays, addDays, differenceInDays } from 'date-fns';
+import { normalizeString } from '@/utils/formatters';
 
 export interface ParcelaCandidato {
   id: string;
@@ -26,6 +27,19 @@ export interface TransacaoComId extends TransacaoExtrato {
   id: string;
 }
 
+// Helper para identificar transações PagBank
+function isPagBankTransaction(descricao: string, origem?: string): boolean {
+  const descNormalized = normalizeString(descricao);
+  return (
+    origem === 'recebimento_pagbank' ||
+    origem === 'taxa_pagbank' ||
+    origem === 'link_pagamento_pagbank' ||
+    descNormalized.includes('parcela_') ||
+    descNormalized.includes('pagbank') ||
+    descNormalized.includes('pag bank')
+  );
+}
+
 export async function buscarParcelasCandidatas(
   transacao: TransacaoExtrato,
   ownerId: string,
@@ -43,6 +57,9 @@ export async function buscarParcelasCandidatas(
     : (tipo === 'CR' ? 'contas_receber' : 'contas_pagar');
   const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
 
+  // NOVO: Verificar se é transação PagBank para ampliar critérios de busca
+  const isPagBank = isPagBankTransaction(transacao.descricao);
+
   let dataTransacao: Date;
   try {
     dataTransacao = parseISO(transacao.data);
@@ -55,8 +72,10 @@ export async function buscarParcelasCandidatas(
     }
   }
   
-  const dataInicio = format(subDays(dataTransacao, 3), 'yyyy-MM-dd');
-  const dataFim = format(addDays(dataTransacao, 3), 'yyyy-MM-dd');
+  // NOVO: Para transações PagBank, usar ±2 dias; para outras, ±3 dias
+  const diasBusca = isPagBank ? 2 : 3;
+  const dataInicio = format(subDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
+  const dataFim = format(addDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
 
   const { data: parcelas, error: parcelasError } = await supabase
     .from(tabelaParcelas)
@@ -152,17 +171,40 @@ export async function buscarParcelasCandidatas(
     let compatibilidade: 'alta' | 'media' | 'baixa' = 'baixa';
     let motivo = '';
 
-    if (diferencaValor < 0.01 && diferencaDias === 0) {
-      compatibilidade = 'alta';
-      motivo = 'Valor e data exatos';
-    } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
-      compatibilidade = 'media';
-      motivo = 'Valor exato, data próxima (±1 dia)';
-    } else if (diferencaValor < 1 && diferencaDias <= 3) {
-      compatibilidade = 'media';
-      motivo = 'Valor e data aproximados';
+    // NOVO: Lógica especial para transações PagBank
+    if (isPagBank) {
+      const origemPagBank = p.origem === 'link_pagamento_pagbank' || 
+                           (contaId && contaDescMap[contaId]?.origem === 'link_pagamento_pagbank');
+      
+      if (origemPagBank && diferencaValor < 0.01 && diferencaDias <= 2) {
+        compatibilidade = 'alta';
+        motivo = 'PagBank: Valor exato, data próxima (±2 dias)';
+      } else if (diferencaValor < 0.01 && diferencaDias === 0) {
+        compatibilidade = 'alta';
+        motivo = 'Valor e data exatos';
+      } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
+        compatibilidade = 'media';
+        motivo = 'Valor exato, data próxima (±1 dia)';
+      } else if (diferencaValor < 1 && diferencaDias <= 3) {
+        compatibilidade = 'media';
+        motivo = 'Valor e data aproximados';
+      } else {
+        motivo = 'Compatibilidade baixa';
+      }
     } else {
-      motivo = 'Compatibilidade baixa';
+      // Lógica original para transações não-PagBank
+      if (diferencaValor < 0.01 && diferencaDias === 0) {
+        compatibilidade = 'alta';
+        motivo = 'Valor e data exatos';
+      } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
+        compatibilidade = 'media';
+        motivo = 'Valor exato, data próxima (±1 dia)';
+      } else if (diferencaValor < 1 && diferencaDias <= 3) {
+        compatibilidade = 'media';
+        motivo = 'Valor e data aproximados';
+      } else {
+        motivo = 'Compatibilidade baixa';
+      }
     }
 
     const contaId = tipo === 'CR' ? p.conta_receber_id : p.conta_pagar_id;

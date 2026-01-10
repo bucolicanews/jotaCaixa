@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign } from 'lucide-react';
+import { BadgeDollarSign, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
+import { toast } from 'sonner';
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
@@ -19,10 +21,19 @@ interface ExtendedParcelaDetalhada {
     data_pagamento?: string | null;
     status: ParcelaStatus;
     ciente_cliente?: boolean | null;
+    pagbank_charge_id?: string | null;
+    pagbank_payment_link?: string | null;
+    pagbank_checkout_id?: string | null;
+    pagbank_checkout_link?: string | null;
+    pagbank_status?: string | null;
+    pagbank_qr_code?: string | null;
+    pagbank_qr_code_text?: string | null;
+    pagbank_payment_method?: string | null;
+    pagbank_updated_at?: string | null;
     contas_receber: {
         id: string;
         descricao: string;
-        clientes: { nome: string } | null;
+        clientes: { nome: string; telefone?: string; email?: string } | null;
     } | null;
 }
 
@@ -32,6 +43,8 @@ interface TabelaParcelasProps {
     formatCurrency: (value: number) => string;
     formatDate: (dateString: string) => string;
     getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
+    onGerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
+    onVisualizarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -40,6 +53,8 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     formatCurrency,
     formatDate,
     getBadgeVariant,
+    onGerarLinkPagBank,
+    onVisualizarLinkPagBank,
 }) => {
     return (
         <Card>
@@ -60,11 +75,12 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 <TableHead>Data Recebimento</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Ciente Cliente</TableHead>
+                                <TableHead>PagBank</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={11} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={12} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -100,6 +116,30 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 <Badge variant={p.ciente_cliente ? 'success' : 'secondary'}>
                                                     {p.ciente_cliente ? 'Sim' : 'Não'}
                                                 </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {(p.pagbank_charge_id || p.pagbank_checkout_id) ? (
+                                                    <div className="space-y-1">
+                                                        <PagBankPaymentStatus status={p.pagbank_status} />
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => onVisualizarLinkPagBank?.(p)}
+                                                        >
+                                                            <Eye className="h-3 w-3 mr-1" />
+                                                            Ver Link
+                                                        </Button>
+                                                    </div>
+                                                ) : p.status === 'aberta' ? (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => onGerarLinkPagBank?.(p)}
+                                                    >
+                                                        Gerar Link
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     );
