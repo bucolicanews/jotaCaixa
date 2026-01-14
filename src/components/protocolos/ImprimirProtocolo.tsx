@@ -51,30 +51,19 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               background: '#f0f0f0'
             }}
           >
-            <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>
+            <div style={{ fontSize: '14pt', fontWeight: 'bold' }}>
               PROTOCOLO DE ENTREGA
             </div>
-            <div style={{ fontSize: '12pt', fontWeight: 'bold' }}>
+            <div style={{ fontSize: '10pt', fontWeight: 'bold' }}>
               {numero}ª VIA - {numero === 1 ? 'EMPRESA' : 'CLIENTE'}
             </div>
           </td>
         </tr>
         <tr>
-          <td
-            colSpan={2}
-            style={{
-              padding: '1mm',
-              borderBottom: '1px solid #000',
-              fontSize: '10pt',
-              textAlign: 'center'
-            }}
-          >
-            <strong>
-              {(perfil as any)?.razao_social || (perfil as any)?.nome || ''}
-            </strong>
+          <td colSpan={2} style={{ padding: '1mm', borderBottom: '1px solid #000', fontSize: '10pt', textAlign: 'center' }}>
+            <strong>{(perfil as any)?.razao_social || (perfil as any)?.nome || ''}</strong>
           </td>
         </tr>
-
         {/* Nº PROTOCOLO */}
         <tr>
           <td
@@ -86,8 +75,8 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               background: '#e8e8e8'
             }}
           >
-            <div style={{ fontSize: '10pt' }}>Nº PROTOCOLO</div>
-            <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>
+            <div style={{ fontSize: '8pt' }}>Nº PROTOCOLO</div>
+            <div style={{ fontSize: '14pt', fontWeight: 'bold' }}>
               {protocolo.numero_protocolo}
             </div>
           </td>
@@ -101,13 +90,12 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               padding: '2mm',
               borderBottom: '1px solid #000',
               borderRight: '1px solid #000',
-              fontSize: '10pt'
+              fontSize: '9pt'
             }}
           >
             <strong>Cliente:</strong>
             <br />
-              {protocolo.tbl_clientes?.razao_social || protocolo.tbl_clientes?.nome || 'N/A'}
-             
+            {protocolo.tbl_clientes?.nome || 'N/A'}
           </td>
 
           <td
@@ -115,7 +103,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               width: '50%',
               padding: '2mm',
               borderBottom: '1px solid #000',
-              fontSize: '10pt'
+              fontSize: '9pt'
             }}
           >
             <strong>Data Criação:</strong>
@@ -131,7 +119,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             style={{
               padding: '2mm',
               borderBottom: '1px solid #000',
-              fontSize: '10pt'
+              fontSize: '9pt'
             }}
           >
             <strong>Título:</strong> {protocolo.titulo || 'N/A'}
@@ -146,7 +134,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               style={{
                 padding: '2mm',
                 borderBottom: '1px solid #000',
-                fontSize: '10pt'
+                fontSize: '9pt'
               }}
             >
               <strong>Observação:</strong>
@@ -171,7 +159,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               style={{
                 padding: '2mm',
                 borderBottom: '1px solid #000',
-                fontSize: '9pt'
+                fontSize: '8pt'
               }}
             >
               <strong>Anexos ({protocolo.anexos.length}):</strong>{' '}
@@ -197,22 +185,18 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               width: '50%',
               padding: '2mm',
               borderRight: '1px solid #000',
-              fontSize: '9pt',
-    textAlign: 'center',
-                 color: 'black'
+              fontSize: '8pt',
+              textAlign: 'center'
             }}
           >
-  <strong>ENTREGUE POR </strong>
-                <div className="assinatura-space">
-              {'__________________________________________'}
+            <strong>ENTREGUE POR</strong>
+            <div style={{ marginTop: '8mm', height: '15mm' }}>
+              {/* Espaço para assinatura manual */}
             </div>
-
-
-            <div>
-              {protocolo.usuario_criador_nome}
+            <div style={{ borderTop: '1px solid #000', paddingTop: '5px' }}>
+              {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
             </div>
-
-            <span style={{ fontSize: '8pt', color: 'black' }}>
+            <span style={{ fontSize: '7pt' }}>
               Data: {formatarDataCurta(protocolo.data_impressao)}
             </span>
           </td>
@@ -221,18 +205,18 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             style={{
               width: '50%',
               padding: '2mm',
-              fontSize: '9pt',
-              textAlign: 'center',
-              color: 'black'
+              fontSize: '8pt',
+              textAlign: 'center'
             }}
           >
             <strong>RECEBIDO POR</strong>
-
-            <div className="assinatura-space">
-              {protocolo.nome_resp_recebimento || '_______________________________________'}
+            <div style={{ marginTop: '8mm', height: '15mm' }}>
+              {/* Espaço para assinatura manual */}
             </div>
-
-            <span style={{ fontSize: '8pt', color: 'black' }}>
+            <div style={{ borderTop: '1px solid #000', paddingTop: '5px' }}>
+              {protocolo.nome_resp_recebimento || '__________________________'}
+            </div>
+            <span style={{ fontSize: '7pt' }}>
               Data: {formatarDataCurta(protocolo.data_recebimento)}
             </span>
           </td>
@@ -244,46 +228,10 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
   return (
     <>
       <style>{`
-        #print-protocolo .assinatura-space {
-           display: block;
-           margin-top: 15mm;
-        }
-
         @media print {
           @page {
             size: A4 portrait;
             margin: 8mm;
-          }
-          
-          body {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-
-          body, html {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          body * {
-            visibility: hidden;
-          }
-
-          #print-protocolo,
-          #print-protocolo * {
-            visibility: visible;
-          }
-
-          #print-protocolo {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: #fff;
-          }
-
-          .no-print {
-            display: none !important;
           }
         }
 
@@ -293,6 +241,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             margin: 0 auto;
             padding: 10px;
             background: #fff;
+            color: #000; /* Black text for modal preview */
           }
         }
       `}</style>
