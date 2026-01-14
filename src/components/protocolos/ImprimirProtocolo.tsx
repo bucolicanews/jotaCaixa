@@ -2,14 +2,13 @@ import { FC } from 'react';
 import { Protocolo } from '@/types/protocolo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useSessao } from '@/hooks/use-sessao';
 
 interface ImprimirProtocoloProps {
   protocolo: Protocolo;
+  perfil: any;
 }
 
-export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => {
-  const { perfil } = useSessao();
+export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo, perfil }) => {
 
   const formatarData = (data: string | null | undefined) => {
     if (!data) return '___/___/____';

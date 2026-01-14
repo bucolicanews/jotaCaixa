@@ -102,10 +102,6 @@ export function usePrint() {
             ${printStyles}
           </head>
           <body>
-            <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
-                <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
-                <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
-            </div>
             <div class="print-container">
                 ${contentHtml}
             </div>
@@ -115,6 +111,11 @@ export function usePrint() {
       printWindow.document.close();
       printWindow.focus();
       
+      // Adicionado para acionar a impressão automaticamente
+      setTimeout(() => {
+        printWindow.print();
+      }, 500); // 500ms de delay para garantir que o conteúdo seja renderizado
+
     } catch (e) {
       console.error('Erro ao imprimir:', e);
       showError('Falha ao iniciar a impressão.');
