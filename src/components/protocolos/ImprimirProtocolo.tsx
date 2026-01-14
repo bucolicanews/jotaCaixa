@@ -190,10 +190,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             }}
           >
             <strong>ENTREGUE POR</strong>
-            <div style={{ marginTop: '8mm', height: '15mm' }}>
-              {/* Espaço para assinatura manual */}
-            </div>
-            <div style={{ borderTop: '1px solid #000', paddingTop: '5px' }}>
+            <div style={{ paddingTop: '23mm', marginTop: '5mm', borderTop: '1px solid #000' }}>
               {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
             </div>
             <span style={{ fontSize: '7pt' }}>
@@ -210,10 +207,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             }}
           >
             <strong>RECEBIDO POR</strong>
-            <div style={{ marginTop: '8mm', height: '15mm' }}>
-              {/* Espaço para assinatura manual */}
-            </div>
-            <div style={{ borderTop: '1px solid #000', paddingTop: '5px' }}>
+            <div style={{ paddingTop: '23mm', marginTop: '5mm', borderTop: '1px solid #000' }}>
               {protocolo.nome_resp_recebimento || '__________________________'}
             </div>
             <span style={{ fontSize: '7pt' }}>
