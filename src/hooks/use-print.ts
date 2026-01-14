@@ -16,20 +16,13 @@ export function usePrint() {
         return;
       }
 
-      const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
-
-      // Estilos otimizados para impressão A4
+      // O componente sendo impresso agora é responsável por sua própria diretiva @page.
+      // Fornecemos classes de ajuda e uma regra global de cor de texto.
       const printStyles = `
         <style>
-          @page {
-            size: ${pageSize};
-            margin: 10mm; /* Margem ajustada */
-          }
-          
+          /* Estilos de impressão globais */
           body { 
             font-family: Arial, sans-serif; 
-            margin: 0; 
-            padding: 0; 
             font-size: 10pt; 
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
@@ -39,6 +32,7 @@ export function usePrint() {
             color: #000 !important; /* Força a cor preta para todo o texto */
           }
 
+          /* Classes de ajuda para outros componentes de impressão */
           .print-container { width: 100%; max-width: 100%; padding: 0; }
           h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
           
@@ -56,7 +50,7 @@ export function usePrint() {
           .print-header h1 { font-size: 16px; font-weight: bold; margin: 0; text-align: left; }
           .print-header p { margin: 0; font-size: 10px; }
           
-          .print-header-cell { text-align: center; padding: 2mm; } /* Classe para cabeçalho de protocolo */
+          .print-header-cell { text-align: center; padding: 2mm; }
           
           .print-section { margin-bottom: 15px; padding: 0; page-break-inside: avoid; }
           
