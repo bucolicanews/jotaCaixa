@@ -21,10 +21,9 @@ export function usePrint() {
       // Estilos otimizados para impressão A4
       const printStyles = `
         <style>
-          /* Configuração A4 dinâmica */
           @page {
             size: ${pageSize};
-            margin: 15mm;
+            margin: 10mm; /* Margem ajustada */
           }
           
           body { 
@@ -33,59 +32,36 @@ export function usePrint() {
             padding: 0; 
             color: #000; 
             font-size: 10pt; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           
-          /* Container principal que deve se expandir */
-          .print-container {
-              width: 100%;
-              max-width: 100%;
-              padding: 0;
-          }
-          
+          .print-container { width: 100%; max-width: 100%; padding: 0; }
           h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
+          
           .print-header { 
             border-bottom: 2px solid #000; 
             padding-bottom: 10px; 
             margin-bottom: 15px; 
             page-break-after: avoid;
-            display: flex; /* Adicionado para layout de logo/título */
+            display: flex;
             align-items: center;
             justify-content: space-between;
           }
+          .print-header-content { flex-grow: 1; margin-left: 15px; }
+          .print-logo { max-height: 50px; max-width: 150px; object-fit: contain; }
+          .print-header h1 { font-size: 16px; font-weight: bold; margin: 0; text-align: left; }
+          .print-header p { margin: 0; font-size: 10px; color: #555; }
           
-          .print-header-content {
-              flex-grow: 1;
-              margin-left: 15px;
-          }
+          .print-header-cell { text-align: center; padding: 2mm; } /* Classe para cabeçalho de protocolo */
           
-          .print-logo {
-              max-height: 50px;
-              max-width: 150px;
-              object-fit: contain;
-          }
+          .print-section { margin-bottom: 15px; padding: 0; page-break-inside: avoid; }
           
-          .print-header h1 {
-              font-size: 16px;
-              font-weight: bold;
-              margin: 0;
-              text-align: left;
-          }
-          .print-header p {
-              margin: 0;
-              font-size: 10px;
-              color: #555;
-          }
-          
-          .print-section { 
-            margin-bottom: 15px; 
-            padding: 0; 
-            page-break-inside: avoid; 
-          }
           .print-table { 
             width: 100%; 
             border-collapse: collapse; 
             margin-top: 5px; 
-            table-layout: fixed; /* Garante que a largura da tabela seja respeitada */
+            table-layout: fixed;
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
@@ -93,45 +69,25 @@ export function usePrint() {
             text-align: left; 
             font-size: 9pt; 
             word-wrap: break-word; 
-            white-space: normal; /* Permite quebra de linha */
-            overflow: visible; 
-            text-overflow: clip; 
+            white-space: normal;
           }
           .print-table th { 
             background-color: #f0f0f0; 
             font-weight: bold;
-            white-space: normal; /* Permite quebra de linha no cabeçalho */
+            white-space: normal;
           }
           
-          /* Estilos para a linha de total */
-          .print-table tfoot tr, .print-table tbody tr:last-child.total-row {
-              font-weight: bold;
-              border-top: 2px solid #000;
-              background-color: #e0e0e0;
-          }
-
-          .print-signatures { 
-            display: flex; 
-            justify-content: space-around; 
-            margin-top: 40px; 
-            page-break-before: avoid;
-          }
-          .print-signature-line { 
-            width: 40%; 
-            border-top: 1px solid #000; 
-            padding-top: 5px; 
-            text-align: center; 
-            font-size: 9pt; 
-          }
+          .print-signatures { display: flex; justify-content: space-around; margin-top: 40px; page-break-before: avoid; }
+          .print-signature-line { width: 40%; border-top: 1px solid #000; padding-top: 5px; text-align: center; font-size: 9pt; }
           
-          /* --- NOVO: Suporte a classes de alinhamento do Quill --- */
+          .print-bg-light-gray { background-color: #f0f0f0 !important; }
+          .print-bg-medium-gray { background-color: #e8e8e8 !important; }
+          
           .ql-align-left { text-align: left !important; }
           .ql-align-center { text-align: center !important; }
           .ql-align-right { text-align: right !important; }
           .ql-align-justify { text-align: justify !important; }
-          /* ------------------------------------------------------- */
           
-          /* Regras de quebra de página para tabelas */
           @media print {
             .print-table { page-break-inside: auto; }
             .print-table tr { page-break-inside: avoid; page-break-after: auto; }
