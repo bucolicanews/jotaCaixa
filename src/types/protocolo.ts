@@ -19,6 +19,7 @@ export interface Protocolo {
   // Relationship
   tbl_clientes: {
     nome: string;
+    razao_social: string;
   } | null;
 }
 

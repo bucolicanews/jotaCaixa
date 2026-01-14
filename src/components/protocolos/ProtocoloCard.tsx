@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { BASE_URL } from '@/config/app-config';
 
 interface ProtocoloCardProps {
-  protocolo: Protocolo & { tbl_clientes: { nome: string } | null }; // CORRIGIDO: Removido 'empresa'
+  protocolo: Protocolo & { tbl_clientes: { nome: string; razao_social: string; } | null };
 }
 
 const ProtocoloCard: FC<ProtocoloCardProps> = ({ protocolo }) => {
@@ -63,8 +63,8 @@ const ProtocoloCard: FC<ProtocoloCardProps> = ({ protocolo }) => {
       </CardHeader>
       <CardContent>
         <div>
-          <p className="font-semibold">{protocolo.tbl_clientes?.nome}</p>
-          <p className="text-sm text-gray-500">{protocolo.tbl_clientes?.nome}</p> {/* Usando nome como fallback */}
+          <p className="font-semibold">{protocolo.tbl_clientes?.razao_social || protocolo.tbl_clientes?.nome}</p>
+          {protocolo.tbl_clientes?.razao_social && <p className="text-sm text-gray-500">{protocolo.tbl_clientes?.nome}</p>}
         </div>
       </CardContent>
     </Card>

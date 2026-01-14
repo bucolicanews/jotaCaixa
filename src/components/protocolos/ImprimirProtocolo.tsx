@@ -95,6 +95,12 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
           >
             <strong>Cliente:</strong>
             <br />
+            {protocolo.tbl_clientes?.razao_social && (
+              <>
+                {protocolo.tbl_clientes.razao_social}
+                <br />
+              </>
+            )}
             {protocolo.tbl_clientes?.nome || 'N/A'}
           </td>
 
@@ -190,7 +196,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             }}
           >
             <strong>ENTREGUE POR</strong>
-            <div style={{ paddingTop: '23mm', marginTop: '5mm', borderTop: '1px solid #000' }}>
+            <div style={{ marginTop: '5mm', borderTop: '1px solid #000' }}>
               {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
             </div>
             <span style={{ fontSize: '7pt' }}>
@@ -207,7 +213,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             }}
           >
             <strong>RECEBIDO POR</strong>
-            <div style={{ paddingTop: '23mm', marginTop: '5mm', borderTop: '1px solid #000' }}>
+            <div style={{  marginTop: '5mm', borderTop: '1px solid #000' }}>
               {protocolo.nome_resp_recebimento || '__________________________'}
             </div>
             <span style={{ fontSize: '7pt' }}>
@@ -220,15 +226,70 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
   );
 
   return (
+  <>
+    <style>{`
+      /* FORÇA PRETO ABSOLUTO EM TUDO */
+      #print-protocolo,
+      #print-protocolo * {
+        color: #000 !important;
+        border-color: #000 !important;
+        background: #fff !important;
+        font-family: Arial, sans-serif !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* TABELA UNIFORME */
+      #print-protocolo table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 2px solid #000 !important;
+      }
+
+      #print-protocolo td {
+        border: 1px solid #000 !important;
+        vertical-align: top;
+      }
+
+      /* CABEÇALHOS */
+      #print-protocolo strong {
+        font-weight: 700 !important;
+        color: #000 !important;
+      }
+
+      /* TEXTO NORMAL */
+      #print-protocolo div,
+      #print-protocolo span,
+      #print-protocolo td {
+        font-weight: 400;
+      }
+
+      /* LINHA TRACEJADA ENTRE VIAS */
+      #print-protocolo .linha-corte {
+        border-bottom: 1px dashed #000 !important;
+        margin: 1mm 0;
+      }
+
+      /* IMPRESSÃO */
+      @media print {
+        body {
+          margin: 0;
+          padding: 0;
+        }
+
+        @page {
+          size: A4 portrait;
+          margin: 8mm;
+        }
+      }
+    `}</style>
+
     <div id="print-protocolo">
       <Via numero={1} />
-      <div
-        style={{
-          borderBottom: '1px dashed #999',
-          margin: '1mm 0'
-        }}
-      />
+      <div className="linha-corte" />
       <Via numero={2} />
     </div>
-  );
+  </>
+);
+
 };

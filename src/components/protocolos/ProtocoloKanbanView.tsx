@@ -117,6 +117,8 @@ export function ProtocoloKanbanView({
     
     const p = protocoloParaImprimir;
     const clienteNome = p.tbl_clientes?.nome || 'N/A';
+    const clienteRazaoSocial = p.tbl_clientes?.razao_social;
+    const clienteDisplay = clienteRazaoSocial ? `${clienteRazaoSocial}<br/>${clienteNome}` : clienteNome;
     const dataCriacao = p.data_criacao ? new Date(p.data_criacao).toLocaleString('pt-BR') : new Date(p.created_at).toLocaleString('pt-BR');
     const dataImpressao = new Date().toLocaleDateString('pt-BR');
     const criadorNome = p.usuario_criador_nome || '______________________';
@@ -141,7 +143,7 @@ export function ProtocoloKanbanView({
           <div style="font-size:14pt;font-weight:bold">${p.numero_protocolo}</div>
         </td></tr>
         <tr>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:9pt"><strong>Cliente:</strong><br/>${clienteNome}</td>
+          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:9pt"><strong>Cliente:</strong><br/>${clienteDisplay}</td>
           <td style="width:50%;padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Data Criação:</strong><br/>${dataCriacao}</td>
         </tr>
         <tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Título:</strong> ${titulo}</td></tr>
@@ -322,8 +324,9 @@ export function ProtocoloKanbanView({
                       <div>
                         <div className="text-xs text-muted-foreground">Cliente</div>
                         <div className="font-medium">
-                          {protocolo.tbl_clientes?.nome || '-'}
+                          {protocolo.tbl_clientes?.razao_social || protocolo.tbl_clientes?.nome || '-'}
                         </div>
+                        {protocolo.tbl_clientes?.razao_social && <div className="text-sm text-muted-foreground">{protocolo.tbl_clientes?.nome}</div>}
                       </div>
                       {protocolo.titulo && (
                         <div>
@@ -475,7 +478,8 @@ export function ProtocoloKanbanView({
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">Cliente</div>
-                  <div className="text-base">{selectedProtocolo.tbl_clientes?.nome || '-'}</div>
+                  <div className="text-base">{selectedProtocolo.tbl_clientes?.razao_social || selectedProtocolo.tbl_clientes?.nome || '-'}</div>
+                  {selectedProtocolo.tbl_clientes?.razao_social && <div className="text-sm text-muted-foreground">{selectedProtocolo.tbl_clientes?.nome}</div>}
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">
