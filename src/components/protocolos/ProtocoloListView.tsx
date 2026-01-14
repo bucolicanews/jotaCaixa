@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSessao } from '@/hooks/use-sessao';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,8 @@ const statusBadgeVariants: Record<string, 'default' | 'secondary' | 'destructive
   Entregue: 'default',
 };
 
+
+
 export function ProtocoloListView({
   protocolos,
   onUpdateStatus,
@@ -74,6 +77,7 @@ export function ProtocoloListView({
   const [protocoloParaBaixa, setProtocoloParaBaixa] = useState<Protocolo | null>(null);
   const [protocoloParaImprimir, setProtocoloParaImprimir] = useState<Protocolo | null>(null);
   const [isImprimirOpen, setIsImprimirOpen] = useState(false);
+  const { perfil } = useSessao();
 
   const formatDate = (dateString: string | undefined | null) => {
     if (!dateString) return '-';
@@ -106,43 +110,48 @@ export function ProtocoloListView({
     if (!protocoloParaImprimir) return;
     
     const p = protocoloParaImprimir;
-    const clienteNome = p.tbl_clientes?.nome || 'N/A';
+    const clienteNome = p.tbl_clientes?.razao_social || p.tbl_clientes?.nome || 'N/A';
     const dataCriacao = p.data_criacao ? new Date(p.data_criacao).toLocaleString('pt-BR') : new Date(p.created_at).toLocaleString('pt-BR');
     const dataImpressao = new Date().toLocaleDateString('pt-BR');
     const criadorNome = p.usuario_criador_nome || '______________________';
     const titulo = p.titulo || 'N/A';
     const descricao = p.descricao || '';
+    const empresaNome = (perfil as any)?.razao_social || (perfil as any)?.nome || '';
+
     const anexosHtml = p.anexos && p.anexos.length > 0 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:8pt"><strong>Anexos (${p.anexos.length}):</strong> ${p.anexos.slice(0,3).map(a => (a.split('/').pop()?.split('-').slice(1).join('-') || 'Anexo').substring(0,20)).join(', ')}${p.anexos.length > 3 ? ` +${p.anexos.length-3}` : ''}</td></tr>` 
+      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Anexos (${p.anexos.length}):</strong> ${p.anexos.slice(0,3).map(a => (a.split('/').pop()?.split('-').slice(1).join('-') || 'Anexo').substring(0,20)).join(', ')}${p.anexos.length > 3 ? ` +${p.anexos.length-3}` : ''}</td></tr>` 
       : '';
 
     const descricaoHtml = descricao 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Observação:</strong><div style="white-space:pre-wrap;word-wrap:break-word;margin-top:1mm">${descricao}</div></td></tr>`
+      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Observação:</strong><div style="white-space:pre-wrap;word-wrap:break-word;margin-top:1mm">${descricao}</div></td></tr>`
       : '';
 
     const viaHtml = (num: number) => `
-      <table style="width:100%;border-collapse:collapse;border:2px solid #000;margin-bottom:3mm">
+      <table style="width:100%;border-collapse:collapse;border:2px solid #000;margin-bottom:3mm;color:black;">
         <tr><td colspan="2" style="text-align:center;border-bottom:2px solid #000;padding:2mm;background:#f0f0f0">
-          <div style="font-size:14pt;font-weight:bold">PROTOCOLO DE ENTREGA</div>
-          <div style="font-size:10pt;font-weight:bold">${num}ª VIA - ${num === 1 ? 'EMPRESA' : 'CLIENTE'}</div>
+          <div style="font-size:16pt;font-weight:bold">PROTOCOLO DE ENTREGA</div>
+          <div style="font-size:12pt;font-weight:bold">${num}ª VIA - ${num === 1 ? 'EMPRESA' : 'CLIENTE'}</div>
+        </td></tr>
+        <tr><td colspan="2" style="padding:1mm;border-bottom:1px solid #000;font-size:10pt;text-align:center">
+          <strong>${empresaNome}</strong>
         </td></tr>
         <tr><td colspan="2" style="text-align:center;padding:2mm;border-bottom:1px solid #000;background:#e8e8e8">
-          <div style="font-size:8pt">Nº PROTOCOLO</div>
-          <div style="font-size:14pt;font-weight:bold">${p.numero_protocolo}</div>
+          <div style="font-size:10pt">Nº PROTOCOLO</div>
+          <div style="font-size:16pt;font-weight:bold">${p.numero_protocolo}</div>
         </td></tr>
         <tr>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:9pt"><strong>Cliente:</strong><br/>${clienteNome}</td>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Data Criação:</strong><br/>${dataCriacao}</td>
+          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:10pt"><strong>Cliente:</strong><br/>${clienteNome}</td>
+          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Data Criação:</strong><br/>${dataCriacao}</td>
         </tr>
-        <tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Título:</strong> ${titulo}</td></tr>
+        <tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Título:</strong> ${titulo}</td></tr>
         ${descricaoHtml}
         ${anexosHtml}
         <tr>
-          <td style="width:50%;padding:2mm;border-right:1px solid #000;font-size:8pt;text-align:center">
-            <strong>ENTREGUE POR</strong><br/>${criadorNome}<br/><span style="font-size:7pt;color:#666">Data: ${dataImpressao}</span>
+          <td style="width:50%;padding:2mm;border-right:1px solid #000;font-size:9pt;text-align:center">
+            <strong>ENTREGUE POR</strong><div style="margin-top:15mm">__________________________________________</div><div>${criadorNome}</div><span style="font-size:8pt;color:black">Data: ${dataImpressao}</span>
           </td>
-          <td style="width:50%;padding:2mm;font-size:8pt;text-align:center">
-            <strong>RECEBIDO POR</strong><br/>______________________<br/><span style="font-size:7pt;color:#666">Data: ___/___/____</span>
+          <td style="width:50%;padding:2mm;font-size:9pt;text-align:center">
+            <strong>RECEBIDO POR</strong><div style="margin-top:15mm">${p.nome_resp_recebimento || '_______________________________________'}</div><span style="font-size:8pt;color:black">Data: ${p.data_recebimento ? new Date(p.data_recebimento).toLocaleDateString('pt-BR') : '___/___/____'}</span>
           </td>
         </tr>
       </table>`;
@@ -153,8 +162,14 @@ export function ProtocoloListView({
       <head>
         <title>Protocolo ${p.numero_protocolo}</title>
         <style>
-          @page { size: A4 portrait; margin: 10mm; }
-          body { font-family: Arial, sans-serif; margin: 0; padding: 10mm; }
+          @page { size: A4 portrait; margin: 8mm; }
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
         </style>
       </head>
       <body>

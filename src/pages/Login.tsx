@@ -2,7 +2,7 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react'; // Importar useRef
 import { useSessao } from '@/hooks/use-sessao';
 import { useTheme } from '@/contexts/ThemeProvider'; // Importando useTheme
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
@@ -15,11 +15,20 @@ const Login = () => {
   const { usuario, carregando } = useSessao();
   const { theme } = useTheme(); // Obtendo o tema atual
   const navegar = useNavigate();
+  const signOutCalled = useRef(false); // Flag para controlar a chamada do signOut
 
   useEffect(() => {
-    if (!carregando && usuario) {
-      // Redirecionar usuários autenticados para o painel principal
-      navegar('/painel');
+    if (!carregando) {
+      if (usuario) {
+        // Redirecionar usuários autenticados para o painel principal
+        navegar('/painel');
+      } else if (!signOutCalled.current) {
+        // Se não há usuário, mas talvez haja uma sessão inválida,
+        // limpá-la para evitar erros como "Invalid Refresh Token".
+        // Isso é chamado apenas uma vez para evitar um loop de renderização.
+        supabase.auth.signOut();
+        signOutCalled.current = true;
+      }
     }
   }, [usuario, carregando, navegar]);
 

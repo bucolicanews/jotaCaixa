@@ -40,6 +40,7 @@ const formSchema = z.object({
 interface Cliente {
   id: string;
   nome: string;
+  razao_social: string | null;
 }
 
 interface ProtocoloFormDialogProps {
@@ -103,7 +104,7 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({
     const tabelaClientes = isAdminContext ? 'tbl_clientes' : 'clientes';
     const ownerKey = isAdminContext ? 'admin_id' : 'proprietario_id';
 
-    let query = supabase.from(tabelaClientes).select('id, nome');
+    let query = supabase.from(tabelaClientes).select('id, nome, razao_social');
     
     if (isAdminContext) {
         query = query.eq('aprovado', true);
@@ -111,7 +112,7 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({
         query = query.eq(ownerKey, ownerId);
     }
     
-    const { data, error } = await query.order('nome', { ascending: true });
+    const { data, error } = await query.order('razao_social', { ascending: true }).order('nome', { ascending: true });
     
     if (error) {
         showError('Erro ao buscar clientes: ' + error.message);
@@ -175,7 +176,7 @@ const FormProtocolo: FC<ProtocoloFormDialogProps> = ({
                               <SelectContent>
                                   {clientes.map((cliente) => (
                                       <SelectItem key={cliente.id} value={cliente.id}>
-                                          {cliente.nome}
+                                          {cliente.razao_social || cliente.nome}
                                       </SelectItem>
                                   ))}
                               </SelectContent>

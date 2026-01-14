@@ -1,5 +1,7 @@
 # Jota App - Sistema de Gestão Financeira e RH Multi-Tenant (d20122025)
 
+supabase secrets set PAGBANK_TOKEN_PRODUCAO=seu_token_de_producao_aqui
+
 ![Version](https://img.shields.io/badge/version-2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)

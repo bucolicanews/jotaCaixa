@@ -1,0 +1,91 @@
+/* 1. Exemplo de Criação de Cobrança (Checkout/Payment) */
+// Request (Enviado para https://api.pagseguro.com/checkouts ou /charges)
+{
+  "reference_id": "PARCELA_12345",
+  "customer": {
+    "name": "Cliente Exemplo",
+    "email": "cliente@email.com",
+    "tax_id": "12345678909",
+    "phones": [
+      {
+        "country": "55",
+        "area": "11",
+        "number": "999999999",
+        "type": "MOBILE"
+      }
+    ]
+  },
+  "items": [
+    {
+      "reference_id": "ITEM_01",
+      "name": "Parcela 1 - Descrição do Serviço",
+      "quantity": 1,
+      "unit_amount": 10000
+    }
+  ],
+  "notification_urls": [
+    "https://caixa.jotaempresas.com/api/pagbank-webhook"
+  ]
+}
+
+/* 2. Exemplo de Webhook de Notificação (Recebido do PagBank) */
+// Response (Payload que sua API recebe quando o pagamento é aprovado)
+{
+  "id": "CHAR_123456789",
+  "reference_id": "PARCELA_12345",
+  "created_at": "2023-10-27T10:00:00.000-03:00",
+  "status": "PAID",
+  "amount": {
+    "value": 10000,
+    "currency": "BRL"
+  },
+  "payment_response": {
+    "code": "20000",
+    "message": "SUCESSO"
+  },
+  "payment_method": {
+    "type": "CREDIT_CARD",
+    "installments": 1,
+    "capture": true,
+    "card": {
+      "brand": "mastercard",
+      "first_digits": "555555",
+      "last_digits": "4444",
+      "exp_month": "12",
+      "exp_year": "2030",
+      "holder": {
+        "name": "JOAO SILVA"
+      }
+    }
+  },
+  "charges": [
+    {
+      "id": "CHAR_123456789",
+      "reference_id": "PARCELA_12345",
+      "status": "PAID",
+      "created_at": "2023-10-27T10:00:00.000-03:00",
+      "paid_at": "2023-10-27T10:00:05.000-03:00",
+      "amount": {
+        "value": 10000,
+        "currency": "BRL",
+        "fees": {
+            "value": 399
+        }
+      },
+      "payment_response": {
+        "code": "20000",
+        "message": "SUCESSO"
+      },
+      "payment_method": {
+        "type": "CREDIT_CARD",
+        "installments": 1,
+        "capture": true,
+        "card": {
+          "brand": "mastercard",
+          "first_digits": "555555",
+          "last_digits": "4444"
+        }
+      }
+    }
+  ]
+}
