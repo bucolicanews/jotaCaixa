@@ -1,4 +1,4 @@
-import { FC, forwardRef } from 'react';
+import { FC } from 'react';
 import { Protocolo } from '@/types/protocolo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,7 +8,7 @@ interface ImprimirProtocoloProps {
   protocolo: Protocolo;
 }
 
-export const ImprimirProtocolo = forwardRef<HTMLDivElement, ImprimirProtocoloProps>(({ protocolo }, ref) => {
+export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => {
   const { perfil } = useSessao();
 
   const formatarData = (data: string | null | undefined) => {
@@ -220,7 +220,7 @@ export const ImprimirProtocolo = forwardRef<HTMLDivElement, ImprimirProtocoloPro
   );
 
   return (
-    <div ref={ref} id="print-protocolo">
+    <div id="print-protocolo">
       <Via numero={1} />
       <div
         style={{
@@ -231,4 +231,4 @@ export const ImprimirProtocolo = forwardRef<HTMLDivElement, ImprimirProtocoloPro
       <Via numero={2} />
     </div>
   );
-});
+};
