@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { FC, forwardRef } from 'react';
 import { Protocolo } from '@/types/protocolo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,7 +8,7 @@ interface ImprimirProtocoloProps {
   protocolo: Protocolo;
 }
 
-export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => {
+export const ImprimirProtocolo = forwardRef<HTMLDivElement, ImprimirProtocoloProps>(({ protocolo }, ref) => {
   const { perfil } = useSessao();
 
   const formatarData = (data: string | null | undefined) => {
@@ -220,36 +220,15 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
   );
 
   return (
-    <>
-      <style>{`
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 8mm;
-          }
-        }
-
-        @media screen {
-          #print-protocolo {
-            max-width: 210mm;
-            margin: 0 auto;
-            padding: 10px;
-            background: #fff;
-            color: #000; /* Black text for modal preview */
-          }
-        }
-      `}</style>
-
-      <div id="print-protocolo">
-        <Via numero={1} />
-        <div
-          style={{
-            borderBottom: '1px dashed #999',
-            margin: '1mm 0'
-          }}
-        />
-        <Via numero={2} />
-      </div>
-    </>
+    <div ref={ref} id="print-protocolo">
+      <Via numero={1} />
+      <div
+        style={{
+          borderBottom: '1px dashed #999',
+          margin: '1mm 0'
+        }}
+      />
+      <Via numero={2} />
+    </div>
   );
-};
+});

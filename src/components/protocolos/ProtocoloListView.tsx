@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import { useSessao } from '@/hooks/use-sessao';
 import { format } from 'date-fns';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -79,6 +81,32 @@ export function ProtocoloListView({
   const [protocoloParaImprimir, setProtocoloParaImprimir] =
     useState<Protocolo | null>(null);
   const [isImprimirOpen, setIsImprimirOpen] = useState(false);
+  
+  const componentRef = useRef<HTMLDivElement>(null);
+
+  const handleAfterPrint = async () => {
+    if (!protocoloParaImprimir) return;
+    if (protocoloParaImprimir.status === 'Criado') {
+      try {
+        await onUpdateStatus(protocoloParaImprimir.id, 'Impresso');
+      } catch (error) {
+        console.error('Falha ao atualizar status do protocolo:', error);
+      }
+    }
+    setIsImprimirOpen(false);
+    setProtocoloParaImprimir(null);
+  };
+
+  const handlePrint = useReactToPrint({
+    content: () => componentRef.current,
+    onAfterPrint: handleAfterPrint,
+    pageStyle: `
+      @page {
+        size: A4 portrait;
+        margin: 8mm;
+      }
+    `,
+  });
 
   const formatDate = (date?: string | null) => {
     if (!date) return '-';
@@ -104,35 +132,22 @@ export function ProtocoloListView({
     if (protocolo.status === 'Trânsito') {
       setProtocoloParaBaixa(protocolo);
       setIsDarBaixaOpen(true);
-    }
-  };
-
-  const handleConfirmarImpressao = () => {
-    if (!protocoloParaImprimir) {
-      alert('Erro: Protocolo para impressão não selecionado.');
       return;
     }
 
-    const afterPrint = async () => {
-      // Garante que a lógica rode apenas uma vez e se limpa
-      window.removeEventListener('afterprint', afterPrint);
+    let newStatus: string | null = null;
+    
+    switch (protocolo.status) {
+      case 'Impresso':
+        newStatus = 'Trânsito';
+        break;
+      default:
+        return;
+    }
 
-      if (protocoloParaImprimir.status === 'Criado') {
-        try {
-          await onUpdateStatus(protocoloParaImprimir.id, 'Impresso');
-        } catch (error) {
-          console.error('Falha ao atualizar status do protocolo:', error);
-        }
-      }
-
-      // Limpeza final
-      setIsImprimirOpen(false);
-      setProtocoloParaImprimir(null);
-    };
-
-    window.addEventListener('afterprint', afterPrint, { once: true });
-
-    window.print();
+    if (newStatus) {
+      await onUpdateStatus(protocolo.id, newStatus);
+    }
   };
 
   const getNextAction = (protocolo: Protocolo) => {
@@ -146,6 +161,16 @@ export function ProtocoloListView({
       default:
         return null;
     }
+  };
+
+  const openDetails = (protocolo: Protocolo) => {
+    setSelectedProtocolo(protocolo);
+    setIsDetailsOpen(true);
+  };
+
+  const closeDetails = () => {
+    setIsDetailsOpen(false);
+    setSelectedProtocolo(null);
   };
 
   return (
@@ -269,7 +294,7 @@ export function ProtocoloListView({
                             }}
                           >
                             <Printer className="h-4 w-4 mr-2" />
-                            Imprimir
+                            Imprimir Protocolo
                           </DropdownMenuItem>
 
                           {nextAction && (
@@ -285,9 +310,7 @@ export function ProtocoloListView({
                             </DropdownMenuItem>
                           )}
 
-                          {isAdmin &&
-                            (protocolo.status === 'Criado' ||
-                              protocolo.status === 'Impresso') && (
+                          {isAdmin && (protocolo.status === 'Criado' || protocolo.status === 'Impresso') && (
                               <DropdownMenuItem
                                 className="text-red-600"
                                 onClick={() => onDelete(protocolo)}
@@ -307,36 +330,143 @@ export function ProtocoloListView({
         </Table>
       </div>
 
-      {/* MODAL IMPRESSÃO */}
-      <Dialog open={isImprimirOpen} onOpenChange={setIsImprimirOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="no-print">
-            <DialogTitle>
-              Protocolo de Entrega –{' '}
-              {protocoloParaImprimir?.numero_protocolo}
-            </DialogTitle>
+      {/* MODAL DETALHES */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Protocolo</DialogTitle>
             <DialogDescription>
-              O documento será impresso em duas vias.
+              Informações completas do protocolo {selectedProtocolo?.numero_protocolo}
             </DialogDescription>
           </DialogHeader>
-
-          {protocoloParaImprimir && (
-            <ImprimirProtocolo
-              protocolo={protocoloParaImprimir}
-              perfil={perfil}
-            />
+          {selectedProtocolo && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Número do Protocolo
+                  </div>
+                  <div className="text-base font-semibold">
+                    {selectedProtocolo.numero_protocolo}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Status</div>
+                  <Badge variant={statusBadgeVariants[selectedProtocolo.status]}>
+                    {selectedProtocolo.status}
+                  </Badge>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Cliente</div>
+                  <div className="text-base">{selectedProtocolo.tbl_clientes?.nome || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Responsável pelo Recebimento
+                  </div>
+                  <div className="text-base">
+                    {selectedProtocolo.nome_resp_recebimento || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Data de Criação
+                  </div>
+                  <div className="text-base">
+                    {formatDate(selectedProtocolo.data_criacao)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Data de Impressão
+                  </div>
+                  <div className="text-base">
+                    {formatDate(selectedProtocolo.data_impressao)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Criado por</div>
+                  <div className="text-base">
+                    {selectedProtocolo.usuario_criador_nome || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">ID</div>
+                  <div className="text-base font-mono text-xs">
+                    {selectedProtocolo.id}
+                  </div>
+                </div>
+              </div>
+              {(selectedProtocolo.titulo || selectedProtocolo.descricao) && (
+                <div className="space-y-3 border-t pt-4">
+                  {selectedProtocolo.titulo && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Título
+                      </div>
+                      <div className="text-base font-semibold">
+                        {selectedProtocolo.titulo}
+                      </div>
+                    </div>
+                  )}
+                  {selectedProtocolo.descricao && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Descrição
+                      </div>
+                      <div className="text-base whitespace-pre-wrap bg-muted/50 p-3 rounded-md">
+                        {selectedProtocolo.descricao}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedProtocolo.link_tarefa && (
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">
+                    Link da Tarefa
+                  </div>
+                  <a
+                    href={selectedProtocolo.link_tarefa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                  >
+                    {selectedProtocolo.link_tarefa}
+                  </a>
+                </div>
+              )}
+              {selectedProtocolo.anexos && selectedProtocolo.anexos.length > 0 && (
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
+                    Arquivos Anexos ({selectedProtocolo.anexos.length})
+                  </div>
+                  <div className="space-y-2">
+                    {selectedProtocolo.anexos.map((anexo, index) => {
+                      const fileName = anexo.split('/').pop()?.split('-').slice(1).join('-') || `Anexo ${index + 1}`;
+                      return (
+                        <a
+                          key={index}
+                          href={anexo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="break-all">{fileName.length > 25 ? fileName.substring(0, 25) + '...' : fileName}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-
-          <DialogFooter className="no-print">
-            <Button
-              variant="outline"
-              onClick={() => setIsImprimirOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={handleConfirmarImpressao}>
-              <Printer className="h-4 w-4 mr-2" />
-              Imprimir e Confirmar
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDetails}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -351,9 +481,43 @@ export function ProtocoloListView({
           onSuccess={() => {
             setIsDarBaixaOpen(false);
             setProtocoloParaBaixa(null);
+            onUpdateStatus(protocoloParaBaixa.id, 'Entregue');
           }}
         />
       )}
+
+      {/* MODAL IMPRESSÃO (agora com o componente de impressão invisível) */}
+      <Dialog open={isImprimirOpen} onOpenChange={setIsImprimirOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="no-print">
+            <DialogTitle>
+              Protocolo de Entrega –{' '}
+              {protocoloParaImprimir?.numero_protocolo}
+            </DialogTitle>
+            <DialogDescription>
+              O documento será impresso em duas vias.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Componente de impressão visível no modal, mas com ref */}
+          <div className="print-area">
+            {protocoloParaImprimir && <ImprimirProtocolo ref={componentRef} protocolo={protocoloParaImprimir} />}
+          </div>
+
+          <DialogFooter className="no-print">
+            <Button
+              variant="outline"
+              onClick={() => setIsImprimirOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handlePrint}>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir e Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
