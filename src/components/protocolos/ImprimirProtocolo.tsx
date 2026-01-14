@@ -91,19 +91,19 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
           )}
           {/* ASSINATURAS */}
           <tr>
-            <td style={{ width: '50%', padding: '2mm', borderRight: '1px solid #000', fontSize: '9pt', textAlign: 'center', color: 'black' }}>
+            <td style={{ width: '50%', padding: '2mm', borderRight: '1px solid #000', fontSize: '9pt', textAlign: 'center' }}>
               <strong>ENTREGUE POR</strong>
               <div style={{ marginTop: '15mm', borderTop: '1px solid #000', paddingTop: '5px' }}>
                 {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
               </div>
-              <span style={{ fontSize: '8pt', color: '#666' }}>Data: {formatarDataCurta(protocolo.data_impressao)}</span>
+              <span style={{ fontSize: '8pt' }}>Data: {formatarDataCurta(protocolo.data_impressao)}</span>
             </td>
-            <td style={{ width: '50%', padding: '2mm', fontSize: '9pt', textAlign: 'center', color: 'black' }}>
+            <td style={{ width: '50%', padding: '2mm', fontSize: '9pt', textAlign: 'center' }}>
               <strong>RECEBIDO POR</strong>
               <div style={{ marginTop: '15mm', borderTop: '1px solid #000', paddingTop: '5px' }}>
                 {protocolo.nome_resp_recebimento || 'Assinatura do Recebedor'}
               </div>
-              <span style={{ fontSize: '8pt', color: '#666' }}>Data: {formatarDataCurta(protocolo.data_recebimento)}</span>
+              <span style={{ fontSize: '8pt' }}>Data: {formatarDataCurta(protocolo.data_recebimento)}</span>
             </td>
           </tr>
         </tbody>
@@ -114,7 +114,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
   return (
     <div>
       <Via numero={1} />
-      <div style={{ borderBottom: '1px dashed #999', margin: '10mm 0', pageBreakAfter: 'always' }} />
+      <div style={{ borderBottom: '1px dashed #999', margin: '10mm 0' }} />
       <Via numero={2} />
     </div>
   );

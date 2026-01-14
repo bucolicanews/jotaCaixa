@@ -30,12 +30,15 @@ export function usePrint() {
             font-family: Arial, sans-serif; 
             margin: 0; 
             padding: 0; 
-            color: #000; 
             font-size: 10pt; 
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           
+          * {
+            color: #000 !important; /* Força a cor preta para todo o texto */
+          }
+
           .print-container { width: 100%; max-width: 100%; padding: 0; }
           h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
           
@@ -51,7 +54,7 @@ export function usePrint() {
           .print-header-content { flex-grow: 1; margin-left: 15px; }
           .print-logo { max-height: 50px; max-width: 150px; object-fit: contain; }
           .print-header h1 { font-size: 16px; font-weight: bold; margin: 0; text-align: left; }
-          .print-header p { margin: 0; font-size: 10px; color: #555; }
+          .print-header p { margin: 0; font-size: 10px; }
           
           .print-header-cell { text-align: center; padding: 2mm; } /* Classe para cabeçalho de protocolo */
           
@@ -80,8 +83,8 @@ export function usePrint() {
           .print-signatures { display: flex; justify-content: space-around; margin-top: 40px; page-break-before: avoid; }
           .print-signature-line { width: 40%; border-top: 1px solid #000; padding-top: 5px; text-align: center; font-size: 9pt; }
           
-          .print-bg-light-gray { background-color: #f0f0f0 !important; }
-          .print-bg-medium-gray { background-color: #e8e8e8 !important; }
+          .print-bg-light-gray { background-color: #f0f0f0; }
+          .print-bg-medium-gray { background-color: #e8e8e8; }
           
           .ql-align-left { text-align: left !important; }
           .ql-align-center { text-align: center !important; }
