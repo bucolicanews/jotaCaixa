@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { DarBaixaProtocoloDialog } from './DarBaixaProtocoloDialog';
 import { ImprimirProtocolo } from './ImprimirProtocolo';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
 import { Protocolo } from '@/types/protocolo';
 
 interface ProtocoloKanbanViewProps {
@@ -67,6 +69,7 @@ export function ProtocoloKanbanView({
   const [protocoloParaBaixa, setProtocoloParaBaixa] = useState<Protocolo | null>(null);
   const [protocoloParaImprimir, setProtocoloParaImprimir] = useState<Protocolo | null>(null);
   const [isImprimirOpen, setIsImprimirOpen] = useState(false);
+  const { printContent } = usePrint();
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '-';
@@ -115,85 +118,9 @@ export function ProtocoloKanbanView({
   const handleConfirmarImpressao = async () => {
     if (!protocoloParaImprimir) return;
     
-    const p = protocoloParaImprimir;
-    const clienteNome = p.tbl_clientes?.nome || 'N/A';
-    const dataCriacao = p.data_criacao ? new Date(p.data_criacao).toLocaleString('pt-BR') : new Date(p.created_at).toLocaleString('pt-BR');
-    const dataImpressao = new Date().toLocaleDateString('pt-BR');
-    const criadorNome = p.usuario_criador_nome || '______________________';
-    const titulo = p.titulo || 'N/A';
-    const descricao = p.descricao || '';
-    const anexosHtml = p.anexos && p.anexos.length > 0 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:8pt"><strong>Anexos (${p.anexos.length}):</strong> ${p.anexos.slice(0,3).map(a => (a.split('/').pop()?.split('-').slice(1).join('-') || 'Anexo').substring(0,20)).join(', ')}${p.anexos.length > 3 ? ` +${p.anexos.length-3}` : ''}</td></tr>` 
-      : '';
-
-    const descricaoHtml = descricao 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Observação:</strong><div style="white-space:pre-wrap;word-wrap:break-word;margin-top:1mm">${descricao}</div></td></tr>`
-      : '';
-
-    const viaHtml = (num: number) => `
-      <table style="width:100%;border-collapse:collapse;border:2px solid #000;margin-bottom:3mm">
-        <tr><td colspan="2" style="text-align:center;border-bottom:2px solid #000;padding:2mm;background:#f0f0f0">
-          <div style="font-size:14pt;font-weight:bold">PROTOCOLO DE ENTREGA</div>
-          <div style="font-size:10pt;font-weight:bold">${num}ª VIA - ${num === 1 ? 'EMPRESA' : 'CLIENTE'}</div>
-        </td></tr>
-        <tr><td colspan="2" style="text-align:center;padding:2mm;border-bottom:1px solid #000;background:#e8e8e8">
-          <div style="font-size:8pt">Nº PROTOCOLO</div>
-          <div style="font-size:14pt;font-weight:bold">${p.numero_protocolo}</div>
-        </td></tr>
-        <tr>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:9pt"><strong>Cliente:</strong><br/>${clienteNome}</td>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Data Criação:</strong><br/>${dataCriacao}</td>
-        </tr>
-        <tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Título:</strong> ${titulo}</td></tr>
-        ${descricaoHtml}
-        ${anexosHtml}
-        <tr>
-          <td style="width:50%;padding:2mm;border-right:1px solid #000;font-size:8pt;text-align:center">
-            <strong>ENTREGUE POR</strong><br/>${criadorNome}<br/><span style="font-size:7pt;color:#666">Data: ${dataImpressao}</span>
-          </td>
-          <td style="width:50%;padding:2mm;font-size:8pt;text-align:center">
-            <strong>RECEBIDO POR</strong><br/>______________________<br/><span style="font-size:7pt;color:#666">Data: ___/___/____</span>
-          </td>
-        </tr>
-      </table>`;
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Protocolo ${p.numero_protocolo}</title>
-        <style>
-          @page { size: A4 portrait; margin: 10mm; }
-          body { font-family: Arial, sans-serif; margin: 0; padding: 10mm; }
-        </style>
-      </head>
-      <body>
-        ${viaHtml(1)}
-        <div style="border-bottom:1px dashed #999;margin:2mm 0"></div>
-        ${viaHtml(2)}
-      </body>
-      </html>
-    `;
-
-    // Abre uma nova janela com o conteúdo formatado para impressão
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      alert('Popup bloqueado! Permita popups para imprimir.');
-      return;
-    }
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Aguarda um pouco para o conteúdo renderizar e depois imprime
-    setTimeout(() => {
-      try {
-        printWindow.focus();
-        printWindow.print();
-      } catch (e) {
-        console.log('Impressão cancelada ou erro:', e);
-      }
-    }, 500);
+    const printComponent = <ImprimirProtocolo protocolo={protocoloParaImprimir} />;
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Protocolo ${protocoloParaImprimir.numero_protocolo}`);
     
     // Só atualiza status para "Impresso" se o protocolo ainda estiver em "Criado"
     if (protocoloParaImprimir.status === 'Criado') {
@@ -482,7 +409,7 @@ export function ProtocoloKanbanView({
                     Responsável pelo Recebimento
                   </div>
                   <div className="text-base">
-                    {selectedProtocolo.responsavel_recebimento || '-'}
+                    {selectedProtocolo.nome_resp_recebimento || '-'}
                   </div>
                 </div>
                 <div>
@@ -609,18 +536,14 @@ export function ProtocoloKanbanView({
           <DialogHeader>
             <DialogTitle>Protocolo de Entrega - {protocoloParaImprimir?.numero_protocolo}</DialogTitle>
             <DialogDescription>
-              Este protocolo será impresso em duas vias: uma para a empresa e outra para o cliente.
+              Este protocolo será impresso em duas vias.
             </DialogDescription>
           </DialogHeader>
-          
           <div className="print-area">
             {protocoloParaImprimir && <ImprimirProtocolo protocolo={protocoloParaImprimir} />}
           </div>
-
           <DialogFooter className="no-print">
-            <Button variant="outline" onClick={() => setIsImprimirOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setIsImprimirOpen(false)}>Cancelar</Button>
             <Button onClick={handleConfirmarImpressao}>
               <Printer className="h-4 w-4 mr-2" />
               Imprimir e Confirmar

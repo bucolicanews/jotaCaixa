@@ -106,7 +106,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
           >
             <strong>Cliente:</strong>
             <br />
-              {protocolo.tbl_clientes?.razao_social || protocolo.tbl_clientes?.nome || 'N/A'}
+              {protocolo.tbl_clientes?.nome || 'N/A'}
              
           </td>
 
@@ -198,21 +198,15 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
               padding: '2mm',
               borderRight: '1px solid #000',
               fontSize: '9pt',
-    textAlign: 'center',
-                 color: 'black'
+              textAlign: 'center',
+              color: 'black'
             }}
           >
-  <strong>ENTREGUE POR </strong>
-                <div className="assinatura-space">
-              {'__________________________________________'}
+            <strong>ENTREGUE POR</strong>
+            <div style={{ marginTop: '15mm', borderTop: '1px solid #000', paddingTop: '5px' }}>
+              {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
             </div>
-
-
-            <div>
-              {protocolo.usuario_criador_nome}
-            </div>
-
-            <span style={{ fontSize: '8pt', color: 'black' }}>
+            <span style={{ fontSize: '8pt', color: '#666' }}>
               Data: {formatarDataCurta(protocolo.data_impressao)}
             </span>
           </td>
@@ -227,12 +221,10 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             }}
           >
             <strong>RECEBIDO POR</strong>
-
-            <div className="assinatura-space">
-              {protocolo.nome_resp_recebimento || '_______________________________________'}
+            <div style={{ marginTop: '15mm', borderTop: '1px solid #000', paddingTop: '5px' }}>
+              {protocolo.nome_resp_recebimento || 'Assinatura do Recebedor'}
             </div>
-
-            <span style={{ fontSize: '8pt', color: 'black' }}>
+            <span style={{ fontSize: '8pt', color: '#666' }}>
               Data: {formatarDataCurta(protocolo.data_recebimento)}
             </span>
           </td>
@@ -244,11 +236,6 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
   return (
     <>
       <style>{`
-        #print-protocolo .assinatura-space {
-           display: block;
-           margin-top: 15mm;
-        }
-
         @media print {
           @page {
             size: A4 portrait;

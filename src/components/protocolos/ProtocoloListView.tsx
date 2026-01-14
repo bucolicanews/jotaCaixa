@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { DarBaixaProtocoloDialog } from './DarBaixaProtocoloDialog';
 import { ImprimirProtocolo } from './ImprimirProtocolo';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
 import { Protocolo } from '@/types/protocolo';
 
 interface ProtocoloListViewProps {
@@ -77,6 +79,7 @@ export function ProtocoloListView({
   const [protocoloParaBaixa, setProtocoloParaBaixa] = useState<Protocolo | null>(null);
   const [protocoloParaImprimir, setProtocoloParaImprimir] = useState<Protocolo | null>(null);
   const [isImprimirOpen, setIsImprimirOpen] = useState(false);
+  const { printContent } = usePrint();
   const { perfil } = useSessao();
 
   const formatDate = (dateString: string | undefined | null) => {
@@ -109,94 +112,9 @@ export function ProtocoloListView({
   const handleConfirmarImpressao = async () => {
     if (!protocoloParaImprimir) return;
     
-    const p = protocoloParaImprimir;
-    const clienteNome = p.tbl_clientes?.razao_social || p.tbl_clientes?.nome || 'N/A';
-    const dataCriacao = p.data_criacao ? new Date(p.data_criacao).toLocaleString('pt-BR') : new Date(p.created_at).toLocaleString('pt-BR');
-    const dataImpressao = new Date().toLocaleDateString('pt-BR');
-    const criadorNome = p.usuario_criador_nome || '______________________';
-    const titulo = p.titulo || 'N/A';
-    const descricao = p.descricao || '';
-    const empresaNome = (perfil as any)?.razao_social || (perfil as any)?.nome || '';
-
-    const anexosHtml = p.anexos && p.anexos.length > 0 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:9pt"><strong>Anexos (${p.anexos.length}):</strong> ${p.anexos.slice(0,3).map(a => (a.split('/').pop()?.split('-').slice(1).join('-') || 'Anexo').substring(0,20)).join(', ')}${p.anexos.length > 3 ? ` +${p.anexos.length-3}` : ''}</td></tr>` 
-      : '';
-
-    const descricaoHtml = descricao 
-      ? `<tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Observação:</strong><div style="white-space:pre-wrap;word-wrap:break-word;margin-top:1mm">${descricao}</div></td></tr>`
-      : '';
-
-    const viaHtml = (num: number) => `
-      <table style="width:100%;border-collapse:collapse;border:2px solid #000;margin-bottom:3mm;color:black;">
-        <tr><td colspan="2" style="text-align:center;border-bottom:2px solid #000;padding:2mm;background:#f0f0f0">
-          <div style="font-size:16pt;font-weight:bold">PROTOCOLO DE ENTREGA</div>
-          <div style="font-size:12pt;font-weight:bold">${num}ª VIA - ${num === 1 ? 'EMPRESA' : 'CLIENTE'}</div>
-        </td></tr>
-        <tr><td colspan="2" style="padding:1mm;border-bottom:1px solid #000;font-size:10pt;text-align:center">
-          <strong>${empresaNome}</strong>
-        </td></tr>
-        <tr><td colspan="2" style="text-align:center;padding:2mm;border-bottom:1px solid #000;background:#e8e8e8">
-          <div style="font-size:10pt">Nº PROTOCOLO</div>
-          <div style="font-size:16pt;font-weight:bold">${p.numero_protocolo}</div>
-        </td></tr>
-        <tr>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;border-right:1px solid #000;font-size:10pt"><strong>Cliente:</strong><br/>${clienteNome}</td>
-          <td style="width:50%;padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Data Criação:</strong><br/>${dataCriacao}</td>
-        </tr>
-        <tr><td colspan="2" style="padding:2mm;border-bottom:1px solid #000;font-size:10pt"><strong>Título:</strong> ${titulo}</td></tr>
-        ${descricaoHtml}
-        ${anexosHtml}
-        <tr>
-          <td style="width:50%;padding:2mm;border-right:1px solid #000;font-size:9pt;text-align:center">
-            <strong>ENTREGUE POR</strong><div style="margin-top:15mm">__________________________________________</div><div>${criadorNome}</div><span style="font-size:8pt;color:black">Data: ${dataImpressao}</span>
-          </td>
-          <td style="width:50%;padding:2mm;font-size:9pt;text-align:center">
-            <strong>RECEBIDO POR</strong><div style="margin-top:15mm">${p.nome_resp_recebimento || '_______________________________________'}</div><span style="font-size:8pt;color:black">Data: ${p.data_recebimento ? new Date(p.data_recebimento).toLocaleDateString('pt-BR') : '___/___/____'}</span>
-          </td>
-        </tr>
-      </table>`;
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Protocolo ${p.numero_protocolo}</title>
-        <style>
-          @page { size: A4 portrait; margin: 8mm; }
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 0; 
-            padding: 0;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        </style>
-      </head>
-      <body>
-        ${viaHtml(1)}
-        <div style="border-bottom:1px dashed #999;margin:2mm 0"></div>
-        ${viaHtml(2)}
-      </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      alert('Popup bloqueado! Permita popups para imprimir.');
-      return;
-    }
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    setTimeout(() => {
-      try {
-        printWindow.focus();
-        printWindow.print();
-      } catch (e) {
-        console.log('Impressão cancelada ou erro:', e);
-      }
-    }, 500);
+    const printComponent = <ImprimirProtocolo protocolo={protocoloParaImprimir} />;
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Protocolo ${protocoloParaImprimir.numero_protocolo}`);
     
     if (protocoloParaImprimir.status === 'Criado') {
       try {
@@ -363,48 +281,101 @@ export function ProtocoloListView({
                   <div>{selectedProtocolo.tbl_clientes?.nome || '-'}</div>
                 </div>
                 <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Responsável pelo Recebimento
+                  </div>
+                  <div className="text-base">
+                    {selectedProtocolo.nome_resp_recebimento || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Data de Criação
+                  </div>
+                  <div className="text-base">
+                    {formatDate(selectedProtocolo.data_criacao)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Data de Impressão
+                  </div>
+                  <div className="text-base">
+                    {formatDate(selectedProtocolo.data_impressao)}
+                  </div>
+                </div>
+                <div>
                   <div className="text-sm font-medium text-muted-foreground">Criado por</div>
-                  <div>{selectedProtocolo.usuario_criador_nome || '-'}</div>
+                  <div className="text-base">
+                    {selectedProtocolo.usuario_criador_nome || '-'}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-muted-foreground">Data Criação</div>
-                  <div>{formatDate(selectedProtocolo.data_criacao)}</div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Data Impressão</div>
-                  <div>{formatDate(selectedProtocolo.data_impressao)}</div>
+                  <div className="text-sm font-medium text-muted-foreground">ID</div>
+                  <div className="text-base font-mono text-xs">
+                    {selectedProtocolo.id}
+                  </div>
                 </div>
               </div>
-              {selectedProtocolo.titulo && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Título</div>
-                  <div>{selectedProtocolo.titulo}</div>
-                </div>
-              )}
-              {selectedProtocolo.descricao && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Descrição</div>
-                  <div className="whitespace-pre-wrap">{selectedProtocolo.descricao}</div>
+              {(selectedProtocolo.titulo || selectedProtocolo.descricao) && (
+                <div className="space-y-3 border-t pt-4">
+                  {selectedProtocolo.titulo && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Título
+                      </div>
+                      <div className="text-base font-semibold">
+                        {selectedProtocolo.titulo}
+                      </div>
+                    </div>
+                  )}
+                  {selectedProtocolo.descricao && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground mb-1">
+                        Descrição
+                      </div>
+                      <div className="text-base whitespace-pre-wrap bg-muted/50 p-3 rounded-md">
+                        {selectedProtocolo.descricao}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {selectedProtocolo.link_tarefa && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Link da Tarefa</div>
-                  <a href={selectedProtocolo.link_tarefa} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">
+                    Link da Tarefa
+                  </div>
+                  <a
+                    href={selectedProtocolo.link_tarefa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                  >
                     {selectedProtocolo.link_tarefa}
                   </a>
                 </div>
               )}
               {selectedProtocolo.anexos && selectedProtocolo.anexos.length > 0 && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Anexos</div>
-                  <div className="space-y-1">
-                    {selectedProtocolo.anexos.map((anexo, i) => {
-                      const fileName = anexo.split('/').pop()?.split('-').slice(1).join('-') || `Anexo ${i+1}`;
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
+                    Arquivos Anexos ({selectedProtocolo.anexos.length})
+                  </div>
+                  <div className="space-y-2">
+                    {selectedProtocolo.anexos.map((anexo, index) => {
+                      const fileName = anexo.split('/').pop()?.split('-').slice(1).join('-') || `Anexo ${index + 1}`;
                       return (
-                        <a key={i} href={anexo} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline text-sm">
-                          <Download className="h-4 w-4" />
-                          {fileName}
+                        <a
+                          key={index}
+                          href={anexo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="break-all">{fileName}</span>
                         </a>
                       );
                     })}
