@@ -191,7 +191,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             <strong>ENTREGUE POR</strong>
 
             <div style={{ marginTop: '10mm', borderTop: '1px solid #000', paddingTop: '5px' }}>
-              {protocolo.usuario_criador_nome || 'Assinatura do Entregador'}
+              {protocolo.usuario_criador_nome || '__________________________'}
             </div>
 
             <span style={{ fontSize: '7pt' }}>
@@ -230,32 +230,6 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             size: A4 portrait;
             margin: 8mm;
           }
-
-          body, html {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          body * {
-            visibility: hidden;
-          }
-
-          #print-protocolo,
-          #print-protocolo * {
-            visibility: visible;
-          }
-
-          #print-protocolo {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: #fff;
-          }
-
-          .no-print {
-            display: none !important;
-          }
         }
 
         @media screen {
@@ -264,7 +238,7 @@ export const ImprimirProtocolo: FC<ImprimirProtocoloProps> = ({ protocolo }) => 
             margin: 0 auto;
             padding: 10px;
             background: #fff;
-            color: #000;
+            color: #000; /* Black text for modal preview */
           }
         }
       `}</style>
