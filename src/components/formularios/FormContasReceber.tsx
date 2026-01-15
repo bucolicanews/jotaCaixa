@@ -66,6 +66,7 @@ interface FormContasReceberProps {
 interface ClienteCRSimples {
   id: string;
   nome: string;
+  razao_social?: string | null;
   documento?: string | null;
   email?: string | null;
 }
@@ -200,7 +201,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (isAdminOrEmployee) {
       const { data: dataClients, error: errorClients } = await supabase
           .from('tbl_clientes')
-          .select('id, nome, documento, email')
+          .select('id, nome, razao_social, documento, email')
           .eq('admin_id', ownerId)
           .eq('aprovado', true)
           .order('nome');
@@ -213,7 +214,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     } else { // This is for 'Cliente' role
       const { data: dataClients, error: errorClients } = await supabase
           .from('clientes')
-          .select('id, nome, documento, email')
+          .select('id, nome, razao_social, documento, email')
           .eq('proprietario_id', ownerId)
           .order('nome');
             
@@ -456,7 +457,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               <SelectContent>
                 {clientes.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.nome} {c.documento && <span className="text-xs text-muted-foreground">({c.documento})</span>}
+                    {c.razao_social || c.nome} {c.documento && <span className="text-xs text-muted-foreground">({c.documento})</span>}
                   </SelectItem>
                 ))}
               </SelectContent>

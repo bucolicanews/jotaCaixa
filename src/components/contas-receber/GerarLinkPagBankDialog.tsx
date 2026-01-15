@@ -224,47 +224,8 @@ export function GerarLinkPagBankDialog({
                     </div>
                   </Label>
                 </div>
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('pix')}>
-                  <RadioGroupItem value="pix" id="pix" />
-                  <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer flex-1">
-                    <QrCode className="h-4 w-4" />
-                    PIX (QR Code e Copia e Cola)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('boleto')}>
-                  <RadioGroupItem value="boleto" id="boleto" />
-                  <Label htmlFor="boleto" className="flex items-center gap-2 cursor-pointer flex-1">
-                    <FileText className="h-4 w-4" />
-                    Boleto Bancario
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('credit_card')}>
-                  <RadioGroupItem value="credit_card" id="credit_card" />
-                  <Label htmlFor="credit_card" className="flex items-center gap-2 cursor-pointer flex-1">
-                    <CreditCard className="h-4 w-4" />
-                    Cartao de Credito
-                  </Label>
-                </div>
               </RadioGroup>
             </div>
-
-            {paymentMethod === 'credit_card' && (
-              <div className="space-y-2">
-                <Label htmlFor="installments">Numero de Parcelas</Label>
-                <Select value={installments} onValueChange={setInstallments}>
-                  <SelectTrigger id="installments">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        {num}x de R$ {(valorParcela / num).toFixed(2)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
         ) : (
           <div className="space-y-4 py-4">
