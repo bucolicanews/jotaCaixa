@@ -100,9 +100,22 @@ export function GerarLinkPagBankDialog({
       if (onSuccess) {
         onSuccess();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao gerar link PagBank:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao gerar link de pagamento');
+      let errorMessage = 'Erro ao gerar link de pagamento. Verifique os logs da função.';
+      if (error.context && typeof error.context.json === 'function') {
+        try {
+          const errorBody = await error.context.json();
+          if (errorBody.error) {
+            errorMessage = errorBody.error;
+          }
+        } catch (e) {
+          // Ignore if JSON parsing fails
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -279,7 +292,7 @@ export function GerarLinkPagBankDialog({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCopyLink(qrCodeText)}
+                        onClick={() => handleCopyLink(qrCodeText, 'pix')}
                       >
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
@@ -302,7 +315,7 @@ export function GerarLinkPagBankDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleCopyLink(paymentLink)}
+                  onClick={() => handleCopyLink(paymentLink, 'link')}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>

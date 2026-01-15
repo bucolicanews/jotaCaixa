@@ -21,7 +21,6 @@ serve(async (req) => {
   }
 
   try {
-    // Usar Service Role Key para ter acesso completo
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -41,7 +40,7 @@ serve(async (req) => {
         *,
         admin_contas_receber (
           *,
-          tbl_clientes (
+          clientes (
             nome,
             email,
             telefone,
@@ -92,9 +91,9 @@ serve(async (req) => {
       has_token_producao: !!config.token_producao,
     });
 
-    const cliente = parcela.admin_contas_receber?.tbl_clientes;
+    const cliente = parcela.admin_contas_receber?.clientes;
     if (!cliente) {
-      throw new Error('Cliente não encontrado');
+      throw new Error('Cliente não encontrado na parcela');
     }
 
     console.log('Cliente encontrado:', {
@@ -108,7 +107,6 @@ serve(async (req) => {
     const valorEmCentavos = Math.round(parcela.valor_parcela * 100);
     const referenceId = `PARCELA_${parcela_id}`;
 
-    // Limpar e validar CPF/CNPJ - prioridade: cpf > cnpj > documento
     let taxId = '';
     if (cliente.cpf) {
       taxId = cliente.cpf.replace(/\D/g, '');
@@ -118,7 +116,6 @@ serve(async (req) => {
       taxId = cliente.documento.replace(/\D/g, '');
     }
 
-    // Validar se o taxId tem tamanho correto
     if (taxId.length !== 11 && taxId.length !== 14) {
       return new Response(
         JSON.stringify({ error: `CPF/CNPJ inválido ou não cadastrado para o cliente "${cliente.nome}".` }),
@@ -132,7 +129,7 @@ serve(async (req) => {
       reference_id: referenceId,
       customer: {
         name: cliente.nome,
-        email: cliente.email,
+        email: cliente.email || 'cliente.sem.email@jotaempresas.com',
         tax_id: taxId,
       },
       items: [
@@ -157,7 +154,7 @@ serve(async (req) => {
       ];
     } else if (payment_method === 'boleto') {
         const dataVencimento = new Date(parcela.data_vencimento);
-        dataVencimento.setDate(dataVencimento.getDate() + 3); // 3 dias de tolerância
+        dataVencimento.setDate(dataVencimento.getDate() + 3);
 
         const postalCode = (cliente.cep || '00000000').replace(/\D/g, '');
         if (postalCode.length !== 8) {
@@ -182,7 +179,7 @@ serve(async (req) => {
                 holder: {
                 name: cliente.nome,
                 tax_id: taxId,
-                email: cliente.email,
+                email: cliente.email || 'cliente.sem.email@jotaempresas.com',
                 address: {
                     street: cliente.endereco || 'Não informado',
                     number: cliente.numero || 'S/N',

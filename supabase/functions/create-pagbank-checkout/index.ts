@@ -29,7 +29,20 @@ serve(async (req) => {
     // 1. Buscar parcela
     const { data: parcela, error: parcelaError } = await supabaseAdmin
       .from('admin_parcelas_receber')
-      .select('*, admin_contas_receber(id, descricao, cliente_id)')
+      .select(`
+        *,
+        admin_contas_receber (
+          *,
+          clientes (
+            nome,
+            email,
+            cpf,
+            cnpj,
+            documento,
+            telefone
+          )
+        )
+      `)
       .eq('id', parcela_id)
       .single();
 
@@ -64,15 +77,9 @@ serve(async (req) => {
     console.log('Cliente ID:', clienteId);
 
     // 2. Buscar cliente
-    const { data: cliente, error: clienteError } = await supabaseAdmin
-      .from('tbl_clientes')
-      .select('nome, email, cpf, cnpj, documento, telefone')
-      .eq('id', clienteId)
-      .single();
-
-    if (clienteError || !cliente) {
-      console.error('Erro ao buscar cliente:', clienteError);
-      throw new Error('Cliente não encontrado');
+    const cliente = parcela.admin_contas_receber?.clientes;
+    if (!cliente) {
+      throw new Error('Cliente não encontrado na parcela');
     }
 
     console.log('Cliente:', cliente.nome);
@@ -137,7 +144,7 @@ serve(async (req) => {
       reference_id: referenceId,
       customer: {
         name: cliente.nome,
-        email: cliente.email || 'cliente@email.com',
+        email: cliente.email || 'cliente.sem.email@jotaempresas.com',
         tax_id: taxId,
       },
       customer_modifiable: true,
