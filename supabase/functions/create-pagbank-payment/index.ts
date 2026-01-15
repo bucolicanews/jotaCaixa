@@ -40,7 +40,7 @@ serve(async (req) => {
         *,
         admin_contas_receber (
           *,
-          clientes (
+          tbl_clientes (
             nome,
             email,
             telefone,
@@ -91,7 +91,7 @@ serve(async (req) => {
       has_token_producao: !!config.token_producao,
     });
 
-    const cliente = parcela.admin_contas_receber?.clientes;
+    const cliente = parcela.admin_contas_receber?.tbl_clientes;
     if (!cliente) {
       throw new Error('Cliente não encontrado na parcela');
     }

@@ -33,7 +33,7 @@ serve(async (req) => {
         *,
         admin_contas_receber (
           *,
-          clientes (
+          tbl_clientes (
             nome,
             email,
             cpf,
@@ -77,7 +77,7 @@ serve(async (req) => {
     console.log('Cliente ID:', clienteId);
 
     // 2. Buscar cliente
-    const cliente = parcela.admin_contas_receber?.clientes;
+    const cliente = parcela.admin_contas_receber?.tbl_clientes;
     if (!cliente) {
       throw new Error('Cliente não encontrado na parcela');
     }
