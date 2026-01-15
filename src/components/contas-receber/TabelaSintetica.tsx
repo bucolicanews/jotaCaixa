@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ListChecks, Edit, Trash2 } from 'lucide-react';
+import { ListChecks, Edit, Trash2, Eye } from 'lucide-react';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { ContaReceberComProgresso } from '@/types/contas-receber';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 // Tipos importados do ContasReceber.tsx
 // Removido: type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
@@ -145,7 +146,10 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell>
-                                            <TableCell className="font-medium">{conta.clientes?.nome || 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {conta.clientes?.razao_social && <div className="font-bold text-foreground">{conta.clientes.razao_social}</div>}
+                                                <div className={cn(conta.clientes?.razao_social && "text-xs text-muted-foreground")}>{conta.clientes?.nome || 'N/A'}</div>
+                                            </TableCell>
                                             <TableCell>{conta.descricao}</TableCell>
                                             <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                                             <TableCell className="font-semibold">{formatCurrency(conta.valor_total)}</TableCell>

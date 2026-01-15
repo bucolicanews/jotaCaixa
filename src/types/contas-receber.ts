@@ -50,12 +50,12 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
     ciente_cliente?: boolean | null;
     contas_receber: {
-        id: string; // CORRIGIDO: Adicionado ID
+        id: string;
         descricao: string;
         cliente_id: string | null;
         origem: ContaReceber['origem'];
-        clientes: { nome: string } | null;
-        id_conta_patrimonial?: string | null; // ADICIONADO
+        clientes: { nome: string; razao_social?: string | null; telefone?: string; email?: string; } | null;
+        id_conta_patrimonial?: string | null;
     } | null;
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -67,7 +67,7 @@ const ContasReceber = () => {
   const [parcelasDialogOpen, setParcelasDialogOpen] = useState(false);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
   const [parcelaParaPagamento, setParcelaParaPagamento] = useState<any>(null);
-  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined); // ALTERADO: Removido o período inicial
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
@@ -185,24 +185,24 @@ const ContasReceber = () => {
             ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
         ])];
         
-        let clienteMap: Record<string, { nome: string; telefone?: string; email?: string }> = {};
+        let clienteMap: Record<string, { nome: string; razao_social?: string | null; telefone?: string; email?: string }> = {};
         if (clienteIds.length > 0) {
             const { data: clientesData } = await supabase
                 .from(tabelaClientes)
-                .select('id, nome, telefone, email')
+                .select('id, nome, razao_social, telefone, email')
                 .in('id', clienteIds);
                 
             if (clientesData) {
                 clienteMap = clientesData.reduce((acc, c) => {
-                    acc[c.id] = { nome: c.nome, telefone: c.telefone, email: c.email };
+                    acc[c.id] = { nome: c.nome, razao_social: c.razao_social, telefone: c.telefone, email: c.email };
                     return acc;
-                }, {} as Record<string, { nome: string; telefone?: string; email?: string }>);
+                }, {} as Record<string, { nome: string; razao_social?: string | null; telefone?: string; email?: string }>);
                 
                 // Merge dos nomes dos clientes nas contas
                 fetchedContas = fetchedContas.map(conta => ({
                     ...conta,
                     clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
-                        ? { nome: clienteMap[conta.cliente_id].nome } as any
+                        ? { nome: clienteMap[conta.cliente_id].nome, razao_social: clienteMap[conta.cliente_id].razao_social } as any
                         : conta.clientes
                 }));
                 
@@ -236,16 +236,6 @@ const ContasReceber = () => {
             };
         });
         
-        // FILTRAGEM DE TEXTO NO FRONTEND (para clientes.nome e id)
-        if (filtroTextoDebounced) {
-            const termo = filtroTextoDebounced.toLowerCase();
-            fetchedContas = fetchedContas.filter(c => 
-                c.id.toLowerCase().includes(termo) ||
-                c.clientes?.nome?.toLowerCase().includes(termo) ||
-                c.descricao.toLowerCase().includes(termo)
-            );
-        }
-        
     setContas(fetchedContas);
     setParcelas(fetchedParcelas);
     
@@ -253,13 +243,13 @@ const ContasReceber = () => {
         setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
         
         // Atualiza o mapa de nomes de clientes para recebimentos
-        const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
+        const clienteIdsRecebimentos = recebimentosRes.data.map(r => r.cliente_id);
         
         // 1. Buscar nomes dos clientes (tbl_clientes)
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
-            .in('id', clienteIds);
+            .in('id', clienteIdsRecebimentos);
             
         if (clientesData) {
             const map = clientesData.reduce((acc, c) => {
@@ -271,8 +261,8 @@ const ContasReceber = () => {
     }
 
     setCarregandoDados(false);
-  }, [proprietarioId, ownerType, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
-
+  }, [proprietarioId, ownerType, filtroPeriodo, shouldBlockSetup]);
+  
   useEffect(() => {
     if (!carregandoSessao && usuario) {
       buscarDados();
@@ -486,8 +476,20 @@ const ContasReceber = () => {
   };
   
   const contasFiltradas = useMemo(() => {
-    const dateFiltered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
-    return filterByStatus(dateFiltered, true) as ContaReceberComProgresso[];
+    let filtered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
+    filtered = filterByStatus(filtered, true) as ContaReceberComProgresso[];
+    
+    if (filtroTextoDebounced) {
+        const termo = filtroTextoDebounced.toLowerCase();
+        filtered = filtered.filter(c => 
+            c.id.toLowerCase().includes(termo) ||
+            c.clientes?.nome?.toLowerCase().includes(termo) ||
+            c.clientes?.razao_social?.toLowerCase().includes(termo) ||
+            c.descricao.toLowerCase().includes(termo)
+        );
+    }
+    
+    return filtered;
   }, [contas, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
 
   const parcelasFiltradas = useMemo(() => {
@@ -501,11 +503,13 @@ const ContasReceber = () => {
             const contaId = p.contas_receber?.id || '';
             const descricao = p.contas_receber?.descricao || '';
             const clienteNome = p.contas_receber?.clientes?.nome || '';
+            const razaoSocial = p.contas_receber?.clientes?.razao_social || '';
             
             return p.id.toLowerCase().includes(termo) ||
                    contaId.toLowerCase().includes(termo) ||
                    descricao.toLowerCase().includes(termo) ||
-                   clienteNome.toLowerCase().includes(termo);
+                   clienteNome.toLowerCase().includes(termo) ||
+                   razaoSocial.toLowerCase().includes(termo);
         });
     }
     

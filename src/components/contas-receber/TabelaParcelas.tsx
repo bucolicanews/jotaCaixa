@@ -33,7 +33,7 @@ interface ExtendedParcelaDetalhada {
     contas_receber: {
         id: string;
         descricao: string;
-        clientes: { nome: string; telefone?: string; email?: string } | null;
+        clientes: { nome: string; razao_social?: string | null; telefone?: string; email?: string } | null;
     } | null;
 }
 
@@ -85,7 +85,9 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                                     const isPaga = p.status === 'paga';
-                                    const clienteNome = p.contas_receber?.clientes?.nome || 'N/A';
+                                    const cliente = p.contas_receber?.clientes;
+                                    const clienteNome = cliente?.nome || 'N/A';
+                                    const razaoSocial = cliente?.razao_social;
                                     const descricao = p.contas_receber?.descricao || 'N/A';
                                     const contaId = p.contas_receber?.id || 'N/A';
 
@@ -98,11 +100,14 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     onClick={() => handleOpenPagamento(p)} 
                                                     disabled={isPaga || p.status === 'bloqueada'}
                                                 >
-                                                    <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
+                                                    <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" /> Receber
                                                 </Button>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell>
-                                            <TableCell className="font-medium">{clienteNome}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {razaoSocial && <div className="font-bold text-foreground">{razaoSocial}</div>}
+                                                <div className={cn(razaoSocial && "text-xs text-muted-foreground")}>{clienteNome}</div>
+                                            </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                             <TableCell className="text-center">{p.numero_parcela}</TableCell>
                                             <TableCell>{formatDate(p.data_vencimento)}</TableCell>
@@ -120,7 +125,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             <TableCell>
                                                 {(p.pagbank_charge_id || p.pagbank_checkout_id) ? (
                                                     <div className="space-y-1">
-                                                        <PagBankPaymentStatus status={p.pagbank_status} />
+                                                        <PagBankPaymentStatus status={p.pagbank_status as any} />
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
