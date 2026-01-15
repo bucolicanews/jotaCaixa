@@ -188,53 +188,55 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     setLoadingContasReceita(false);
   }, [ownerId, configMap.Receita]);
 
-  useEffect(() => {
-    const fetchClientsData = async () => {
-      if (!ownerId) {
-        setLoadingClientes(false);
-        return;
-      }
-      setLoadingClientes(true);
-      
-      let fetchedClients: ClienteCRSimples[] = [];
-      
-      if (isAdminOrEmployee) {
-        const { data: dataClients, error: errorClients } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome, documento, email')
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (errorClients) {
-            showError('Erro ao carregar clientes: ' + errorClients.message);
-        } else {
-            fetchedClients = (dataClients as ClienteCRSimples[])
-                .filter(c => c.id !== ownerId);
-        }
-      } else {
-        const { data: dataClients, error: errorClients } = await supabase
-            .from('clientes')
-            .select('id, nome, documento, email')
-            .eq('proprietario_id', ownerId)
-            .order('nome');
-            
-        if (errorClients) {
-            showError('Erro ao carregar clientes: ' + errorClients.message);
-        } else {
-            fetchedClients = dataClients as ClienteCRSimples[];
-        }
-      }
-      
-      setClientes(fetchedClients);
+  const fetchClientsData = useCallback(async () => {
+    if (!ownerId) {
       setLoadingClientes(false);
-    };
+      return;
+    }
+    setLoadingClientes(true);
     
-    fetchClientsData();
-    fetchHistoricos();
-    fetchContasPatrimoniais();
-    fetchContasReceita();
-    fetchMapeamentoContabil();
-  }, [perfil, role, ownerId, isAdminOrEmployee, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita]);
+    let fetchedClients: ClienteCRSimples[] = [];
+    
+    if (isAdminOrEmployee) {
+      const { data: dataClients, error: errorClients } = await supabase
+          .from('tbl_clientes')
+          .select('id, nome, documento, email')
+          .eq('admin_id', ownerId)
+          .eq('aprovado', true)
+          .order('nome');
+          
+      if (errorClients) {
+          showError('Erro ao carregar clientes: ' + errorClients.message);
+      } else {
+          fetchedClients = (dataClients as ClienteCRSimples[]);
+      }
+    } else { // This is for 'Cliente' role
+      const { data: dataClients, error: errorClients } = await supabase
+          .from('clientes')
+          .select('id, nome, documento, email')
+          .eq('proprietario_id', ownerId)
+          .order('nome');
+            
+      if (errorClients) {
+          showError('Erro ao carregar clientes: ' + errorClients.message);
+      } else {
+          fetchedClients = dataClients as ClienteCRSimples[];
+      }
+    }
+    
+    setClientes(fetchedClients);
+    setLoadingClientes(false);
+  }, [ownerId, isAdminOrEmployee]);
+
+  useEffect(() => {
+    if (ownerId) {
+      fetchClientsData();
+      fetchHistoricos();
+      fetchContasPatrimoniais();
+      fetchContasReceita();
+      fetchMapeamentoContabil();
+    }
+  }, [ownerId, fetchClientsData, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchMapeamentoContabil]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
