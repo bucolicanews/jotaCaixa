@@ -206,7 +206,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           
           {/* FILTRO DE TEXTO */}
-          <div className="relative w-full sm:w-[200px]">
+          <div className="relative w-full sm:w-[700px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                   placeholder="Buscar ID, Cliente, Descrição..."
@@ -243,11 +243,11 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
               </SelectContent>
           </Select>
           {/* FIM FILTRO DE STATUS */}
-          
-          <DateRangePicker
+          <div>  <DateRangePicker
             date={filtroPeriodo}
             setDate={setFiltroPeriodo}
-          />
+          /></div>
+        
           
           <DropdownMenu>
               <DropdownMenuTrigger asChild>
