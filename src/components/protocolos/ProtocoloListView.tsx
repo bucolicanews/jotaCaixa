@@ -248,12 +248,12 @@ export function ProtocoloListView({
           .direita { border-right:1px solid #000 }
 
           .linha-assinatura {
-            margin-top:20mm;
-            padding-top:23mm;
+            margin-top:8px;
+            padding-top:12px;
             border-top:1px solid #000;
           }
 
-          @page { size:A4 portrait;margin:8mm }
+          @page { size:A4 portrait;margin:8mm, margin-top:10px;}
         </style>
       </head>
       <body>

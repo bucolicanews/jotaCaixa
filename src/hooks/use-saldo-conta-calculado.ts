@@ -76,7 +76,7 @@ const useSaldoContaCalculado = (
       const contaContabilIds = fetchedContas.map(c => c.plano_contas?.id).filter((id): id is string => !!id);
       
       if (contaIds.length === 0 && contaContabilIds.length === 0) {
-          return { fetchedContas: [], lancamentosData: [] };
+          return { fetchedContas: [], lancamentosData: [], extratoData: [] };
       }
 
       // 2. Buscar todos os lançamentos
@@ -98,7 +98,20 @@ const useSaldoContaCalculado = (
       const { data: lancamentosData, error: lancamentosError } = await lancamentosQuery;
       if (lancamentosError) throw lancamentosError;
       
-      return { fetchedContas, lancamentosData };
+        let extratoData: any[] = [];
+        if (contaIds.length > 0) {
+            const { data, error } = await supabase
+                .from('extratos')
+                .select('valor, tipo, id_saldo_contas')
+                .eq('empresa_id', targetEmpresaId)
+                .eq('conciliado', false)
+                .in('id_saldo_contas', contaIds);
+
+            if (error) throw error;
+            if (data) extratoData = data;
+        }
+
+      return { fetchedContas, lancamentosData, extratoData };
   }, [filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]);
 
 
@@ -111,7 +124,7 @@ const useSaldoContaCalculado = (
     setCarregando(true);
     
     try {
-      const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId);
+        const { fetchedContas, lancamentosData, extratoData } = await fetchContasAndLancamentos(empresaId);
 
       // 3. Inicializar o mapa de movimentos por SaldoConta ID
       const lancamentosPorConta = fetchedContas.reduce((acc, conta) => {
@@ -151,6 +164,17 @@ const useSaldoContaCalculado = (
             }
         }
       });
+      
+      (extratoData || []).forEach((e: any) => {
+        if (e.id_saldo_contas && lancamentosPorConta[e.id_saldo_contas]) {
+            const valor = parseFloat(e.valor) || 0;
+            if (e.tipo === 'Entrada') {
+                lancamentosPorConta[e.id_saldo_contas].entradas += valor;
+            } else if (e.tipo === 'Saida') {
+                lancamentosPorConta[e.id_saldo_contas].saidas += valor;
+            }
+        }
+    });
 
       const contasCalculadas: SaldoCalculado[] = fetchedContas.map(conta => {
         const { entradas = 0, saidas = 0 } = lancamentosPorConta[conta.id] || {};
