@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { useSessao } from './use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { useOwner } from './use-owner'; // Importando o hook centralizado
 
 interface SaldoCalculado extends SaldoContaDetalhada {
   saldo_atual: number;
@@ -23,41 +23,24 @@ const useSaldoContaCalculado = (
     filtroContaContabilId: string, 
     filtroNomeDebounced: string, 
     scope: Scope = 'bancos',
-    isBancoOnly: boolean = false // NOVO PARÂMETRO
+    isBancoOnly: boolean = false
 ): SaldoContaCalculadoHook => {
-  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // Usando o hook centralizado para obter o ID do proprietário
   const [contas, setContas] = useState<SaldoCalculado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const getEmpresaId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') {
-        const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-        if ('admin_id' in user && user.admin_id) return user.admin_id;
-        if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-    }
-    return null;
-  };
-  
-  const empresaId = getEmpresaId();
-  
-  console.log('[useSaldoContaCalculado] DEBUG:', { role, empresaId, 'perfil?.id': (perfil as any)?.id });
 
   const refetch = useCallback(() => {
     setRefreshKey(prev => prev + 1);
   }, []);
   
-  // Função auxiliar para buscar contas e lançamentos (sem data de corte)
-  const fetchContasAndLancamentos = useCallback(async (targetEmpresaId: string) => {
-      // 1. Buscar contas de saldo (filtradas ou todas)
+  const fetchContasAndLancamentos = useCallback(async (targetOwnerId: string) => {
       let contasQuery = supabase
         .from('saldo_contas')
-        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial, is_caixa, is_banco )`) // ADICIONADO is_caixa e is_banco
-        .eq('proprietario_id', targetEmpresaId);
+        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial, is_caixa, is_banco )`)
+        .eq('proprietario_id', targetOwnerId);
         
-      // Aplica Filtros de UI
       if (filtroTipoSaldo !== 'todos') {
           contasQuery = contasQuery.eq('tipo_saldo', filtroTipoSaldo);
       }
@@ -79,11 +62,6 @@ const useSaldoContaCalculado = (
           return { fetchedContas: [], lancamentosData: [], extratoData: [] };
       }
 
-      // 2. Buscar todos os lançamentos
-      
-      // Cláusula OR para buscar lançamentos:
-      // A) Movimentações de Caixa/Banco (conta_bancaria_id IN contaIds)
-      // B) Movimentações Patrimoniais (conta_contabil_id IN contaContabilIds)
       const orClauses = [
           `conta_bancaria_id.in.(${contaIds.join(',')})`,
           `conta_contabil_id.in.(${contaContabilIds.join(',')})`,
@@ -91,8 +69,8 @@ const useSaldoContaCalculado = (
       
       let lancamentosQuery = supabase
         .from('lancamentos')
-        .select('valor, tipo, conta_contabil_id, conta_bancaria_id, origem') // REMOVIDO is_saldo_inicial
-        .eq('proprietario_id', targetEmpresaId)
+        .select('valor, tipo, conta_contabil_id, conta_bancaria_id, origem')
+        .eq('proprietario_id', targetOwnerId)
         .or(orClauses.join(','));
 
       const { data: lancamentosData, error: lancamentosError } = await lancamentosQuery;
@@ -103,7 +81,7 @@ const useSaldoContaCalculado = (
             const { data, error } = await supabase
                 .from('extratos')
                 .select('valor, tipo, id_saldo_contas')
-                .eq('empresa_id', targetEmpresaId)
+                .eq('empresa_id', targetOwnerId)
                 .eq('conciliado', false)
                 .in('id_saldo_contas', contaIds);
 
@@ -116,7 +94,7 @@ const useSaldoContaCalculado = (
 
 
   const buscarContas = useCallback(async () => {
-    if (!empresaId || carregandoSessao) {
+    if (!ownerId || carregandoSessao) {
       setCarregando(false);
       return;
     }
@@ -124,34 +102,28 @@ const useSaldoContaCalculado = (
     setCarregando(true);
     
     try {
-        const { fetchedContas, lancamentosData, extratoData } = await fetchContasAndLancamentos(empresaId);
+        const { fetchedContas, lancamentosData, extratoData } = await fetchContasAndLancamentos(ownerId);
 
-      // 3. Inicializar o mapa de movimentos por SaldoConta ID
       const lancamentosPorConta = fetchedContas.reduce((acc, conta) => {
         acc[conta.id] = { entradas: 0, saidas: 0 };
         return acc;
       }, {} as Record<string, { entradas: number, saidas: number }>);
       
-      // Mapeamento de Conta Contábil ID para Saldo Conta ID
       const contaContabilToSaldoIdMap = fetchedContas.reduce((acc, c) => {
           if (c.conta_contabil_id) acc[c.conta_contabil_id] = c.id;
           return acc;
       }, {} as Record<string, string>);
 
       lancamentosData.forEach(l => {
-        // CRÍTICO: IGNORA LANÇAMENTOS DE ESTORNO E LANÇAMENTOS ORIGINAIS ESTORNADOS
         const origem = l.origem || '';
         
-        // Se a origem contiver 'estorno' ou 'estornada', IGNORA o lançamento no cálculo do saldo.
         if (origem.includes('estorno') || origem.includes('estornada')) return; 
         
         let targetSaldoId: string | null = null;
         
-        // Prioridade 1: Movimentação de Caixa/Banco (usa conta_bancaria_id)
         if (l.conta_bancaria_id && lancamentosPorConta[l.conta_bancaria_id]) {
             targetSaldoId = l.conta_bancaria_id;
         } 
-        // Prioridade 2: Movimentação Patrimonial (usa conta_contabil_id)
         else if (l.conta_contabil_id && contaContabilToSaldoIdMap[l.conta_contabil_id]) {
             targetSaldoId = contaContabilToSaldoIdMap[l.conta_contabil_id];
         }
@@ -179,7 +151,6 @@ const useSaldoContaCalculado = (
       const contasCalculadas: SaldoCalculado[] = fetchedContas.map(conta => {
         const { entradas = 0, saidas = 0 } = lancamentosPorConta[conta.id] || {};
         
-        // Saldo Atual = Saldo Inicial + Entradas - Saídas
         const saldo_atual = conta.saldo_inicial + entradas - saidas;
         
         return {
@@ -188,14 +159,11 @@ const useSaldoContaCalculado = (
         };
       });
       
-      // 4. Aplicar filtro de ESCOPO no frontend
       let filteredContas = contasCalculadas;
       
       if (scope === 'bancos') {
-          // Filtra contas marcadas como Caixa OU Banco
           filteredContas = filteredContas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
       } else if (scope === 'patrimonial') {
-          // Filtra apenas contas marcadas como Patrimonial, EXCLUINDO Caixa e Banco
           filteredContas = filteredContas.filter(c => 
               c.plano_contas?.is_conta_patrimonial && 
               !c.plano_contas?.is_caixa && 
@@ -203,12 +171,10 @@ const useSaldoContaCalculado = (
           );
       }
       
-      // NOVO FILTRO: Apenas contas marcadas como Banco (para Conciliação)
       if (isBancoOnly) {
           filteredContas = filteredContas.filter(c => c.plano_contas?.is_banco === true);
       }
       
-      // 5. Aplicar filtro de nome no frontend (se a busca por ILIKE não for suficiente)
       if (filtroNomeDebounced) {
           const termo = filtroNomeDebounced.toLowerCase();
           filteredContas = filteredContas.filter(conta => {
@@ -227,7 +193,7 @@ const useSaldoContaCalculado = (
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope, isBancoOnly, filtroTipoSaldo, filtroContaContabilId]);
+  }, [ownerId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope, isBancoOnly, filtroTipoSaldo, filtroContaContabilId]);
 
   useEffect(() => {
     buscarContas();
