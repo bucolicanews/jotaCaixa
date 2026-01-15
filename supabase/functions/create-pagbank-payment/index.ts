@@ -47,7 +47,13 @@ serve(async (req) => {
             telefone,
             cpf,
             cnpj,
-            documento
+            documento,
+            cep,
+            endereco,
+            numero,
+            bairro,
+            cidade,
+            estado
           )
         )
       `)
@@ -114,7 +120,10 @@ serve(async (req) => {
 
     // Validar se o taxId tem tamanho correto
     if (taxId.length !== 11 && taxId.length !== 14) {
-      throw new Error(`CPF/CNPJ inválido. O cliente "${cliente.nome}" não possui CPF ou CNPJ válido cadastrado.`);
+      return new Response(
+        JSON.stringify({ error: `CPF/CNPJ inválido ou não cadastrado para o cliente "${cliente.nome}".` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log('Tax ID formatado:', taxId, '(length:', taxId.length, ')');
@@ -146,13 +155,47 @@ serve(async (req) => {
           expiration_date: dataVencimento.toISOString(),
         },
       ];
-    } else if (payment_method === 'credit_card') {
-      chargeRequest.payment_methods = [
-        {
-          type: 'CREDIT_CARD',
-          installments: installments,
-        },
-      ];
+    } else if (payment_method === 'boleto') {
+        const dataVencimento = new Date(parcela.data_vencimento);
+        dataVencimento.setDate(dataVencimento.getDate() + 3); // 3 dias de tolerância
+
+        const postalCode = (cliente.cep || '00000000').replace(/\D/g, '');
+        if (postalCode.length !== 8) {
+            return new Response(
+            JSON.stringify({ error: `CEP inválido para o cliente "${cliente.nome}". O boleto exige um CEP de 8 dígitos.` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        chargeRequest.charges = [{
+            reference_id: `CHARGE_BOLETO_${parcela_id}`,
+            description: `Parcela ${parcela.numero_parcela} - ${parcela.admin_contas_receber.descricao}`,
+            amount: { value: valorEmCentavos, currency: 'BRL' },
+            payment_method: {
+            type: 'BOLETO',
+            boleto: {
+                due_date: dataVencimento.toISOString().split('T')[0],
+                instruction_lines: {
+                line_1: 'Não receber após o vencimento.',
+                line_2: `Referente a: ${parcela.admin_contas_receber.descricao}`,
+                },
+                holder: {
+                name: cliente.nome,
+                tax_id: taxId,
+                email: cliente.email,
+                address: {
+                    street: cliente.endereco || 'Não informado',
+                    number: cliente.numero || 'S/N',
+                    locality: cliente.bairro || 'Não informado',
+                    city: cliente.cidade || 'Não informada',
+                    region_code: cliente.estado || 'SP',
+                    country: 'BRA',
+                    postal_code: postalCode,
+                }
+                }
+            }
+            }
+        }];
     }
 
     console.log('Criando cobrança PagBank:', JSON.stringify(chargeRequest, null, 2));
@@ -164,6 +207,8 @@ serve(async (req) => {
 
     const qrCode = chargeResponse.qr_codes?.[0]?.links?.find((link) => link.media === 'image/png')?.href || null;
     const qrCodeText = chargeResponse.qr_codes?.[0]?.text || null;
+    const boletoLink = chargeResponse.charges?.[0]?.links?.find(l => l.media === 'application/pdf')?.href || null;
+    const boletoBarcode = chargeResponse.charges?.[0]?.payment_method?.boleto?.barcode || null;
 
     const updateData: Record<string, unknown> = {
       pagbank_charge_id: chargeResponse.id,
@@ -175,6 +220,10 @@ serve(async (req) => {
     if (payment_method === 'pix') {
       updateData.pagbank_qr_code = qrCode;
       updateData.pagbank_qr_code_text = qrCodeText;
+    } else if (payment_method === 'boleto') {
+        updateData.pagbank_boleto_pdf_url = boletoLink;
+        updateData.pagbank_boleto_barcode = boletoBarcode;
+        updateData.pagbank_payment_link = boletoLink;
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -203,6 +252,8 @@ serve(async (req) => {
         charge_id: chargeResponse.id,
         qr_code: qrCode,
         qr_code_text: qrCodeText,
+        boleto_pdf_url: boletoLink,
+        boleto_barcode: boletoBarcode,
         status: chargeResponse.status,
         cliente: {
           nome: cliente.nome,

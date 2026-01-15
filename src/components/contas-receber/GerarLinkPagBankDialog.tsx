@@ -54,41 +54,27 @@ export function GerarLinkPagBankDialog({
         throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
       }
 
-      let data: any;
-      let error: any;
+      let functionName: 'create-pagbank-payment' | 'create-pagbank-checkout';
+      let body: any;
 
-      if (paymentMethod === 'checkout') {
-        const result = await supabase.functions.invoke('create-pagbank-checkout', {
-          body: {
-            parcela_id: parcelaId,
-            admin_id: ownerId,
-          },
-        });
-        data = result.data;
-        error = result.error;
-
-        if (!error && data?.success) {
-          setPaymentLink(data.checkout_link);
-          setClienteInfo(data.cliente);
-        }
-      } else {
-        const result = await supabase.functions.invoke('create-pagbank-payment', {
-          body: {
-            parcela_id: parcelaId,
-            payment_method: paymentMethod,
-            installments: paymentMethod === 'credit_card' ? parseInt(installments) : 1,
-            admin_id: ownerId,
-          },
-        });
-        data = result.data;
-        error = result.error;
-
-        if (!error && data?.success) {
-          setQrCode(data.qr_code);
-          setQrCodeText(data.qr_code_text);
-          setClienteInfo(data.cliente);
-        }
+      if (paymentMethod === 'checkout' || paymentMethod === 'credit_card') {
+        functionName = 'create-pagbank-checkout';
+        body = {
+          parcela_id: parcelaId,
+          admin_id: ownerId,
+        };
+      } else { // pix or boleto
+        functionName = 'create-pagbank-payment';
+        body = {
+          parcela_id: parcelaId,
+          payment_method: paymentMethod,
+          admin_id: ownerId,
+        };
       }
+
+      const { data, error } = await supabase.functions.invoke(functionName, {
+        body,
+      });
 
       console.log('[GerarLinkPagBank] Resposta:', { data, error });
 
@@ -99,6 +85,17 @@ export function GerarLinkPagBankDialog({
       }
 
       toast.success('Link de pagamento gerado com sucesso!');
+      
+      if (paymentMethod === 'checkout' || paymentMethod === 'credit_card') {
+        setPaymentLink(data.checkout_link);
+      } else {
+        setQrCode(data.qr_code);
+        setQrCodeText(data.qr_code_text);
+        if (data.boleto_pdf_url) {
+          setPaymentLink(data.boleto_pdf_url);
+        }
+      }
+      setClienteInfo(data.cliente);
       
       if (onSuccess) {
         onSuccess();
@@ -115,7 +112,7 @@ export function GerarLinkPagBankDialog({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success('Link copiado!');
+      toast.success('Copiado!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       toast.error('Erro ao copiar link');
@@ -148,6 +145,11 @@ export function GerarLinkPagBankDialog({
   };
 
   const handleSendEmail = async () => {
+    if (!parcelaId || !ownerId) {
+      toast.error('Dados incompletos para envio de email');
+      return;
+    }
+
     try {
       setSendingEmail(true);
 
@@ -324,7 +326,7 @@ export function GerarLinkPagBankDialog({
                   variant="outline"
                   className="flex-1"
                   onClick={handleSendEmail}
-                  disabled={sendingEmail || !clienteInfo?.email}
+                  disabled={sendingEmail || !clienteInfo?.email || !parcelaId}
                 >
                   {sendingEmail ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

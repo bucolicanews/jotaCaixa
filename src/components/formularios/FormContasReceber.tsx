@@ -244,10 +244,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       cliente_id: contaInicial?.cliente_id || undefined,
       descricao: contaInicial?.descricao || '',
       tipo_lancamento: contaInicial?.tipo_receita === 'única' ? 'unico' : (contaInicial?.tipo_receita === 'recorrente' ? 'repetir' : 'unico'),
-      valor: contaInicial?.valor_total || undefined,
-      data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
+      valor: contaInicial?.valor_total || 0,
+      data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : new Date(),
       numero_parcelas: 1,
       intervalo_dias: 30,
+      data_primeiro_vencimento: new Date(),
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
       conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
@@ -450,11 +451,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         <FormField control={form.control} name="cliente_id" render={({ field }) => (
           <FormItem>
             <FormLabel>1. Cliente</FormLabel>
-            <Select onValueChange={field.onChange} value={field.value ? String(field.value) : undefined} disabled={loadingClientes || isEditing}>
+            <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingClientes || isEditing}>
               <FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl>
               <SelectContent>
                 {clientes.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
+                  <SelectItem key={c.id} value={c.id}>
                     {c.nome} {c.documento && <span className="text-xs text-muted-foreground">({c.documento})</span>}
                   </SelectItem>
                 ))}
@@ -479,12 +480,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           render={({ field }) => (
             <FormItem>
               <FormLabel>3. Conta Patrimonial (Ativo/Direito a Receber)</FormLabel>
-              <Select value={field.value ? String(field.value) : "0"} onValueChange={(v) => field.onChange(v === "0" ? null : v)} disabled={loadingContasPatrimoniais}>
-                <FormControl><SelectTrigger><SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : "Selecione a conta patrimonial"} /></SelectTrigger></FormControl>
+              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
+                <FormControl><SelectTrigger><SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`} /></SelectTrigger></FormControl>
                 <SelectContent>
-                  <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
+                  <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
                   {contasPatrimoniais.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.Conta} - {c.Descricao}
                     </SelectItem>
                   ))}
@@ -506,12 +507,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           render={({ field }) => (
             <FormItem>
               <FormLabel>4. Conta de Receita (Resultado DRE)</FormLabel>
-              <Select value={field.value ? String(field.value) : "0"} onValueChange={(v) => field.onChange(v === "0" ? null : v)} disabled={loadingContasReceita}>
+              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
                 <FormControl><SelectTrigger><SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} /></SelectTrigger></FormControl>
                 <SelectContent>
-                  <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
+                  <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
                   {contasReceita.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.Conta} - {c.Descricao}
                     </SelectItem>
                   ))}
@@ -535,12 +536,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               name="historico_id"
               render={({ field }) => (
                 <FormItem className="flex-1">
-                  <Select value={field.value ? String(field.value) : "0"} onValueChange={(v) => field.onChange(v === "0" ? null : v)} disabled={isCreatingHistorico}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={isCreatingHistorico}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione um histórico pré-cadastrado" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="0">Nenhum</SelectItem>
+                      <SelectItem value={null as any}>Nenhum</SelectItem>
                       {historicos.map(h => (
-                        <SelectItem key={h.id} value={String(h.id)}>
+                        <SelectItem key={h.id} value={h.id}>
                           {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
                           {h.descricao}
                         </SelectItem>

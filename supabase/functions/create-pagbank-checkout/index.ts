@@ -101,7 +101,10 @@ serve(async (req) => {
     console.log('CPF/CNPJ:', taxId);
 
     if (!taxId || (taxId.length !== 11 && taxId.length !== 14)) {
-      throw new Error(`CPF/CNPJ inválido: ${taxId}`);
+      return new Response(
+        JSON.stringify({ error: `CPF/CNPJ inválido ou não cadastrado para o cliente "${cliente.nome}".` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 5. Processar telefone

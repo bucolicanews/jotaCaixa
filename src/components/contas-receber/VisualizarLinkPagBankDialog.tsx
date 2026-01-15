@@ -244,7 +244,7 @@ export function VisualizarLinkPagBankDialog({
               </div>
               {(clienteNome || clienteTelefone || clienteEmail) && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  {clienteNome && `Cliente: ${clienteNome}`}
+                  Cliente: {clienteNome} 
                   {clienteTelefone && ` | Tel: ${clienteTelefone}`}
                   {clienteEmail && ` | Email: ${clienteEmail}`}
                 </p>
