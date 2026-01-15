@@ -1,10 +1,10 @@
 import React from 'react';
 import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { GRUPOS_PERMISSOES } from '@/config/permissoes';
+import NumberField from './NumberField';
 
 interface FormGeralProps {
   control: Control<any>;
@@ -22,29 +22,6 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isEditingSelfPermissions,
 }) => {
   
-  const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
-    <FormField
-      control={control}
-      name={fieldName}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input 
-              type="number" 
-              placeholder={placeholder} 
-              {...field} 
-              value={field.value === undefined || field.value === null ? '' : String(field.value)}
-              onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-              disabled={disabled || isReadOnly} 
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-  
   const nomeLabel = 'Nome Completo do Usuario';
   const isNameEditable = !isReadOnly;
 
@@ -56,9 +33,9 @@ const FormGeral: React.FC<FormGeralProps> = ({
       
       <h4 className="font-semibold mt-6 border-t pt-4">Remuneracao e Jornada</h4>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {renderNumberField('salario', 'Salario Mensal (R$)', '0', isSubmitting)}
-        {renderNumberField('horas_semanais', 'Horas Semanais', '44', isSubmitting)}
-        {renderNumberField('horas_mensais', 'Horas Mensais', '220', isSubmitting)}
+        <NumberField control={control} name="salario" label="Salario Mensal (R$)" placeholder="0" disabled={isSubmitting || isReadOnly} />
+        <NumberField control={control} name="horas_semanais" label="Horas Semanais" placeholder="44" disabled={isSubmitting || isReadOnly} />
+        <NumberField control={control} name="horas_mensais" label="Horas Mensais" placeholder="220" disabled={isSubmitting || isReadOnly} />
       </div>
       
       <div className="space-y-4 pt-4 border-t">
