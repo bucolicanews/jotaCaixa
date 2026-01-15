@@ -47,15 +47,15 @@ export function GerarLinkPagBankDialog({
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
 
   const handleGerarLink = async () => {
+    let functionName: 'create-pagbank-payment' | 'create-pagbank-checkout' = 'create-pagbank-payment';
+    let body: any = {};
+
     try {
       setLoading(true);
 
       if (!ownerId) {
         throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
       }
-
-      let functionName: 'create-pagbank-payment' | 'create-pagbank-checkout';
-      let body: any;
 
       if (paymentMethod === 'checkout' || paymentMethod === 'credit_card') {
         functionName = 'create-pagbank-checkout';
@@ -76,7 +76,14 @@ export function GerarLinkPagBankDialog({
         body,
       });
 
-      console.log('[GerarLinkPagBank] Resposta:', { data, error });
+      console.log('[GerarLinkPagBank] Resposta Bruta:', { data, error });
+
+      // LOG PARA HOMOLOGAÇÃO PAGBANK
+      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (SUCESSO) ===');
+      console.log('📍 Função:', functionName);
+      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
+      console.log('📥 Response Data:', JSON.stringify(data, null, 2));
+      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
 
       if (error) throw error;
 
@@ -103,9 +110,12 @@ export function GerarLinkPagBankDialog({
     } catch (error: any) {
       console.error('Erro ao gerar link PagBank:', error);
       let errorMessage = 'Erro ao gerar link de pagamento. Verifique os logs da função.';
+      let errorResponse = null;
+
       if (error.context && typeof error.context.json === 'function') {
         try {
           const errorBody = await error.context.json();
+          errorResponse = errorBody;
           if (errorBody.error) {
             errorMessage = errorBody.error;
           }
@@ -115,6 +125,14 @@ export function GerarLinkPagBankDialog({
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
+
+      // LOG PARA HOMOLOGAÇÃO PAGBANK (ERRO)
+      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (ERRO) ===');
+      console.log('📍 Função:', functionName);
+      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
+      console.log('📥 Response Error:', JSON.stringify(errorResponse || error, null, 2));
+      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
+
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -199,6 +217,14 @@ export function GerarLinkPagBankDialog({
     onOpenChange(false);
   };
 
+  const handleReset = () => {
+    setPaymentLink(null);
+    setQrCode(null);
+    setQrCodeText(null);
+    setCopied(false);
+    setClienteInfo(null);
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
@@ -224,8 +250,16 @@ export function GerarLinkPagBankDialog({
                     </div>
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('pix')}>
+                  <RadioGroupItem value="pix" id="pix" />
+                  <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer flex-1">
+                    <QrCode className="h-4 w-4" />
+                    PIX (QR Code e Copia e Cola)
+                  </Label>
+                </div>
               </RadioGroup>
             </div>
+
           </div>
         ) : (
           <div className="space-y-4 py-4">
@@ -333,9 +367,14 @@ export function GerarLinkPagBankDialog({
               </Button>
             </>
           ) : (
-            <Button onClick={handleClose} className="w-full">
-              Fechar
-            </Button>
+            <div className="flex gap-2 w-full">
+              <Button variant="outline" onClick={handleReset} className="flex-1">
+                Gerar Novamente
+              </Button>
+              <Button onClick={handleClose} className="flex-1">
+                Fechar
+              </Button>
+            </div>
           )}
         </DialogFooter>
       </DialogContent>
