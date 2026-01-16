@@ -174,7 +174,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     },
   });
   
-  const { watch, setValue, reset, handleSubmit, control } = form; // ADICIONADO: control
+  const { watch, setValue, reset, handleSubmit, control } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
   
@@ -405,6 +405,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             
         } else {
             const tabelaDestino = isAdminContext ? 'admin_usuarios' : 'tbl_usuarios';
+            
+            // CRÍTICO: Buscar admin_id/cliente_id original do usuário que está sendo editado se isEditing for true
+            let finalProprietarioId = proprietarioId;
+            if (isEditing && userProfile) {
+                finalProprietarioId = isAdminContext 
+                    ? (userProfile as AdminUsuarioProfile).admin_id 
+                    : (userProfile as UsuarioProfile).cliente_id!;
+            }
+
             const dataToUpdate: any = { 
                 avatar_url: values.avatar_url || null,
                 nome: values.nome,
@@ -435,8 +444,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 titulo_eleitor_url: values.titulo_eleitor_url || null,
                 reservista_url: values.reservista_url || null,
                 ctps_url: values.ctps_url || null,
-                certidao_nascimento_url: values.certidao_nascimento_url || null,
-                certidao_casamento_url: values.certidao_casamento_url || null,
+                certidao_nascimento_url: userProfile?.certidao_nascimento_url || null,
+                certidao_casamento_url: userProfile?.certidao_casamento_url || null,
                 comprovante_residencia_url: values.comprovante_residencia_url || null,
                 comprovante_escolaridade_url: values.comprovante_escolaridade_url || null,
                 exame_admissional_url: values.exame_admissional_url || null,
@@ -444,7 +453,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cnh_url: values.cnh_url || null,
                 cartao_pis_url: values.cartao_pis_url || null,
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
-                ...(isNewAuthUser && (isAdminContext ? { admin_id: proprietarioId } : { cliente_id: proprietarioId })),
+                // CRÍTICO: Incluir a chave estrangeira no payload para satisfazer o WITH CHECK do RLS
+                ...(isAdminContext ? { admin_id: finalProprietarioId } : { cliente_id: finalProprietarioId }),
             };
             
             const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
