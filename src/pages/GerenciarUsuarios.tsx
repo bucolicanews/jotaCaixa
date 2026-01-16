@@ -1,34 +1,42 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Clock, User, Filter } from 'lucide-react';
+import { Loader2, User, Filter, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { showError } from '@/utils/toast';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { showError, showSuccess } from '@/utils/toast';
+import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Cliente } from '@/types/cliente';
 import { DataTable } from '@/components/ui/data-table';
 import { columns } from '@/components/ponto/columns';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOwner } from '@/hooks/use-owner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import FormUsuario from '@/components/formularios/FormUsuario';
+import { Plano } from '@/types/plano';
 
-// Tipo simplificado para o usuário que estamos buscando
-interface UsuarioPonto extends UsuarioProfile {
-    cliente_nome?: string; // Nome do cliente/empresa a que o usuário pertence
+// Tipo para unificar usuários de admin e de clientes
+interface UsuarioGerenciado extends UsuarioProfile {
+    cliente_nome?: string;
     is_admin_user?: boolean;
     admin_id?: string | null;
 }
 
-const AcompanharPonto: React.FC = () => {
+const GerenciarUsuarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const { ownerId } = useOwner();
   
-  const [usuarios, setUsuarios] = useState<UsuarioPonto[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioGerenciado[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroClienteId, setFiltroClienteId] = useState('todos');
   const [clientesDisponiveis, setClientesDisponiveis] = useState<Cliente[]>([]);
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  
+  // Estados para o diálogo de criação/edição
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [usuarioParaEditar, setUsuarioParaEditar] = useState<UsuarioGerenciado | null>(null);
 
   const isAdmin = role === 'Admin';
 
@@ -40,12 +48,12 @@ const AcompanharPonto: React.FC = () => {
     
     setCarregandoDados(true);
     
-    let fetchedUsers: UsuarioPonto[] = [];
+    let fetchedUsers: UsuarioGerenciado[] = [];
     let fetchedClientes: Cliente[] = [];
 
     if (isAdmin && usuario?.id) {
-        // ADMIN LOGIC
-        // 1. Fetch admin's own clients to populate filter and map names
+        // LÓGICA DO ADMIN
+        // 1. Buscar clientes do admin para o filtro e mapeamento de nomes
         const { data: clientsData, error: clientsError } = await supabase
             .from('tbl_clientes')
             .select('id, nome');
@@ -55,11 +63,10 @@ const AcompanharPonto: React.FC = () => {
             return;
         }
         fetchedClientes = (clientsData as Cliente[]) || [];
-        // Add admin's own "company" to the list for filtering
         fetchedClientes.unshift({ id: usuario.id, nome: 'Meus Usuários (Admin)' } as Cliente);
         setClientesDisponiveis(fetchedClientes);
 
-        // 2. Fetch admin's direct employees from `admin_usuarios`
+        // 2. Buscar funcionários diretos do admin (tabela admin_usuarios)
         const { data: adminUsersData, error: adminUsersError } = await supabase
             .from('admin_usuarios')
             .select('*')
@@ -69,14 +76,14 @@ const AcompanharPonto: React.FC = () => {
         } else if (adminUsersData) {
             fetchedUsers.push(...adminUsersData.map(u => ({
                 ...u,
-                cliente_id: null, // No client_id for admin's users
+                cliente_id: null,
                 admin_id: usuario.id,
                 is_admin_user: true,
                 cliente_nome: 'Meus Usuários (Admin)'
-            } as UsuarioPonto)));
+            } as UsuarioGerenciado)));
         }
 
-        // 3. Fetch employees of the admin's clients from `tbl_usuarios`
+        // 3. Buscar funcionários dos clientes do admin (tabela tbl_usuarios)
         const clientIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
         if (clientIds.length > 0) {
             const { data: clientUsersData, error: clientUsersError } = await supabase
@@ -90,12 +97,11 @@ const AcompanharPonto: React.FC = () => {
                     ...u,
                     is_admin_user: false,
                     cliente_nome: fetchedClientes.find(c => c.id === u.cliente_id)?.nome || 'N/A'
-                } as UsuarioPonto)));
+                } as UsuarioGerenciado)));
             }
         }
     } else if (!isAdmin && ownerId) {
-        // CLIENT LOGIC
-        // Fetch only their own employees from `tbl_usuarios`
+        // LÓGICA DO CLIENTE
         const { data: usersData, error: usersError } = await supabase
             .from('tbl_usuarios')
             .select('*')
@@ -106,7 +112,7 @@ const AcompanharPonto: React.FC = () => {
             fetchedUsers = (usersData as UsuarioProfile[]).map(u => ({
                 ...u,
                 cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa'
-            } as UsuarioPonto));
+            } as UsuarioGerenciado));
         }
     }
 
@@ -132,18 +138,26 @@ const AcompanharPonto: React.FC = () => {
     
     if (filtroClienteId !== 'todos') {
         filtered = filtered.filter(u => {
-            // If filtering for admin's own users
             if (filtroClienteId === usuario?.id) {
                 return u.is_admin_user;
             }
-            // If filtering for a client's users
             return u.cliente_id === filtroClienteId;
         });
     }
 
     return filtered;
   }, [usuarios, filtroNome, filtroClienteId, usuario?.id]);
-
+  
+  const handleOpenDialog = (usuario?: UsuarioGerenciado) => {
+      setUsuarioParaEditar(usuario || null);
+      setDialogOpen(true);
+  };
+  
+  const handleSaveComplete = () => {
+      setDialogOpen(false);
+      setUsuarioParaEditar(null);
+      buscarDados();
+  };
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -157,21 +171,39 @@ const AcompanharPonto: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <Clock className="w-6 h-6 mr-2" /> Acompanhar Ponto
+          <User className="w-6 h-6 mr-2" /> Gerenciar Usuários
         </h1>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+                <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto">
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Novo Usuário
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>{usuarioParaEditar ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+                </DialogHeader>
+                <FormUsuario
+                    criadorRole={role!}
+                    criadorPerfil={perfil!}
+                    usuarioInicial={usuarioParaEditar}
+                    onSaveComplete={handleSaveComplete}
+                    planos={planos}
+                />
+            </DialogContent>
+        </Dialog>
       </div>
       
       <Card>
         <CardHeader>
           <CardTitle className="text-xl flex items-center">
-            <User className="w-5 h-5 mr-2" /> Usuários Ativos
+            Usuários Ativos
           </CardTitle>
         </CardHeader>
         <CardContent>
-            
-            {/* Filtros */}
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                 <Input
                     placeholder="Filtrar por nome ou email..."
