@@ -22,21 +22,30 @@ export class PagBankClient {
 
   async createCharge(request: CreateChargeRequest): Promise<CreateChargeResponse> {
     const url = `${this.baseUrl}/orders`;
-    
-    console.log('[create-pagbank-payment] 📤 REQUEST RAW JSON:', JSON.stringify(request, null, 2));
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token.substring(0, 8)}...`,
+        'Accept': 'application/json'
+    };
+
+    console.log('[create-pagbank-payment] 📤 REQUEST RAW');
+    console.log('URL:', url);
+    console.log('HEADERS:', JSON.stringify(headers, null, 2));
+    console.log('BODY:', JSON.stringify(request, null, 2));
     
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
+        ...headers,
+        'Authorization': `Bearer ${this.token}` // Token real para a requisição
       },
       body: JSON.stringify(request),
     });
 
     const responseText = await response.text();
-    console.log('[create-pagbank-payment] 📥 RESPONSE STATUS:', response.status);
-    console.log('[create-pagbank-payment] 📥 RESPONSE RAW JSON:', responseText);
+    console.log('[create-pagbank-payment] 📥 RESPONSE RAW');
+    console.log('STATUS:', response.status);
+    console.log('BODY:', responseText);
 
     if (!response.ok) {
       throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
@@ -57,7 +66,9 @@ export class PagBankClient {
     });
 
     const responseText = await response.text();
-    console.log('[create-pagbank-payment] 📥 GET CHARGE RESPONSE:', responseText);
+    console.log('[create-pagbank-payment] 📥 GET CHARGE RAW RESPONSE');
+    console.log('STATUS:', response.status);
+    console.log('BODY:', responseText);
 
     if (!response.ok) {
       throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
