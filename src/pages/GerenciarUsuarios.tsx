@@ -239,4 +239,4 @@ const GerenciarUsuarios: React.FC = () => {
   );
 };
 
-export default AcompanharPonto;
+export default GerenciarUsuarios;
