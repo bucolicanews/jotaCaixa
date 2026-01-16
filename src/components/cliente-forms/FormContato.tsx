@@ -1,7 +1,7 @@
 import React from 'react';
 import { Control } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
-import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
 
 interface FormContatoProps {
   control: Control<any>;

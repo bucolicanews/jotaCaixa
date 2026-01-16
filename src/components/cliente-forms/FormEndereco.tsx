@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
-import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
 import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
 
 interface FormEnderecoProps {

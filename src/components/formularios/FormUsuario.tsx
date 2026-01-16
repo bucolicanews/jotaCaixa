@@ -3,43 +3,45 @@ import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature, CalendarIcon } from 'lucide-react';
+import { Loader2, Tag, FileSignature, CalendarIcon, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
-import { Input } from '../ui/input';
-import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from '../ui/form';
+import { Input } from '@/components/ui/input';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from '@/components/ui/form';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
-import { Separator } from '../ui/separator';
-import FormGeral from '../formularios/FormGeral';
-import FormFolgas from '../formularios/FormFolgas';
+import { Separator } from '@/components/ui/separator';
+import FormGeral from './FormGeral';
+import FormFolgas from './FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import AvatarUpload from '../AvatarUpload'; // NOVO IMPORT
-import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
-import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
-import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
-import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
+import LogoUpload from '../LogoUpload';
+import AvatarUpload from '../AvatarUpload';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import FormIdentificacao from '../cliente-forms/FormIdentificacao';
+import FormContato from '../cliente-forms/FormContato';
+import FormEndereco from '../cliente-forms/FormEndereco';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Plano } from '@/types/plano';
-import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
+import { fetchAddressByCep } from '@/utils/cep-lookup';
+import { sanitizeConteudo } from '@/utils/formatters';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
 
 const formSchema = z.object({
-  avatar_url: textOptional, // ADICIONADO AO SCHEMA
+  avatar_url: textOptional,
   nome: z.string().min(1, 'O nome é obrigatório.'),
   email: z.string().email('Email inválido.'),
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
@@ -69,24 +71,24 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient ou Cliente Profile)
+  // NOVOS CAMPOS DE CLIENTE
   razao_social: textOptional,
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
   plano_id: z.string().optional(),
   
-  // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
+  // NOVOS CAMPOS DE ASSINATURA
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
   
-  // Dados Contratuais (Apenas para UsuarioProfile)
+  // Dados Contratuais
   data_inicio_contrato: z.date().optional().nullable(),
   data_fim_contrato: z.date().optional().nullable(),
   data_inicio_aviso: z.date().optional().nullable(),
   tipo_aviso: z.enum(['Trabalhado', 'Indenizado', 'Nenhum']).optional().nullable(),
 
-  // Documentos (URLs)
+  // Documentos
   rg_url: urlSchema,
   cpf_url: urlSchema,
   titulo_eleitor_url: urlSchema,
@@ -102,7 +104,6 @@ const formSchema = z.object({
   cartao_pis_url: urlSchema,
   ja_admitido_anteriormente: z.boolean().optional(),
   
-  // NOVO CAMPO DE ACESSO
   data_fim_acesso: z.date().optional().nullable(),
 });
 
@@ -118,17 +119,14 @@ interface FormUsuarioProps {
   planos?: Plano[];
 }
 
-// Type guard para verificar se o perfil é UsuarioProfile
 const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
     return !!profile && 'cliente_id' in profile && profile.cliente_id !== null;
 };
 
-// Type guard para verificar se o perfil é AdminUsuarioProfile
 const isAdminUsuarioProfile = (profile: AnyProfile): profile is AdminUsuarioProfile => {
     return !!profile && 'admin_id' in profile && profile.admin_id !== null;
 };
 
-// Type guard para verificar se o perfil é ClienteProfile
 const isClienteProfile = (profile: AnyProfile): profile is ClienteProfile => {
     return !!profile && 'limite_usuarios' in profile;
 };
@@ -143,7 +141,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   planos = [],
 }) => {
   const isEditing = !!usuarioInicial;
-  
   const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
   
   const isEditingClientProfile = isEditing && isClienteProfile(profileToEdit);
@@ -156,7 +153,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   const resourceId = usuarioInicial?.id;
   const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
@@ -169,45 +165,35 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-        avatar_url: '', // ADICIONADO
+        avatar_url: '',
         nome: '',
         email: '',
         senha: '',
         permissoes: {},
         limite_usuarios: 5,
-        plano_id: undefined,
-        data_fim_acesso: undefined,
     },
   });
   
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const { watch, setValue } = form;
+  const { watch, setValue, reset, handleSubmit } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
   
-  // --- LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
   const handleCepLookup = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
-
-    if (cleanCep.length !== 8) {
-      return;
-    }
+    if (cleanCep.length !== 8) return;
     
-    // 1. Define estado de carregamento
     setValue('endereco', 'Buscando...');
     setValue('bairro', 'Buscando...');
     setValue('cidade', 'Buscando...');
     setValue('estado', 'Buscando...');
     
-    const address = await fetchAddressByCep(cleanCep); // Usa o utilitário
-    
+    const address = await fetchAddressByCep(cleanCep);
     if (address) {
         setValue('endereco', address.logradouro || '');
         setValue('bairro', address.bairro || '');
         setValue('cidade', address.localidade || '');
         setValue('estado', address.uf || '');
     } else {
-        // Limpa se falhar
         setValue('endereco', '');
         setValue('bairro', '');
         setValue('cidade', '');
@@ -215,22 +201,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   }, [setValue]);
   
-  // Monitora a mudança do CEP para buscar o endereço
   useEffect(() => {
     const cleanCep = cepValue?.replace(/\D/g, '');
-    
     if (cleanCep && cleanCep.length === 8) {
       handleCepLookup(cleanCep);
-    } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
-      // Limpa os campos de endereço se o CEP estiver incompleto
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
     }
-  }, [cepValue, handleCepLookup, setValue]);
-  // --- FIM LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
-
+  }, [cepValue, handleCepLookup]);
 
   useEffect(() => {
     if (!profileToEdit) return;
@@ -245,13 +221,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }, {} as Record<string, boolean>);
     
     const resetValues: Partial<FormValues> = {
-        avatar_url: profileToEdit?.avatar_url || '', // ADICIONADO
+        avatar_url: profileToEdit?.avatar_url || '',
         nome: profileToEdit?.nome || '',
         email: profileToEdit?.email || '',
         senha: '',
         permissoes: defaultPermissoes,
         
-        // Dados de Cliente Profile
         limite_usuarios: clientProfile?.limite_usuarios || 5,
         plano_id: clientProfile?.plano_id || undefined,
         data_fim_acesso: parseDate(clientProfile?.data_fim_acesso),
@@ -262,7 +237,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         assinatura_proprietario_nome: clientProfile?.assinatura_proprietario_nome || clientProfile?.nome || '',
         assinatura_proprietario_url: clientProfile?.assinatura_proprietario_url || clientProfile?.logo_url || '',
         
-        // Dados de Usuário Profile
         dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
         folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
         salario: userProfile?.salario || 0,
@@ -273,7 +247,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
         tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
         
-        // Dados Cadastrais (Comum)
         cpf: userProfile?.cpf || clientProfile?.cpf || '',
         rg: userProfile?.rg || clientProfile?.rg || '',
         nome_mae: userProfile?.nome_mae || '',
@@ -287,7 +260,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         cidade: userProfile?.cidade || clientProfile?.cidade || '',
         estado: userProfile?.estado || clientProfile?.estado || '',
         
-        // Documentos (URLs)
         rg_url: userProfile?.rg_url || '',
         cpf_url: userProfile?.cpf_url || '',
         titulo_eleitor_url: userProfile?.titulo_eleitor_url || '',
@@ -304,12 +276,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         ja_admitido_anteriormente: userProfile?.ja_admitido_anteriormente ?? false,
     };
 
-    form.reset(resetValues);
-  }, [profileToEdit, isNewClient]);
+    reset(resetValues);
+  }, [profileToEdit, isNewClient, reset, clientProfile, userProfile]);
 
   const handleSelectAll = (select: boolean) => {
     PERMISSOES_DISPONIVEIS.forEach((p: Permissao) => {
-      form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
+      setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
   
@@ -317,25 +289,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       refetchStatus();
   }, [refetchStatus]);
   
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
-      // Se for Cliente Profile, atualiza o logo_url também
+      setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
       if (isEditingClientProfile) {
           await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
       }
-  }, [form, isEditingClientProfile, clientProfile]);
+  }, [setValue, isEditingClientProfile, clientProfile]);
   
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
-  const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
-  }, [form]);
-  
-  // NOVO HANDLER: Upload de Avatar
   const handleAvatarUploadComplete = useCallback(async (url: string | null) => {
-      form.setValue('avatar_url', url || null, { shouldDirty: true });
-  }, [form]);
+      setValue('avatar_url', url || null, { shouldDirty: true });
+  }, [setValue]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente' || criadorRole === 'Usuario';
 
@@ -346,13 +309,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
     
     setIsSubmitting(true);
-    
-    // Adiciona a verificação para bloquear edição de permissões pelo próprio usuário
     const isSelfEditing = isEditing && usuarioInicial?.id === criadorPerfil?.id;
-    
-    // Determina o proprietarioId baseado no role do criador
     let proprietarioId: string | null = null;
-    let isAdminContext = false; // Flag para saber se estamos no contexto de Admin
+    let isAdminContext = false;
     
     if (criadorRole === 'Admin') {
         proprietarioId = criadorPerfil?.id || null;
@@ -361,7 +320,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         proprietarioId = (criadorPerfil as ClienteProfile)?.id || null;
         isAdminContext = false;
     } else if (criadorRole === 'Usuario') {
-        // Funcionário do Admin ou Cliente
         const userPerfil = criadorPerfil as UsuarioProfile | AdminUsuarioProfile;
         if ('admin_id' in userPerfil && userPerfil.admin_id) {
             proprietarioId = userPerfil.admin_id;
@@ -382,88 +340,48 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         let userId = usuarioInicial?.id;
         let isNewAuthUser = false;
         
-        // 1. Handle New User Creation (Auth) - USANDO EDGE FUNCTION
         if (!isEditing) {
             if (!values.senha) {
                 showError('A senha é obrigatória para novos usuários.');
-                return;
-            }
-            
-            const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: values.email });
-            if (emailError) {
-                showError('Erro ao verificar email: ' + emailError.message);
-                setIsSubmitting(false);
-                return;
-            }
-            if (!emailDisponivel) {
-                showError('Este email já está cadastrado no sistema. Utilize outro email ou redefina a senha do usuário existente.');
                 setIsSubmitting(false);
                 return;
             }
             
             const targetRole = isNewClient ? 'Cliente' : 'Usuario';
-            const metadata: Record<string, any> = { 
-                role: targetRole, 
-                nome: values.nome, 
-            };
+            const metadata: Record<string, any> = { role: targetRole, nome: values.nome };
             
             if (targetRole === 'Usuario') {
-                if (criadorRole === 'Admin') {
-                    metadata.proprietario_id = proprietarioId;
-                } else {
-                    metadata.proprietario_id = proprietarioId;
-                }
+                metadata.proprietario_id = proprietarioId;
             } else if (targetRole === 'Cliente') {
                 metadata.aprovado = false;
             }
             
             const { data, error: invokeError } = await supabase.functions.invoke('create-user-admin', {
-                body: {
-                    email: values.email,
-                    password: values.senha,
-                    user_metadata: metadata,
-                },
+                body: { email: values.email, password: values.senha, user_metadata: metadata },
             });
             
             if (invokeError) throw invokeError;
             if (data?.error) throw new Error(data.error);
-            
             userId = data.userId;
             isNewAuthUser = true;
         }
         
         if (!userId) throw new Error('Falha ao obter ID do usuário.');
 
-        // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
-        
         if (isEditingClientProfile || isNewClient) {
-            const planoIdAtualizado = values.plano_id ?? clientProfile?.plano_id ?? null;
-            const dataFimAcessoIso = values.data_fim_acesso
-                ? format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z'
-                : clientProfile?.data_fim_acesso || null;
-            const limiteUsuariosAtualizado = values.limite_usuarios ?? clientProfile?.limite_usuarios ?? 5;
-            // Edição de Cliente Profile (tbl_clientes)
-            // Adiciona a verificação para bloquear edição de permissões pelo próprio usuário
-            const isSelfEditing = isEditing && usuarioInicial?.id === criadorPerfil?.id;
-
-            const dataToUpdate: Partial<ClienteProfile> = {
-                avatar_url: values.avatar_url || null, // ADICIONADO
+            const dataToUpdate: any = {
+                avatar_url: values.avatar_url || null,
                 nome: values.nome,
                 email: values.email,
                 admin_id: isAdminContext ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
-                aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
-                limite_usuarios: limiteUsuariosAtualizado,
-                // permissões só podem ser editadas pelo Admin
+                limite_usuarios: values.limite_usuarios ?? 5,
                 ...(isSelfEditing ? {} : { permissoes: values.permissoes }),
-                plano_id: planoIdAtualizado,
-                data_fim_acesso: dataFimAcessoIso,
-                
+                plano_id: values.plano_id || null,
+                data_fim_acesso: values.data_fim_acesso ? format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z' : null,
                 razao_social: values.razao_social || null,
                 nome_fantasia: values.nome_fantasia || null,
                 documento: values.documento || null,
                 cnpj: values.cnpj || null,
-                
-                // Dados Cadastrais
                 cpf: values.cpf || null,
                 rg: values.rg || null,
                 telefone: values.telefone || null,
@@ -474,26 +392,19 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 bairro: values.bairro || null,
                 cidade: values.cidade || null,
                 estado: values.estado || null,
-                
-                // Assinatura e Branding
                 assinatura_proprietario_nome: values.assinatura_proprietario_nome || null,
                 assinatura_proprietario_url: values.assinatura_proprietario_url || null,
-                logo_url: values.assinatura_proprietario_url || null,
             };
             
             const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
             if (error) throw error;
             
-        } else if (isEditingUser || isNewAuthUser) {
-            // Edição de Usuário (tbl_usuarios ou admin_usuarios)
+        } else {
             const tabelaDestino = isAdminContext ? 'admin_usuarios' : 'tbl_usuarios';
-            
             const dataToUpdate: any = { 
-                avatar_url: values.avatar_url || null, // ADICIONADO
+                avatar_url: values.avatar_url || null,
                 nome: values.nome,
                 ...(isSelfEditing ? {} : { permissoes: values.permissoes }),
-                
-                // Dados de RH/Contrato
                 dias_folga_fixos: values.dias_folga_fixos || [],
                 folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
                 salario: values.salario,
@@ -503,8 +414,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
                 data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
                 tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
-                
-                // Dados Cadastrais e Documentos
                 cpf: values.cpf || null,
                 rg: values.rg || null,
                 nome_mae: values.nome_mae || null,
@@ -531,13 +440,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cnh_url: values.cnh_url || null,
                 cartao_pis_url: values.cartao_pis_url || null,
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
-                
-                // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }),
-                ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
-                
-                // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
-                ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
+                ...(isNewAuthUser && (isAdminContext ? { admin_id: proprietarioId } : { cliente_id: proprietarioId })),
             };
             
             const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
@@ -549,253 +452,87 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             }
         }
 
-        showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
-        
+        showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} salvo com sucesso!`);
         if (isNewAuthUser) {
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
-                redirectTo: `${BASE_URL}/atualizar-senha`,
-            });
-            if (resetError) console.error('Aviso: Falha ao enviar email de redefinição de senha:', resetError);
-            else showSuccess('Link de acesso enviado para o email.');
+            await supabase.auth.resetPasswordForEmail(values.email, { redirectTo: `${BASE_URL}/atualizar-senha` });
         }
-        
         refetchStatus();
         onSaveComplete();
     } catch (error: any) {
-        const msg = error.message?.toLowerCase() || '';
-        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
-            showError('Este email já está cadastrado. Utilize outro email ou redefina a senha do usuário existente.');
-        } else if (msg.includes('password') && msg.includes('6')) {
-            showError('A senha deve ter no mínimo 6 caracteres.');
-        } else if (msg.includes('invalid email')) {
-            showError('O formato do email é inválido.');
-        } else {
-            showError(`Falha ao salvar: ${error.message}`);
-        }
+        showError(`Falha ao salvar: ${error.message}`);
     } finally {
         setIsSubmitting(false);
     }
   };
   
-  // --- Lógica de Read-Only para Tabs ---
-  // isSelfEditUsuario: Quando um funcionário está editando seu PRÓPRIO perfil (não criando/editando outro)
   const isSelfEditUsuario = criadorRole === 'Usuario' && isEditing && usuarioInicial?.id === criadorPerfil?.id;
+  const isChildFormReadOnly = (tabValue: string) => isReadOnly || (isSelfEditUsuario && (tabValue !== 'pessoal' && tabValue !== 'cadastrais' && tabValue !== 'documentos'));
+  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || ['pessoal', 'cadastrais', 'documentos'].includes(activeTab));
   
-  // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
-  const handleTabChange = (newTab: string) => {
-      setActiveTab(newTab);
-  };
-  
-  // Read-Only status para os componentes filhos
-  const isChildFormReadOnly = (tabValue: string) => {
-      // 1. Se o modo read-only global (passado pelo gestor) estiver ativo, todos os filhos são read-only.
-      if (isReadOnly) return true; 
-      
-      // 2. Se for edição de perfil de funcionário por ele mesmo
-      if (isSelfEditUsuario) {
-          // Permite edição em 'pessoal', 'cadastrais' e 'documentos'
-          return tabValue !== 'pessoal' && tabValue !== 'cadastrais' && tabValue !== 'documentos';
-      }
-      
-      return false;
-  };
-  
-  // 3. Controla a visibilidade do botão de salvar
-  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'pessoal' || activeTab === 'cadastrais' || activeTab === 'documentos');
-  
-  // Se for Cliente Profile, remove as abas de RH
   if (isEditingClientProfile) {
-      const clientTabs = [
-          { value: 'pessoal', label: 'Geral', component: FormGeral },
-          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
-          { value: 'contato', label: 'Contato', component: FormContato },
-          { value: 'endereco', label: 'Endereço', component: FormEndereco },
-      ];
-      
       return (
         <FormProvider {...form}>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                            {clientTabs.map(tab => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
-                            ))}
+                            <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
+                            <TabsTrigger value="identificacao" className="flex-1 md:flex-none md:w-1/4">Identificação</TabsTrigger>
+                            <TabsTrigger value="contato" className="flex-1 md:flex-none md:w-1/4">Contato</TabsTrigger>
+                            <TabsTrigger value="endereco" className="flex-1 md:flex-none md:w-1/4">Endereço</TabsTrigger>
                         </TabsList>
                         
-                        {/* TAB 1: GERAL (CLIENTE PROFILE) */}
                         <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                            <AvatarUpload
-                                entityId={clientProfile!.id}
-                                bucketName="avatars"
-                                initialAvatarUrl={form.watch('avatar_url')}
-                                onUploadComplete={handleAvatarUploadComplete}
-                                isReadOnly={isSubmitting || isReadOnly}
-                            />
-                            <FormField control={form.control} name="nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="senha" render={({ field }) => (
-                                <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
-                            )} />
+                            <AvatarUpload entityId={clientProfile!.id} bucketName="avatars" initialAvatarUrl={watch('avatar_url')} onUploadComplete={handleAvatarUploadComplete} isReadOnly={isSubmitting || isReadOnly} />
+                            <FormField control={form.control} name="nome" render={({ field }) => ( <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem> )} />
+                            <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled /></FormControl><FormMessage /></FormItem> )} />
                             
                             <Separator />
                             <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <LogoUpload 
-                                ownerId={clientProfile!.id}
-                                tableName={'tbl_clientes'}
-                                initialLogoUrl={form.watch('assinatura_proprietario_url')}
-                                onUploadComplete={handleLogoUploadComplete}
-                                onSyncUrl={handleSyncUrl} // NOVO PROP
-                                isReadOnly={isSubmitting || isReadOnly}
-                            />
+                            <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => ( <FormItem><FormLabel>Nome da Empresa para Assinatura</FormLabel><FormControl><Input {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem> )} />
+                            <LogoUpload ownerId={clientProfile!.id} tableName="tbl_clientes" initialLogoUrl={watch('assinatura_proprietario_url')} onUploadComplete={handleLogoUploadComplete} onSyncUrl={handleSyncUrl} isReadOnly={isSubmitting || isReadOnly} />
                             
                             <Separator />
-                            <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
-                            <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClientEditLocked} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField control={form.control} name="plano_id" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Plano de Assinatura</FormLabel>
-                                        <FormControl>
-                                            <Select
-                                                onValueChange={(value) => field.onChange(value)}
-                                                value={field.value ?? ''}
-                                                disabled={isSubmitting || isReadOnly || planos.length === 0 || isClientEditLocked}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={planos.length ? 'Selecione o plano' : 'Nenhum plano carregado'} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {planos.map((plano) => (
-                                                        <SelectItem key={plano.id} value={plano.id}>
-                                                            {plano.nome}
-                                                            {plano.preco_mensal > 0 ? ` (${formatCurrency(plano.preco_mensal)})` : ' (Grátis)'}
-                                                            {!plano.visivel_vendas && ' (Interno)'}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </FormControl>
+                                        <FormLabel>Plano</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || isReadOnly || isClientEditLocked}>
+                                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione o plano" /></SelectTrigger></FormControl>
+                                            <SelectContent>{planos.map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+                                        </Select>
                                         <FormMessage />
                                     </FormItem>
                                 )} />
                                 <FormField control={form.control} name="data_fim_acesso" render={({ field }) => (
                                     <FormItem className="flex flex-col">
-                                        <FormLabel>Data Limite de Acesso</FormLabel>
+                                        <FormLabel>Data Limite</FormLabel>
                                         <Popover>
-                                            <PopoverTrigger asChild>
-                                                <FormControl>
-                                                    <Button
-                                                        variant="outline"
-                                                        className={cn(
-                                                            'w-full pl-3 text-left font-normal',
-                                                            !field.value && 'text-muted-foreground'
-                                                        )}
-                                                        disabled={isSubmitting || isReadOnly || isClientEditLocked}
-                                                    >
-                                                        {field.value ? format(field.value as Date, 'PPP', { locale: ptBR }) : <span>Escolha a data</span>}
-                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                    </Button>
-                                                </FormControl>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={field.value as Date}
-                                                    onSelect={field.onChange}
-                                                    initialFocus
-                                                    locale={ptBR}
-                                                />
-                                            </PopoverContent>
+                                            <PopoverTrigger asChild><FormControl><Button variant="outline" className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')} disabled={isSubmitting || isReadOnly || isClientEditLocked}>{field.value ? format(field.value as Date, 'PPP', { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value as Date} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent>
                                         </Popover>
                                         <FormMessage />
                                     </FormItem>
                                 )} />
                             </div>
-                            
-                            <div className="space-y-2 pt-4">
-                                <div className="flex justify-between items-center mb-1">
-                                    <FormLabel>Permissões de Acesso</FormLabel>
-                                    <div className="space-x-2">
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')}>Selecionar Todos</Button>
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')}>Desmarcar Todos</Button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-                                    {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                                        <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')} /></FormControl>
-                                                <FormLabel className="font-normal">{p.label}</FormLabel>
-                                            </FormItem>
-                                        )} />
-                                    ))}
-                                </div>
-                            </div>
                         </TabsContent>
                         
-                        {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
-                        <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
-                            <FormIdentificacao
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
-                        <TabsContent value="contato" className="mt-4 space-y-6 p-4">
-                            <FormContato
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
-                        <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
-                            <FormEndereco
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
+                        <TabsContent value="identificacao" className="mt-4 p-4"><FormIdentificacao control={control as unknown as Control<any>} clienteId={clientProfile?.id} isSubmitting={isSubmitting} tagRefreshKey={refreshKey} onTagToggle={handleTagToggle} /></TabsContent>
+                        <TabsContent value="contato" className="mt-4 p-4"><FormContato control={control as unknown as Control<any>} clienteId={clientProfile?.id} isSubmitting={isSubmitting} tagRefreshKey={refreshKey} onTagToggle={handleTagToggle} /></TabsContent>
+                        <TabsContent value="endereco" className="mt-4 p-4"><FormEndereco control={control as unknown as Control<any>} clienteId={clientProfile?.id} isSubmitting={isSubmitting} tagRefreshKey={refreshKey} onTagToggle={handleTagToggle} /></TabsContent>
                     </Tabs>
-                    
-                    <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Salvar Alterações
-                    </Button>
+                    <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar Alterações</Button>
                 </form>
             </Form>
         </FormProvider>
       );
   }
 
-  // --- RENDERIZAÇÃO PARA USUÁRIO (FUNCIONÁRIO) ---
   return (
     <FormProvider {...form}>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
               <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
               <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
@@ -805,102 +542,21 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
             </TabsList>
             
-            {/* TAB 1: GERAL */}
             <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                <AvatarUpload
-                    entityId={userProfile?.id || ''}
-                    bucketName="avatars"
-                    initialAvatarUrl={form.watch('avatar_url')}
-                    onUploadComplete={handleAvatarUploadComplete}
-                    isReadOnly={isSubmitting || isChildFormReadOnly('pessoal')}
-                />
-              <FormGeral 
-                  control={form.control}
-                  isSubmitting={isSubmitting}
-                  handleSelectAll={handleSelectAll}
-                  isReadOnly={isChildFormReadOnly('pessoal')}
-                  isEditingSelfPermissions={isSelfEditUsuario && activeTab === 'pessoal'}
-              />
-              
-              {/* Campos de Login (Apenas para criação ou alteração de senha) */}
-              <Separator />
-              <h3 className="font-semibold text-lg">Acesso e Login</h3>
-              <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-              )} />
-              {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-              )} />}
-              {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-              )} />}
+                <AvatarUpload entityId={userProfile?.id || ''} bucketName="avatars" initialAvatarUrl={watch('avatar_url')} onUploadComplete={handleAvatarUploadComplete} isReadOnly={isSubmitting || isChildFormReadOnly('pessoal')} />
+                <FormGeral control={control} isSubmitting={isSubmitting} handleSelectAll={handleSelectAll} isReadOnly={isChildFormReadOnly('pessoal')} isEditingSelfPermissions={isSelfEditUsuario && activeTab === 'pessoal'} />
+                <Separator /><h3 className="font-semibold text-lg">Acesso e Login</h3>
+                <FormField control={control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={isEditing || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem> )} />
+                <FormField control={control} name="senha" render={({ field }) => ( <FormItem><FormLabel>{isEditing ? 'Alterar Senha' : 'Criar Senha'}</FormLabel><FormControl><Input type="password" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem> )} />
             </TabsContent>
             
-            {/* TAB 2: FOLGAS FIXAS */}
-            <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
-                <FormFolgas
-                    control={form.control as unknown as Control<any>}
-                    isSubmitting={isSubmitting}
-                    usuarioInicial={userProfile}
-                    isReadOnly={isChildFormReadOnly('folgas')}
-                />
-            </TabsContent>
-            
-            {/* TAB 3: FÉRIAS (CRUD) */}
-            <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
-                <FormFerias
-                    usuarioInicial={userProfile}
-                    isReadOnly={isChildFormReadOnly('ferias')}
-                />
-            </TabsContent>
-
-            {/* TAB 4: DADOS CADASTRAIS (EDITÁVEL) */}
-            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                <div className="flex justify-between items-center">
-                    <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
-                
-                <FormDadosCadastrais
-                    control={form.control as unknown as Control<any>}
-                    isSubmitting={isSubmitting}
-                    resourceId={resourceId}
-                    tagRefreshKey={refreshKey}
-                    onTagToggle={handleTagToggle}
-                    isReadOnly={isChildFormReadOnly('cadastrais')}
-                    isClientScope={false} // Escopo de Usuário
-                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
-                />
-            </TabsContent>
-            
-            {/* TAB 5: DOCUMENTOS DE ADMISSÃO */}
-            <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
-                <FormDocumentos
-                    control={form.control as unknown as Control<any>}
-                    isSubmitting={isSubmitting}
-                    resourceId={resourceId}
-                    isReadOnly={isChildFormReadOnly('documentos')}
-                />
-            </TabsContent>
-
-            {/* TAB 6: DADOS CONTRATUAIS (RH) */}
-            <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
-                <FormDadosContratuais
-                    control={form.control as unknown as Control<any>}
-                    isSubmitting={isSubmitting}
-                    isContractEditable={isContractEditable}
-                    isReadOnly={isChildFormReadOnly('contrato')}
-                />
-            </TabsContent>
+            <TabsContent value="folgas" className="mt-4 p-4"><FormFolgas control={control as unknown as Control<any>} isSubmitting={isSubmitting} usuarioInicial={userProfile} isReadOnly={isChildFormReadOnly('folgas')} /></TabsContent>
+            <TabsContent value="ferias" className="mt-4 p-4"><FormFerias usuarioInicial={userProfile} isReadOnly={isChildFormReadOnly('ferias')} /></TabsContent>
+            <TabsContent value="cadastrais" className="mt-4 p-4"><FormDadosCadastrais control={control as unknown as Control<any>} isSubmitting={isSubmitting} resourceId={resourceId} tagRefreshKey={refreshKey} onTagToggle={handleTagToggle} isReadOnly={isChildFormReadOnly('cadastrais')} isAddressLoading={isAddressLoading} /></TabsContent>
+            <TabsContent value="documentos" className="mt-4 p-4"><FormDocumentos control={control as unknown as Control<any>} isSubmitting={isSubmitting} resourceId={resourceId} isReadOnly={isChildFormReadOnly('documentos')} /></TabsContent>
+            <TabsContent value="contrato" className="mt-4 p-4"><FormDadosContratuais control={control as unknown as Control<any>} isSubmitting={isSubmitting} isContractEditable={isContractEditable} isReadOnly={isChildFormReadOnly('contrato')} /></TabsContent>
           </Tabs>
-          
-          {/* O botão de salvar só é habilitado se não for read-only globalmente E se for a aba editável para o usuário funcionário */}
-          {shouldShowSaveButton && (
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar Alterações
-              </Button>
-          )}
+          {shouldShowSaveButton && <Button type="submit" className="w-full" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar Alterações</Button>}
         </form>
       </Form>
     </FormProvider>

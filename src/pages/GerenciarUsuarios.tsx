@@ -1,26 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
+import { useOwner } from '@/hooks/use-owner';
 import { Loader2, Plus, Search, Trash2, Edit, Filter, Users as UsersIcon, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, UsuarioProfile, UserRole, AdminUsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { AnyProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BASE_URL } from '@/config/app-config';
+import { useDebounce } from '@/hooks/use-debounce';
 
 // Tipagem para o perfil de usuário com nome da empresa
 type UsuarioComEmpresa = (UsuarioProfile | AdminUsuarioProfile) & { nome_empresa?: string };
 
-// Tipo para o filtro de empresa (inclui o Admin)
+// Tipo para o filtro de empresa
 interface EmpresaFiltro {
     id: string;
     nome: string;
@@ -28,12 +29,13 @@ interface EmpresaFiltro {
 
 const GerenciarUsuarios: React.FC = () => {
   const { usuario, perfil, role, carregando } = useSessao();
-  const { ownerId, ownerType } = useOwner(); // USANDO O PADRÃO DO CONTAS A RECEBER
+  const { ownerId, ownerType } = useOwner();
   
   const [usuarios, setUsuarios] = useState<UsuarioComEmpresa[]>([]);
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [filtro, setFiltro] = useState('');
+  const filtroDebounced = useDebounce(filtro, 500);
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
@@ -42,48 +44,36 @@ const GerenciarUsuarios: React.FC = () => {
   const [activeTab, setActiveTab] = useState('meus_funcionarios');
 
   const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
-  const isUsuario = role === 'Usuario';
-  
   const isAdminUsuario = ownerType === 'AdminUsuario';
   const usuarioId = usuario?.id || null;
 
-  // Efeito para definir a aba ativa inicial
   useEffect(() => {
-      if (!carregando && (isAdmin || isCliente)) {
+      if (!carregando && (isAdmin || role === 'Cliente')) {
           setActiveTab('meus_funcionarios');
       }
-  }, [carregando, isAdmin, isCliente]);
+  }, [carregando, isAdmin, role]);
 
   const fetchDados = useCallback(async () => {
-    // ATUALIZAÇÃO: Agora usamos o ownerId vindo do hook
     if (!usuarioId || !ownerId) {
         setCarregandoDados(false);
         return;
     }
 
     setCarregandoDados(true);
-    
-    let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsers: UsuarioComEmpresa[] = [];
 
     try {
-        // Se for Admin ou Funcionário de Admin
         if (ownerType === 'Admin' || ownerType === 'AdminUsuario') {
-          // 1. Busca todos os clientes do criador
           const { data: clientsData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
             .eq('admin_id', ownerId);
 
           if (clientsData) {
-            fetchedClientes = clientsData as EmpresaFiltro[];
             const adminOption: EmpresaFiltro = { id: ownerId, nome: 'Meus Usuários (Admin)' };
-            fetchedClientes.unshift(adminOption);
-            setEmpresasFiltro(fetchedClientes);
+            setEmpresasFiltro([adminOption, ...clientsData]);
           }
 
-          // 2. Busca Funcionários diretos
           const { data: adminUsersData } = await supabase
             .from('admin_usuarios')
             .select('*, admin_id')
@@ -99,8 +89,7 @@ const GerenciarUsuarios: React.FC = () => {
               })));
           }
 
-          // 3. Busca Funcionários dos Clientes
-          const clientIds = fetchedClientes.filter(c => c.id !== ownerId).map(c => c.id);
+          const clientIds = (clientsData || []).map(c => c.id);
           if (clientIds.length > 0) {
               const { data: clientUsersData } = await supabase
                 .from('tbl_usuarios')
@@ -110,13 +99,12 @@ const GerenciarUsuarios: React.FC = () => {
               
               if (clientUsersData) {
                   fetchedUsers.push(...clientUsersData.map(item => {
-                    const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
+                    const nomeEmpresa = (clientsData || []).find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
                     return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
                   }));
               }
           }
         } else if (ownerType === 'Cliente') {
-          // Se o dono for Cliente, busca apenas os subordinados dele
           const { data: usuariosData } = await supabase
             .from('tbl_usuarios')
             .select('*')
@@ -128,7 +116,6 @@ const GerenciarUsuarios: React.FC = () => {
           }
         }
 
-        // ATUALIZAÇÃO: Filtragem final simplificada para evitar que usuários sumam por erro de vínculo
         setUsuarios(fetchedUsers.filter(u => u.id !== usuarioId));
     } catch (error) {
         console.error('Erro na busca:', error);
@@ -140,21 +127,14 @@ const GerenciarUsuarios: React.FC = () => {
   useEffect(() => {
     if (!carregando && usuarioId && ownerId) {
       fetchDados();
-    } else if (!carregando && !usuarioId) {
-      setCarregandoDados(false);
     }
   }, [carregando, usuarioId, ownerId, fetchDados]);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFiltro(e.target.value);
-  };
-
-  // Separação de usuários para as abas
-  const meusFuncionarios = usuarios.filter(u => (u as any).is_admin_user || (u as any).admin_id === ownerId);
-  const funcionariosClientes = usuarios.filter(u => !(u as any).is_admin_user && (u as any).cliente_id !== ownerId);
+  const meusFuncionarios = useMemo(() => usuarios.filter(u => (u as any).is_admin_user || (u as any).admin_id === ownerId), [usuarios, ownerId]);
+  const funcionariosClientes = useMemo(() => usuarios.filter(u => !(u as any).is_admin_user && (u as any).cliente_id !== ownerId), [usuarios, ownerId]);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
-    const termoBusca = filtro.toLowerCase();
+    const termoBusca = filtroDebounced.toLowerCase();
     return userList.filter(u => {
         const textMatch = u.nome.toLowerCase().includes(termoBusca) || u.email.toLowerCase().includes(termoBusca);
         if (!textMatch) return false;
@@ -168,12 +148,12 @@ const GerenciarUsuarios: React.FC = () => {
   
   const filteredMeusFuncionarios = filterUsers(meusFuncionarios, 'meus_funcionarios');
   const filteredFuncionariosClientes = filterUsers(funcionariosClientes, 'funcionarios_clientes');
-  const filteredClientUsers = filterUsers(usuarios, 'meus_funcionarios');
 
   const handleDelete = async (id: string, nome: string) => {
     if (!window.confirm(`Tem certeza que deseja deletar a conta de ${nome}?`)) return;
     try {
-      const { error } = await supabase.from('admin_usuarios').delete().eq('id', id);
+      const tabela = isAdmin ? 'admin_usuarios' : 'tbl_usuarios';
+      const { error } = await supabase.from(tabela).delete().eq('id', id);
       if (error) throw error;
       showSuccess(`Conta deletada.`);
       fetchDados();
@@ -209,10 +189,6 @@ const GerenciarUsuarios: React.FC = () => {
       }
   };
   
-  const targetRole: UserRole = 'Usuario';
-  const title = 'Gerenciar Funcionários'; 
-  const buttonText = 'Novo Usuário (Funcionário)'; 
-  
   const renderTableContent = (profiles: UsuarioComEmpresa[], currentTab: string) => {
     if (profiles.length === 0) {
         return <p className="text-center text-muted-foreground py-10">Nenhum funcionário encontrado.</p>;
@@ -245,10 +221,10 @@ const GerenciarUsuarios: React.FC = () => {
                                     {isSendingInvite === userProfile.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                                 </Button>
                                 <Button variant="outline" size="icon" onClick={() => handleOpenDialog(userProfile)}>
-                                    <Edit className="h-4 w-4" />
+                                    <Edit className="w-4 h-4" />
                                 </Button>
                                 <Button variant="destructive" size="icon" onClick={() => handleDelete(userProfile.id, userProfile.nome)}>
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="w-4 h-4" />
                                 </Button>
                             </TableCell>
                         </TableRow>
@@ -268,30 +244,28 @@ const GerenciarUsuarios: React.FC = () => {
       </LayoutPrincipal>
     );
   }
-
-  if (!usuario || !role || !perfil) {
-    return <LayoutPrincipal><p>Redirecionando...</p></LayoutPrincipal>;
-  }
   
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+            <UsersIcon className="w-6 h-6 mr-2" /> Gerenciar Funcionários
+        </h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button 
                 onClick={() => handleOpenDialog(null)}
                 className="w-full sm:w-auto"
                 disabled={isAdminUsuario}
-                title={isAdminUsuario ? 'Apenas o Admin principal pode criar novos usuários.' : buttonText}
+                title={isAdminUsuario ? 'Apenas o Admin principal pode criar novos usuários.' : 'Novo Usuário'}
             >
               <Plus className="mr-2 h-4 w-4" />
-              {buttonText}
+              Novo Usuário
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{perfilParaEditar ? `Editar ${targetRole}` : `Criar Novo ${targetRole}`}</DialogTitle>
+              <DialogTitle>{perfilParaEditar ? `Editar Usuário` : `Criar Novo Usuário`}</DialogTitle>
             </DialogHeader>
             <FormUsuario 
               criadorRole={role}
@@ -306,8 +280,8 @@ const GerenciarUsuarios: React.FC = () => {
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="meus_funcionarios" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Meus Funcionários</TabsTrigger>
-            <TabsTrigger value="funcionarios_clientes" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Funcionários dos Clientes</TabsTrigger>
+            <TabsTrigger value="meus_funcionarios" className="flex items-center">Meus Funcionários</TabsTrigger>
+            <TabsTrigger value="funcionarios_clientes" className="flex items-center">Funcionários dos Clientes</TabsTrigger>
           </TabsList>
           
           <TabsContent value="meus_funcionarios">
@@ -317,7 +291,7 @@ const GerenciarUsuarios: React.FC = () => {
                 <Input
                   placeholder="Buscar por nome ou email..."
                   value={filtro}
-                  onChange={handleSearch}
+                  onChange={(e) => setFiltro(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -332,7 +306,7 @@ const GerenciarUsuarios: React.FC = () => {
                 <Input
                   placeholder="Buscar por nome, email ou empresa..."
                   value={filtro}
-                  onChange={handleSearch}
+                  onChange={(e) => setFiltro(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -356,20 +330,20 @@ const GerenciarUsuarios: React.FC = () => {
           </TabsContent>
         </Tabs>
       ) : (
-        <>
+        <div className="space-y-4">
           <div className="flex flex-col sm:flex-row mb-4 gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nome ou email..."
                 value={filtro}
-                onChange={handleSearch}
+                onChange={(e) => setFiltro(e.target.value)}
                 className="pl-10"
               />
             </div>
           </div>
-          {renderTableContent(filteredClientUsers, 'meus_funcionarios')}
-        </>
+          {renderTableContent(filterUsers(usuarios, 'meus_funcionarios'), 'meus_funcionarios')}
+        </div>
       )}
     </LayoutPrincipal>
   );

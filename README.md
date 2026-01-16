@@ -2639,59 +2639,86 @@ CREATE POLICY "clientes_update_self" ON public.tbl_clientes FOR UPDATE USING (au
 
 -- RLS para tbl_usuarios
 ALTER TABLE public.tbl_usuarios ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "tbl_usuarios_select" ON public.tbl_usuarios FOR SELECT USING ((id = auth.uid()) OR (cliente_id = auth.uid()) OR ((get_admin_id_for_current_user() IS NOT NULL) AND (get_admin_id_for_current_user() = ( SELECT tc.admin_id FROM tbl_clientes tc WHERE (tc.id = tbl_usuarios.cliente_id) LIMIT 1))));
-CREATE POLICY "tbl_usuarios_insert" ON public.tbl_usuarios FOR INSERT WITH CHECK ((cliente_id = auth.uid()) OR ((get_admin_id_for_current_user() IS NOT NULL) AND (get_admin_id_for_current_user() = ( SELECT tc.admin_id FROM tbl_clientes tc WHERE (tc.id = tbl_usuarios.cliente_id) LIMIT 1))));
-CREATE POLICY "tbl_usuarios_update" ON public.tbl_usuarios FOR UPDATE USING ((cliente_id = auth.uid()) OR ((get_admin_id_for_current_user() IS NOT NULL) AND (get_admin_id_for_current_user() = ( SELECT tc.admin_id FROM tbl_clientes tc WHERE (tc.id = tbl_usuarios.cliente_id) LIMIT 1))));
-CREATE POLICY "tbl_usuarios_delete" ON public.tbl_usuarios FOR DELETE USING ((cliente_id = auth.uid()) OR ((get_admin_id_for_current_user() IS NOT NULL) AND (get_admin_id_for_current_user() = ( SELECT tc.admin_id FROM tbl_clientes tc WHERE (tc.id = tbl_usuarios.cliente_id) LIMIT 1))));
-CREATE POLICY "Users can update their own profile" ON public.tbl_usuarios FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "tbl_usuarios_select" ON public.tbl_usuarios;
+DROP POLICY IF EXISTS "tbl_usuarios_insert" ON public.tbl_usuarios;
+DROP POLICY IF EXISTS "tbl_usuarios_update" ON public.tbl_usuarios;
+DROP POLICY IF EXISTS "tbl_usuarios_delete" ON public.tbl_usuarios;
+DROP POLICY IF EXISTS "usuarios_access_policy" ON public.tbl_usuarios;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.tbl_usuarios;
+CREATE POLICY "tbl_usuarios_select_policy" ON public.tbl_usuarios FOR SELECT USING (id = auth.uid() OR cliente_id = auth.uid() OR (( SELECT admin_id FROM public.tbl_clientes WHERE id = tbl_usuarios.cliente_id) = public.get_my_admin_id()));
+CREATE POLICY "tbl_usuarios_insert_policy" ON public.tbl_usuarios FOR INSERT WITH CHECK (cliente_id = auth.uid() OR (( SELECT admin_id FROM public.tbl_clientes WHERE id = tbl_usuarios.cliente_id) = public.get_my_admin_id()));
+CREATE POLICY "tbl_usuarios_update_policy" ON public.tbl_usuarios FOR UPDATE USING (id = auth.uid() OR cliente_id = auth.uid() OR (( SELECT admin_id FROM public.tbl_clientes WHERE id = tbl_usuarios.cliente_id) = public.get_my_admin_id())) WITH CHECK (id = auth.uid() OR cliente_id = auth.uid() OR (( SELECT admin_id FROM public.tbl_clientes WHERE id = tbl_usuarios.cliente_id) = public.get_my_admin_id()));
+CREATE POLICY "tbl_usuarios_delete_policy" ON public.tbl_usuarios FOR DELETE USING (cliente_id = auth.uid() OR (( SELECT admin_id FROM public.tbl_clientes WHERE id = tbl_usuarios.cliente_id) = public.get_my_admin_id()));
 
 -- RLS para admin_usuarios
 ALTER TABLE public.admin_usuarios ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "admin_usuarios_select" ON public.admin_usuarios FOR SELECT USING ((id = auth.uid()) OR (admin_id = auth.uid()));
-CREATE POLICY "admin_usuarios_insert" ON public.admin_usuarios FOR INSERT WITH CHECK (admin_id = auth.uid());
-CREATE POLICY "admin_usuarios_update" ON public.admin_usuarios FOR UPDATE USING (true) WITH CHECK ((id = auth.uid()) OR (admin_id = auth.uid()));
-CREATE POLICY "admin_usuarios_delete" ON public.admin_usuarios FOR DELETE USING (admin_id = auth.uid());
+DROP POLICY IF EXISTS "admin_usuarios_select" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_insert" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_update" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_delete" ON public.admin_usuarios;
+DROP POLICY IF EXISTS "admin_usuarios_access_policy" ON public.admin_usuarios;
+CREATE POLICY "admin_usuarios_select_policy" ON public.admin_usuarios FOR SELECT USING (admin_id = public.get_my_admin_id());
+CREATE POLICY "admin_usuarios_insert_policy" ON public.admin_usuarios FOR INSERT WITH CHECK (admin_id = auth.uid());
+CREATE POLICY "admin_usuarios_update_policy" ON public.admin_usuarios FOR UPDATE USING (admin_id = public.get_my_admin_id()) WITH CHECK (admin_id = auth.uid() OR id = auth.uid());
+CREATE POLICY "admin_usuarios_delete_policy" ON public.admin_usuarios FOR DELETE USING (admin_id = auth.uid());
 
 -- RLS para admin_user_lookup (RLS desabilitada, mas políticas de segurança para service_role)
 ALTER TABLE public.admin_user_lookup ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "admin_user_lookup_all" ON public.admin_user_lookup;
 CREATE POLICY "admin_user_lookup_all" ON public.admin_user_lookup FOR ALL USING (true) WITH CHECK (true);
 
 -- RLS para planos (Público para leitura)
 ALTER TABLE public.planos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read access for plans" ON public.planos;
+DROP POLICY IF EXISTS "Admins can manage all plans" ON public.planos;
 CREATE POLICY "Public read access for plans" ON public.planos FOR SELECT USING (true);
 CREATE POLICY "Admins can manage all plans" ON public.planos FOR ALL USING (auth.uid() IN ( SELECT tbl_admins.id FROM tbl_admins)) WITH CHECK (auth.uid() IN ( SELECT tbl_admins.id FROM tbl_admins));
 
 -- RLS para saldo_contas
 ALTER TABLE public.saldo_contas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "saldo_contas_select_policy" ON public.saldo_contas;
+DROP POLICY IF EXISTS "saldo_contas_insert_policy" ON public.saldo_contas;
+DROP POLICY IF EXISTS "saldo_contas_update_policy" ON public.saldo_contas;
+DROP POLICY IF EXISTS "saldo_contas_delete_policy" ON public.saldo_contas;
 CREATE POLICY "saldo_contas_select_policy" ON public.saldo_contas FOR SELECT USING ((proprietario_id = auth.uid()) OR (get_admin_id_for_current_user() = proprietario_id));
-CREATE POLICY "saldo_contas_insert_policy" ON public.saldo_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY "saldo_contas_update_policy" ON public.saldo_contas FOR UPDATE USING (proprietario_id = auth.uid());
+CREATE POLICY "saldo_contas_insert_policy" ON public.saldo_contas FOR INSERT WITH CHECK (proprietario_id = public.get_my_admin_id());
+CREATE POLICY "saldo_contas_update_policy" ON public.saldo_contas FOR UPDATE USING (proprietario_id = public.get_my_admin_id());
 CREATE POLICY "saldo_contas_delete_policy" ON public.saldo_contas FOR DELETE USING (proprietario_id = auth.uid());
 
 -- RLS para plano_contas
 ALTER TABLE public.plano_contas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "plano_contas_select_policy" ON public.plano_contas;
+DROP POLICY IF EXISTS "plano_contas_insert_policy" ON public.plano_contas;
+DROP POLICY IF EXISTS "plano_contas_update_policy" ON public.plano_contas;
+DROP POLICY IF EXISTS "plano_contas_delete_policy" ON public.plano_contas;
 CREATE POLICY "plano_contas_select_policy" ON public.plano_contas FOR SELECT USING ((proprietario_id = auth.uid()) OR (get_admin_id_for_current_user() = proprietario_id));
-CREATE POLICY "plano_contas_insert_policy" ON public.plano_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY "plano_contas_update_policy" ON public.plano_contas FOR UPDATE USING (proprietario_id = auth.uid());
+CREATE POLICY "plano_contas_insert_policy" ON public.plano_contas FOR INSERT WITH CHECK (proprietario_id = public.get_my_admin_id());
+CREATE POLICY "plano_contas_update_policy" ON public.plano_contas FOR UPDATE USING (proprietario_id = public.get_my_admin_id());
 CREATE POLICY "plano_contas_delete_policy" ON public.plano_contas FOR DELETE USING (proprietario_id = auth.uid());
 
 -- RLS para lancamentos
 ALTER TABLE public.lancamentos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "lancamentos_access_policy" ON public.lancamentos FOR ALL USING (is_owner_or_admin_user(proprietario_id)) WITH CHECK (proprietario_id = auth.uid());
+DROP POLICY IF EXISTS "lancamentos_access_policy" ON public.lancamentos;
+CREATE POLICY "lancamentos_access_policy" ON public.lancamentos FOR ALL USING (proprietario_id = public.get_my_admin_id()) WITH CHECK (proprietario_id = public.get_my_admin_id());
 
 -- RLS para historicos
 ALTER TABLE public.historicos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "historicos_access_policy" ON public.historicos FOR ALL USING (is_owner_or_admin_user(proprietario_id)) WITH CHECK (proprietario_id = auth.uid());
+DROP POLICY IF EXISTS "historicos_access_policy" ON public.historicos;
+CREATE POLICY "historicos_access_policy" ON public.historicos FOR ALL USING (proprietario_id = public.get_my_admin_id()) WITH CHECK (proprietario_id = public.get_my_admin_id());
 
 -- RLS para clientes (Clientes CR)
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Empresas podem gerenciar seus próprios clientes" ON public.clientes FOR ALL USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL)))) WITH CHECK (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
-CREATE POLICY "Admin select own clients" ON public.clientes FOR SELECT USING (auth.uid() = proprietario_id);
-CREATE POLICY "Admin insert own clients" ON public.clientes FOR INSERT WITH CHECK (auth.uid() = proprietario_id);
-CREATE POLICY "Admin update own clients" ON public.clientes FOR UPDATE USING (auth.uid() = proprietario_id);
-CREATE POLICY "Admin delete own clients" ON public.clientes FOR DELETE USING (auth.uid() = proprietario_id);
-CREATE POLICY "Admins podem ver todos os clientes" ON public.clientes FOR SELECT TO authenticated USING (EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid())));
-CREATE POLICY "Admin employees read admin clients" ON public.clientes FOR SELECT USING ((auth.uid() = proprietario_id) OR (EXISTS ( SELECT 1 FROM admin_usuarios au WHERE ((au.id = auth.uid()) AND (au.admin_id = clientes.proprietario_id)))));
+DROP POLICY IF EXISTS "Empresas podem gerenciar seus próprios clientes" ON public.clientes;
+DROP POLICY IF EXISTS "Admin select own clients" ON public.clientes;
+DROP POLICY IF EXISTS "Admin insert own clients" ON public.clientes;
+DROP POLICY IF EXISTS "Admin update own clients" ON public.clientes;
+DROP POLICY IF EXISTS "Admin delete own clients" ON public.clientes;
+DROP POLICY IF EXISTS "Admins podem ver todos os clientes" ON public.clientes;
+DROP POLICY IF EXISTS "Admin employees read admin clients" ON public.clientes;
+CREATE POLICY "clientes_cr_select_policy" ON public.clientes FOR SELECT USING (proprietario_id = public.get_my_admin_id());
+CREATE POLICY "clientes_cr_insert_policy" ON public.clientes FOR INSERT WITH CHECK (proprietario_id = public.get_my_admin_id());
+CREATE POLICY "clientes_cr_update_policy" ON public.clientes FOR UPDATE USING (proprietario_id = public.get_my_admin_id());
+CREATE POLICY "clientes_cr_delete_policy" ON public.clientes FOR DELETE USING (proprietario_id = auth.uid());
 
 -- RLS para contratos_gerados
 ALTER TABLE public.contratos_gerados ENABLE ROW LEVEL SECURITY;
@@ -2718,9 +2745,10 @@ CREATE POLICY "Clientes can view their own payments" ON public.admin_recebimento
 
 -- RLS para tickets
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "tickets_access_policy" ON public.tickets FOR ALL USING (is_owner_or_admin_user(proprietario_id)) WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY "Admin pode gerenciar todos os tickets" ON public.tickets FOR ALL USING (EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid()))) WITH CHECK (EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid())));
-CREATE POLICY "Clientes podem gerenciar seus proprios tickets" ON public.tickets FOR ALL USING (empresa_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) WITH CHECK (proprietario_id = auth.uid());
+DROP POLICY IF EXISTS "tickets_access_policy" ON public.tickets;
+DROP POLICY IF EXISTS "Admin pode gerenciar todos os tickets" ON public.tickets;
+DROP POLICY IF EXISTS "Clientes podem gerenciar seus proprios tickets" ON public.tickets;
+CREATE POLICY "tickets_access_policy" ON public.tickets FOR ALL USING (proprietario_id = public.get_my_admin_id() OR empresa_id = auth.uid()) WITH CHECK (proprietario_id = public.get_my_admin_id() OR empresa_id = auth.uid());
 
 -- RLS para mensagens_ticket
 ALTER TABLE public.mensagens_ticket ENABLE ROW LEVEL SECURITY;
@@ -2738,30 +2766,50 @@ CREATE POLICY "Public read access for stripe config" ON public.configuracoes_str
 
 ## 🏛️ Arquitetura de Acesso e RLS (Pós-Correção de Recursão)
 
-Esta seção documenta o ponto de partida definitivo para o controle de acesso no sistema, implementado para resolver erros críticos de "infinite recursion" no PostgreSQL.
+Esta seção documenta o padrão **definitivo** para o controle de acesso no sistema. Ele foi implementado para resolver erros críticos de "infinite recursion" e garantir que a hierarquia de permissões (Admin → Funcionário do Admin) funcione corretamente em todas as tabelas.
 
-### A Solução Definitiva: Acesso Não-Recursivo
+### A Solução: Acesso Não-Recursivo com Função Auxiliar
 
-A nova arquitetura elimina completamente a recursão, garantindo performance e estabilidade. Ela se baseia em três pilares:
+A nova arquitetura garante performance e estabilidade, baseando-se em uma única função auxiliar chamada `get_my_admin_id()`.
 
-#### 1. Tabela de Mapeamento `admin_user_lookup`
+#### A Função `public.get_my_admin_id()`
 
-Tabela auxiliar com RLS **desabilitado** (mas com políticas `USING (true)` para `service_role`) que mantém um mapeamento direto entre o `id` de um usuário (`admin_usuarios`) e seu respectivo `admin_id`.
+Esta função é o pilar da nossa estratégia de RLS. Ela identifica corretamente o **ID do dono final dos dados**, não importa quem esteja logado:
 
-#### 2. Função Segura `get_admin_id_for_current_user()`
+-   **Se um Admin está logado:** A função retorna o `id` do próprio admin (`auth.uid()`).
+-   **Se um Funcionário do Admin está logado:** A função consulta a tabela `admin_usuarios` (de forma segura e não-recursiva) e retorna o `admin_id` do seu chefe.
 
-Esta função busca o `admin_id` do usuário logado diretamente da tabela `admin_user_lookup` com `SECURITY DEFINER` e `SET LOCAL row_security = off`, evitando a recursão.
-
-#### 3. Novo Padrão de Políticas
-
-As políticas de RLS agora comparam IDs diretamente ou usam o resultado da função segura.
-
-**Exemplo para `saldo_contas`:**
 ```sql
-CREATE POLICY "saldo_contas_select_policy" ON public.saldo_contas
+CREATE OR REPLACE FUNCTION public.get_my_admin_id()
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  admin_uuid uuid;
+BEGIN
+  -- A cláusula SET LOCAL é crucial para evitar a recursão
+  SET LOCAL row_security = off;
+  SELECT admin_id INTO admin_uuid
+  FROM public.admin_usuarios
+  WHERE id = auth.uid() LIMIT 1;
+  
+  IF admin_uuid IS NULL THEN
+    -- Se não encontrou, o usuário é o próprio dono (Admin/Cliente)
+    RETURN auth.uid();
+  END IF;
+  -- Se encontrou, retorna o ID do chefe
+  RETURN admin_uuid;
+END;
+$$;
+```
+
+#### Novo Padrão de Políticas
+
+Todas as tabelas que pertencem a um "dono" (seja ele um Admin ou um Cliente) devem usar esta função para validar o acesso. A chave da tabela (ex: `proprietario_id`, `admin_id`, `empresa_id`) é comparada com o resultado de `public.get_my_admin_id()`.
+
+**Exemplo para uma tabela genérica `tabela_x` com a coluna `proprietario_id`:**
+```sql
+CREATE POLICY "tabela_x_access_policy" ON public.tabela_x
 FOR SELECT USING (
-  proprietario_id = auth.uid()
-  OR public.get_admin_id_for_current_user() = public.saldo_contas.proprietario_id
+  proprietario_id = public.get_my_admin_id()
 );
 ```
 Este padrão foi aplicado a todas as tabelas críticas, garantindo que um funcionário (usuário) possa acessar os dados de sua empresa (proprietário) sem quebrar o RLS.

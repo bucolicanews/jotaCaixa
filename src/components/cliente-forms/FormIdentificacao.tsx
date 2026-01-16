@@ -1,6 +1,6 @@
 import React from 'react';
 import { Control } from 'react-hook-form';
-import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
 
 interface FormIdentificacaoProps {
   control: Control<any>;

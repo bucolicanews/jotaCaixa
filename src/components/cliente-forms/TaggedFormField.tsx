@@ -14,18 +14,32 @@ interface TaggedFormFieldProps {
     fieldName: string;
     label: string;
     placeholder: string;
-    clienteId: string | undefined;
+    resourceId: string | undefined;
     disabled: boolean;
     isOptional?: boolean;
     tagRefreshKey: number;
     onTagToggle?: () => void; // NOVO PROP: Opcional, pois nem sempre será usado (ex: FormCliente)
+    isClientScope?: boolean;
+    isAddressLoading?: boolean;
 }
 
-const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, clienteId, disabled, isOptional = true, tagRefreshKey, onTagToggle }) => {
+const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ 
+    control, 
+    fieldName, 
+    label, 
+    placeholder, 
+    resourceId, 
+    disabled, 
+    isOptional = true, 
+    tagRefreshKey, 
+    onTagToggle,
+    isClientScope,
+    isAddressLoading 
+}) => {
     const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
     
     // Se o campo não estiver mapeado para uma tag, renderiza o input normal
-    if (!fieldMap || !clienteId) {
+    if (!fieldMap || !resourceId) {
         return (
             <FormField control={control} name={fieldName} render={({ field }) => (
                 <FormItem>
@@ -37,7 +51,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
         );
     }
     
-    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, fieldMap, tagRefreshKey);
+    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, fieldMap, tagRefreshKey);
 
     const handleToggle = async (checked: boolean) => {
         await toggleTag(checked);
