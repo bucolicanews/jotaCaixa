@@ -174,7 +174,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     },
   });
   
-  const { watch, setValue, reset, handleSubmit } = form;
+  const { watch, setValue, reset, handleSubmit, control } = form; // ADICIONADO: control
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
   
@@ -295,6 +295,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
       }
   }, [setValue, isEditingClientProfile, clientProfile]);
+
+  const handleSyncUrl = useCallback((url: string | null) => {
+      setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
+  }, [setValue]);
   
   const handleAvatarUploadComplete = useCallback(async (url: string | null) => {
       setValue('avatar_url', url || null, { shouldDirty: true });
