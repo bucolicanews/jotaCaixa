@@ -67,7 +67,8 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       return Array.from(new Set(combined.map(t => t.nome_tag)))
           .map(tagKey => combined.find(t => t.nome_tag === tagKey))
-          .sort((a, b) => a!.nome_tag.localeCompare(b!.nome_tag));
+          .filter((t): t is any => !!t)
+          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
 
   const handleInsertTag = (tag: string) => {
@@ -88,6 +89,13 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
       } else {
           form.setValue('conteudo', currentContent + tag, { shouldDirty: true });
       }
+  };
+
+  const handleCopyAllTags = () => {
+      if (allTags.length === 0) return;
+      const tagsString = allTags.map(t => t.nome_tag).join(', ');
+      navigator.clipboard.writeText(tagsString);
+      showSuccess('Todas as tags copiadas para a área de transferência!');
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -179,6 +187,17 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
                 </h4>
                 <p className="text-xs text-muted-foreground mb-4">Clique na tag para inserir no cursor.</p>
                 
+                <Button 
+                    type="button" 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={handleCopyAllTags}
+                    className="w-full mb-4"
+                    disabled={allTags.length === 0}
+                >
+                    <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags
+                </Button>
+                
                 <ScrollArea className="flex-1 pr-2 max-h-[450px]">
                     <div className="space-y-2">
                         {loadingTags ? (
@@ -186,12 +205,12 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
                         ) : (
                             allTags.map((tag) => (
                                 <div 
-                                    key={tag!.nome_tag}
-                                    onClick={() => handleInsertTag(tag!.nome_tag)}
+                                    key={tag.nome_tag}
+                                    onClick={() => handleInsertTag(tag.nome_tag)}
                                     className="p-2 border rounded bg-background hover:bg-accent cursor-pointer transition-colors text-left"
                                 >
-                                    <code className="text-xs font-bold text-primary">{tag!.nome_tag}</code>
-                                    <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{tag!.descricao}</p>
+                                    <code className="text-xs font-bold text-primary">{tag.nome_tag}</code>
+                                    <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{tag.descricao}</p>
                                 </div>
                             ))
                         )}
