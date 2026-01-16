@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, LogIn, Undo2, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -51,7 +50,7 @@ export interface EmpresaSistema extends ClienteProfile {
 // NOVO TIPO: Cliente CR com status de sistema e contagens
 interface ClienteCRComStatus extends Cliente {
     is_system_client: boolean;
-    system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado' | 'CR'; // Adicionado 'CR'
+    system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado' | 'CR' | 'Avulso'; // Adicionado 'Avulso'
     contratos_count: number; // NOVO
     documentos_societarios_count: number; // NOVO
     // NOVO CAMPO PARA CATEGORIZAÇÃO VISUAL
@@ -320,7 +319,7 @@ const ClientesPage = () => {
               const emailKey = clienteComStatus.email.toLowerCase();
               const existing = emailMap[emailKey];
               
-              if (!existing || (clienteComstatus.is_system_client && existing.system_client_status !== 'Ativo')) {
+              if (!existing || (clienteComStatus.is_system_client && existing.system_client_status !== 'Ativo')) {
                   // Se não existe, ou se o novo é um cliente do sistema (e o existente não é Ativo), substitui.
                   emailMap[emailKey] = clienteComStatus;
               } else if (!existing.is_system_client && !clienteComStatus.is_system_client) {
@@ -1024,6 +1023,7 @@ const ClientesPage = () => {
             <TableHeader>
                 <TableRow>
                     <TableHead>Nome da Empresa</TableHead>
+                    <TableHead>Razão Social</TableHead> {/* NOVA COLUNA */}
                     <TableHead>Email (Login)</TableHead>
                     <TableHead>Plano</TableHead>
                     <TableHead>Acesso Expira</TableHead>
@@ -1034,7 +1034,7 @@ const ClientesPage = () => {
             <TableBody>
                 {empresas.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
                             Nenhuma empresa encontrada nesta categoria.
                         </TableCell>
                     </TableRow>
@@ -1076,6 +1076,7 @@ const ClientesPage = () => {
                         return (
                             <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlockedOrExpired && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
+                                <TableCell>{empresa.razao_social || '-'}</TableCell> {/* EXIBINDO RAZÃO SOCIAL */}
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
                                 <TableCell>{dataExpiracaoDisplay}</TableCell>
@@ -1366,7 +1367,7 @@ const ClientesPage = () => {
                         />
                         <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}>
                             <SelectTrigger className="w-full md:w-[250px]">
-                                <Building2 className="w-4 h-4 mr-2" />
+                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
                                 <SelectValue placeholder="Filtrar por Empresa do Sistema" />
                             </SelectTrigger>
                             <SelectContent>
