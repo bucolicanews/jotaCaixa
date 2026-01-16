@@ -21,11 +21,9 @@ export class PagBankClient {
   }
 
   async createCharge(request: CreateChargeRequest): Promise<CreateChargeResponse> {
-    // Para PIX, usamos o endpoint /orders ao invés de /charges
     const url = `${this.baseUrl}/orders`;
     
-    console.log('PagBankClient - URL:', url);
-    console.log('PagBankClient - Request:', JSON.stringify(request, null, 2));
+    console.log('[create-pagbank-payment] 📤 REQUEST RAW JSON:', JSON.stringify(request, null, 2));
     
     const response = await fetch(url, {
       method: 'POST',
@@ -37,8 +35,8 @@ export class PagBankClient {
     });
 
     const responseText = await response.text();
-    console.log('PagBankClient - Response status:', response.status);
-    console.log('PagBankClient - Response body:', responseText);
+    console.log('[create-pagbank-payment] 📥 RESPONSE STATUS:', response.status);
+    console.log('[create-pagbank-payment] 📥 RESPONSE RAW JSON:', responseText);
 
     if (!response.ok) {
       throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
@@ -58,28 +56,13 @@ export class PagBankClient {
       },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`PagBank API error: ${response.status} - ${errorText}`);
-    }
-
-    return await response.json();
-  }
-
-  async cancelCharge(chargeId: string): Promise<void> {
-    const url = `${this.baseUrl}/orders/${chargeId}`;
-    
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
-      },
-    });
+    const responseText = await response.text();
+    console.log('[create-pagbank-payment] 📥 GET CHARGE RESPONSE:', responseText);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`PagBank API error: ${response.status} - ${errorText}`);
+      throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
     }
+
+    return JSON.parse(responseText);
   }
 }

@@ -1,0 +1,141 @@
+=== LOGS DE INTEGRACAO PARA HOMOLOGACAO - JOTA CAIXA ===
+Ambiente: SANDBOX
+Data: 09/01/2026
+
+---------------------------------------------------------
+1. TESTE DE GERACAO DE PIX (ORDER API)
+---------------------------------------------------------
+URL: POST https://sandbox.api.pagseguro.com/orders
+ID da Parcela: 11822843-e3d2-4cb1-bb1f-6507798d208b
+
+>> REQUEST BODY (SENT TO PAGBANK):
+{
+  "reference_id": "PARCELA_11822843-e3d2-4cb1-bb1f-6507798d208b",
+  "customer": {
+    "name": "AMILTON RIBEIRO BARBOSA",
+    "email": "MIR@JOTAEMPRESAS.COM",
+    "tax_id": "00000000000"
+  },
+  "items": [
+    {
+      "name": "Parcela 1 - Mensalidade",
+      "quantity": 1,
+      "unit_amount": 4200
+    }
+  ],
+  "qr_codes": [
+    {
+      "amount": {
+        "value": 4200
+      },
+      "expiration_date": "2026-01-12T12:00:00-03:00"
+    }
+  ],
+  "notification_urls": [
+    "https://caixa.jotaempresas.com/api/pagbank-webhook"
+  ]
+}
+
+<< RESPONSE BODY (RECEIVED FROM PAGBANK):
+{
+  "id": "ORDE_9BBD4AFE-EABE-47EC-B77E-7B666B622E67",
+  "reference_id": "PARCELA_11822843-e3d2-4cb1-bb1f-6507798d208b",
+  "status": "WAITING",
+  "created_at": "2026-01-09T10:15:30.000-03:00",
+  "customer": {
+    "name": "AMILTON RIBEIRO BARBOSA",
+    "email": "MIR@JOTAEMPRESAS.COM",
+    "tax_id": "00000000000"
+  },
+  "items": [
+    {
+      "reference_id": "ITEM_1",
+      "name": "Parcela 1 - Mensalidade",
+      "quantity": 1,
+      "unit_amount": 4200,
+      "total_amount": 4200
+    }
+  ],
+  "qr_codes": [
+    {
+      "id": "QRCO_6BCCCBBC-C76B-4578-84B9-7DC1A0EE843B",
+      "amount": {
+        "value": 4200
+      },
+      "text": "00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/6BCCCBBC-C76B-4578-84B9-7DC1A0EE843B27600016BR.COM.PAGSEGURO01366BCCCBBC-C76B-4578-84B9-7DC1A0EE843B52048111530398654042.005802BR592259.234.834 joao luiz s6005Belem62070503***6304CEC7",
+      "links": [
+        {
+          "rel": "QRCODE.PNG",
+          "href": "https://sandbox.api.pagseguro.com/qrcode/QRCO_6BCCCBBC-C76B-4578-84B9-7DC1A0EE843B/png",
+          "media": "image/png",
+          "type": "GET"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "rel": "SELF",
+      "href": "https://sandbox.api.pagseguro.com/orders/ORDE_9BBD4AFE-EABE-47EC-B77E-7B666B622E67",
+      "media": "application/json",
+      "type": "GET"
+    }
+  ]
+}
+
+---------------------------------------------------------
+2. TESTE DE CHECKOUT REDIRECT (CHECKOUT API)
+---------------------------------------------------------
+URL: POST https://sandbox.api.pagseguro.com/checkouts
+ID da Parcela: 086c5a89-2754-4dc2-8cce-f10e015b0dbd
+
+>> REQUEST BODY (SENT TO PAGBANK):
+{
+  "reference_id": "PARCELA_086c5a89-2754-4dc2-8cce-f10e015b0dbd",
+  "customer": {
+    "name": "ANGELA PINTO MACIEL",
+    "email": "angelaq.2018@outlook.com",
+    "tax_id": "00000000000"
+  },
+  "items": [
+    {
+      "name": "Parcela 1 - Mensalidade",
+      "quantity": 1,
+      "unit_amount": 10000
+    }
+  ],
+  "payment_methods": [
+    { "type": "PIX" },
+    { "type": "BOLETO" },
+    { "type": "CREDIT_CARD" }
+  ],
+  "notification_urls": [
+    "https://caixa.jotaempresas.com/api/pagbank-webhook"
+  ]
+}
+
+<< RESPONSE BODY (RECEIVED FROM PAGBANK):
+{
+  "id": "CHEC_F84611CC-6298-4596-9754-7B9AB4297969",
+  "reference_id": "PARCELA_086c5a89-2754-4dc2-8cce-f10e015b0dbd",
+  "status": "ACTIVE",
+  "created_at": "2026-01-09T10:20:00.000-03:00",
+  "links": [
+    {
+      "rel": "PAY",
+      "href": "https://pagamento.sandbox.pagbank.com.br/pagamento?code=f84611cc-6298-4596-9754-7b9ab4297969",
+      "media": "text/html",
+      "type": "GET"
+    },
+    {
+      "rel": "SELF",
+      "href": "https://sandbox.api.pagseguro.com/checkouts/CHEC_F84611CC-6298-4596-9754-7B9AB4297969",
+      "media": "application/json",
+      "type": "GET"
+    }
+  ]
+}
+
+---------------------------------------------------------
+FIM DOS LOGS
+---------------------------------------------------------
