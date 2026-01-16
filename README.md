@@ -1,112 +1,55 @@
-# Jota App - Sistema de Gestão Financeira e RH Multi-Tenant
+# Jota App - Sistema de Gestão Financeira, Contábil e RH
 
-![Version](https://img.shields.io/badge/version-2.1-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-2.5-blue)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)
 
-Um sistema robusto de gestão financeira, RH e contratos construído com React, TypeScript, Supabase e Stripe. Oferece soluções completas para administração de empresas, gestão de clientes, contas a receber/pagar, ponto eletrônico, folha de ponto e contratos dinâmicos.
+O **Jota App** é uma plataforma ERP multi-tenant completa, projetada para unificar a gestão financeira, contábil e de recursos humanos em um único painel. O sistema utiliza uma arquitetura robusta no Supabase com Row Level Security (RLS) para garantir o isolamento total de dados entre empresas.
 
-## 📋 Índice
+## 🚀 Funcionalidades Principais
 
-- [Visão Geral](#visão-geral)
-- [Requisitos do Sistema](#requisitos-do-sistema)
-- [Arquitetura de Acesso e RLS](#️-arquitetura-de-acesso-e-rls-padrão-definitivo)
-- [Gestão de Usuários (Frontend & Backend)](#-gestão-de-usuários-frontend--backend)
-- [Funcionalidades e Telas](#funcionalidades-e-telas)
-- [API e Integrações](#api-e-integrações)
+### 💰 Financeiro & Faturamento
+- **Contas a Receber/Pagar:** Gestão sintética e analítica de parcelas com controle de status automático.
+- **Integração PagBank:** Geração de links de pagamento (PIX, Boleto e Cartão) com baixa automática via Webhook.
+- **Conciliação Bancária:** Processamento de extratos CSV com criação automática de lançamentos em partidas dobradas.
+- **Gestão de Fluxo de Caixa:** Visualização consolidada de saldos e movimentações reais por conta.
 
----
+### 📊 Contabilidade Automatizada
+- **Plano de Contas Hierárquico:** Suporte a máscaras personalizáveis e marcações de natureza (Ativo, Passivo, Resultado).
+- **Relatórios Contábeis:** Geração em tempo real de DRE, Balanço Patrimonial, Balancete de Verificação e Livro Razão.
+- **Integração Calima:** Exportação de lançamentos e históricos no padrão aceito pelo sistema contábil.
+- **Lançamentos Manuais:** Registro de partidas dobradas com referência cruzada automática.
 
-## 🏛️ Arquitetura de Acesso e RLS (Padrão Definitivo)
+### 👥 RH & Ponto Eletrônico
+- **Ponto com Biometria Facial:** Registro de jornada com captura de selfie e geolocalização.
+- **Folha de Ponto Mensal:** Cálculo automático de horas extras (100%), banco de horas, faltas e abonos.
+- **Gestão de Férias:** Controle de períodos aquisitivos baseado em regras CLT e agendamento de períodos de gozo.
+- **Documentação de Admissão:** Upload e gestão de documentos obrigatórios para funcionários.
 
-Esta seção documenta o padrão **obrigatório** para o controle de acesso, projetado para evitar erros de "infinite recursion" e garantir que funcionários autorizados possam gerenciar dados de sua organização.
+### 📄 Contratos e Documentos
+- **Templates Dinâmicos:** Criação de modelos com tags personalizadas (ex: `{{CLIENTE_NOME}}`).
+- **Assinatura Eletrônica:** Fluxo seguro para assinatura de clientes com coleta de selfie e nome completo.
+- **Documentos Societários:** Geração de atas e contratos sociais utilizando blocos de texto reutilizáveis.
 
-### 1. Prevenção de Recursividade Infinita
+## 🛡️ Arquitetura de Segurança (RLS)
 
-Nunca faça subqueries na mesma tabela dentro de uma política RLS. Use as seguintes ferramentas:
+O sistema segue padrões rigorosos para evitar vazamento de dados:
+- **Tabela `admin_user_lookup`:** Atua como cache de permissões para evitar recursão infinita em políticas RLS.
+- **Função `get_my_admin_id()`:** Helper central que identifica o proprietário dos dados, permitindo que funcionários acessem informações de sua empresa de forma segura.
+- **Isolamento de Storage:** Buckets organizados por `user_id` com políticas que restringem o acesso apenas ao proprietário ou gestor.
 
-#### A Tabela `admin_user_lookup`
-Esta tabela armazena a relação `user_id -> admin_id`. Ela atua como um cache para que as políticas RLS possam verificar a qual Admin um funcionário pertence sem consultar a tabela `admin_usuarios` diretamente (o que causaria recursão).
-- **Trigger**: É atualizada automaticamente por triggers nas tabelas de usuários.
+## 💳 Integração PagBank (Homologado)
 
-#### A Função `public.get_my_admin_id()`
-Identifica o ID do dono final dos dados (Admin ou Cliente) de forma segura:
-```sql
--- Se Admin: retorna auth.uid()
--- Se Funcionário: retorna o admin_id da tabela de lookup (sem RLS)
-```
+O sistema está preparado para operar em ambiente Sandbox e Produção:
+1. **Geração:** O link é gerado via Edge Function chamando a API do PagBank.
+2. **Notificação:** O Webhook processa pagamentos em tempo real.
+3. **Contabilização:** Ao receber um pagamento, o sistema gera automaticamente os lançamentos de entrada no banco, baixa no direito a receber e registro da despesa de taxa.
 
-### 2. Padrão de Políticas RLS para Tabelas Admin
+## 🛠️ Stack Tecnológica
 
-Para permitir que o Admin e seus Funcionários Gerentes acessem os dados:
-
-```sql
--- SELECT / UPDATE / DELETE
-USING (
-  admin_id = auth.uid() 
-  OR admin_id = public.get_admin_id_for_current_user()
-)
-
--- INSERT / UPDATE (Filtro de Escrita)
-WITH CHECK (
-  admin_id = auth.uid() 
-  OR admin_id = public.get_admin_id_for_current_user()
-)
-```
+- **Frontend:** React 18, TypeScript, Tailwind CSS, Shadcn/UI, Recharts.
+- **Backend:** Supabase (PostgreSQL, Auth, Edge Functions, Storage).
+- **Pagamentos:** API PagBank / Stripe.
+- **E-mail:** API Resend para notificações e convites.
 
 ---
-
-## 👥 Gestão de Usuários (Frontend & Backend)
-
-A gestão de usuários exige atenção especial ao roteamento de tabelas e à construção de payloads.
-
-### 1. Diferenciação de Tabelas
-- **`admin_usuarios`**: Funcionários diretos do Administrador do sistema (Sub-Admins, Suporte).
-- **`tbl_usuarios`**: Funcionários das Empresas Clientes.
-
-### 2. Regra de Ouro do Payload (Escrita) ⚠️
-Para que um `upsert` ou `insert` funcione no Supabase com RLS ativo, o objeto enviado **DEVE conter a chave estrangeira do proprietário**, mesmo que o banco de dados tenha um default ou trigger. Caso contrário, a política `WITH CHECK` falhará por não encontrar o vínculo no payload.
-
-**Exemplo Correto no Frontend:**
-```typescript
-const dataToSave = {
-    nome: values.nome,
-    // ... outros campos
-    // OBRIGATÓRIO: Passar o ID do dono para validar o RLS
-    admin_id: proprietarioIdOriginal, 
-};
-const { error } = await supabase.from('admin_usuarios').upsert(dataToSave);
-```
-
-### 3. Detecção de Contexto de Gestão
-
-```typescript
-const { role, perfil } = useSessao();
-const isAdminContext = role === 'Admin' || (role === 'Usuario' && !!perfil.admin_id);
-const tabelaDestino = isAdminContext ? 'admin_usuarios' : 'tbl_usuarios';
-const ownerKey = isAdminContext ? 'admin_id' : 'cliente_id';
-```
-
----
-
-## 🛠️ Checklist de Desenvolvimento
-
-Ao modificar permissões ou fluxos de usuário:
-1. [ ] **Payload**: Verifique se `admin_id` ou `cliente_id` está sendo incluído no objeto enviado ao Supabase.
-2. [ ] **Lookup**: Se criou uma nova tabela de usuários, adicione o trigger de sincronização para `admin_user_lookup`.
-3. [ ] **Recursão**: Garanta que as políticas RLS usem as funções helper (`get_my_admin_id`) em vez de consultas diretas à própria tabela.
-4. [ ] **Permissões**: Funcionários (role: `Usuario`) dependem da flag `permissoes` em seu perfil para acessar módulos específicos.
-
----
-
-## API e Integrações
-
-### Edge Functions (Deno)
-- `create-user-admin`: Cria usuários no Auth com metadados corretos para evitar falhas de trigger.
-- `create-pagbank-payment`: Integração com API PagBank para cobranças.
-- `contabil-setup`: Inicializa plano de contas e históricos para novos clientes.
-
-### Funções RPC (PostgreSQL)
-- `insert_manual_lancamentos`: Transação atômica para partidas dobradas.
-- `get_my_admin_id`: Helper principal de segurança.
-- `demote_system_client`: Exclusão segura de empresas verificando vínculos ativos.
+© 2026 Jota Empresas. Todos os direitos reservados.
