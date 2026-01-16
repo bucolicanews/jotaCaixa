@@ -52,4 +52,4 @@ O sistema está preparado para operar em ambiente Sandbox e Produção:
 - **E-mail:** API Resend para notificações e convites.
 
 ---
-© 2026 Jota Empresas. Todos os direitos reservados.
+© 2026 Jota Empresas. Todos os direitos reservados..
