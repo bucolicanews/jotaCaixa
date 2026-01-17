@@ -1,4 +1,4 @@
-import { PagBankConfig, CreateChargeRequest, CreateChargeResponse } from '../create-pagbank-payment/types.ts';
+import { PagBankConfig, CreateChargeRequest, CreateChargeResponse, CreateTransferRequest, CreateTransferResponse } from './types.ts';
 
 export class PagBankClient {
   private baseUrl: string;
@@ -22,7 +22,6 @@ export class PagBankClient {
 
   async createCharge(request: CreateChargeRequest): Promise<CreateChargeResponse> {
     const url = `${this.baseUrl}/orders`;
-    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -34,18 +33,32 @@ export class PagBankClient {
     });
 
     const responseText = await response.text();
-
     if (!response.ok) {
-      console.error(`[PagBank Orders Error] Status ${response.status}:`, responseText);
-      throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
+      throw new Error(`PagBank Orders API error: ${response.status} - ${responseText}`);
     }
+    return JSON.parse(responseText);
+  }
 
+  async createTransfer(request: CreateTransferRequest): Promise<CreateTransferResponse> {
+    const url = `${this.baseUrl}/transfers`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: JSON.stringify(request),
+    });
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(`PagBank Transfers API error: ${response.status} - ${responseText}`);
+    }
     return JSON.parse(responseText);
   }
 
   async getCharge(chargeId: string): Promise<CreateChargeResponse> {
     const url = `${this.baseUrl}/orders/${chargeId}`;
-    
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -53,13 +66,8 @@ export class PagBankClient {
         'Authorization': `Bearer ${this.token}`,
       },
     });
-
     const responseText = await response.text();
-
-    if (!response.ok) {
-      throw new Error(`PagBank API error: ${response.status} - ${responseText}`);
-    }
-
+    if (!response.ok) throw new Error(`PagBank GET Charge API error: ${response.status}`);
     return JSON.parse(responseText);
   }
 }
