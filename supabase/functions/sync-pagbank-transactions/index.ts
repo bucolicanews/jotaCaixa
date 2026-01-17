@@ -56,11 +56,12 @@ serve(async (req) => {
 
     const rawData = await response.json();
     let apiStatus = rawData.status;
-    let paymentFound = false;
+    let paymentConfirmed = false;
     let chargeData = null;
 
-    // Lógica para detectar pagamento em Checkout
+    // Lógica rigorosa de detecção de pagamento
     if (isCheckout && rawData.orders && rawData.orders.length > 0) {
+        // Procuramos por QUALQUER ordem que tenha sido paga dentro deste checkout
         const paidOrder = rawData.orders.find((o: any) => 
             ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status)
         );
@@ -68,17 +69,26 @@ serve(async (req) => {
         if (paidOrder) {
             chargeData = paidOrder;
             apiStatus = 'PAID';
-            paymentFound = true;
+            paymentConfirmed = true;
+            console.log(`[Sync] Pagamento confirmado encontrado na ordem ${paidOrder.id}`);
+        } else {
+            // Se não houver nenhuma paga, pegamos o status da tentativa mais recente apenas para informação visual
+            const sortedOrders = [...rawData.orders].sort((a: any, b: any) => b.id.localeCompare(a.id));
+            apiStatus = sortedOrders[0].status;
+            console.log(`[Sync] Nenhuma ordem paga encontrada. Status visual definido como: ${apiStatus}`);
         }
     } else if (!isCheckout && (apiStatus === 'PAID' || apiStatus === 'COMPLETED')) {
-        paymentFound = true;
+        paymentConfirmed = true;
         chargeData = rawData;
     }
 
-    // Se encontramos um pagamento mas o banco local não está atualizado, tentamos forçar a baixa
-    if (paymentFound && parcela.status !== 'paga') {
+    // --- BLOQUEIO DE SEGURANÇA ---
+    // A baixa financeira (recebimento/contabilidade) SÓ acontece se paymentConfirmed for TRUE
+    if (paymentConfirmed && parcela.status !== 'paga') {
+        console.log(`[Sync] Iniciando processo de baixa financeira para parcela ${parcela.id}`);
+        
         const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
-        await fetch(webhookUrl, {
+        const webhookResponse = await fetch(webhookUrl, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -93,8 +103,13 @@ serve(async (req) => {
                 charges: chargeData?.charges || []
             })
         });
+
+        if (!webhookResponse.ok) {
+            console.error('[Sync] Falha ao processar baixa via webhook interno');
+        }
     } else {
-        // Apenas atualiza o status visual
+        // Se não está pago, APENAS atualizamos o status visual da etiqueta no banco
+        // Isso não altera saldos nem marca a parcela como 'paga' na coluna de controle financeiro
         await supabaseAdmin.from('admin_parcelas_receber').update({ 
             pagbank_status: apiStatus,
             pagbank_updated_at: new Date().toISOString()
@@ -104,8 +119,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
         success: true, 
         status: apiStatus,
-        isPaid: paymentFound,
-        rawResponse: rawData // RETORNANDO TUDO PARA O CONSOLE
+        isPaid: paymentConfirmed,
+        rawResponse: rawData 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
