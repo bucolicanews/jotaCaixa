@@ -118,15 +118,15 @@ const GerarDocumentoSocietario: React.FC = () => {
   const clienteSelecionadoId = watch('cliente_id');
   const proprietarioDocumentoId = watch('proprietario_documento_id');
   const tituloDocumento = watch('titulo_documento');
-  const tipoConteudo = watch('tipo_conteudo');
   const valoresTags = watch('valores_tags') || {};
 
   const clienteSelecionado = useMemo(() => {
       return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
-  // Busca os dados da empresa proprietária selecionada (o escritório)
+  // Busca os dados da empresa proprietária selecionada (o escritório/admin)
   const fetchEmpresaProprietaria = useCallback(async (id: string) => {
+      // Tenta buscar primeiro como Admin Central
       const { data, error } = await supabase
           .from('tbl_admins')
           .select('*')
@@ -136,7 +136,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       if (data && !error) {
           setDadosEmpresaProprietaria(data);
       } else {
-          // Se não for admin central, tenta na tbl_clientes
+          // Se não for admin central, busca na tbl_clientes (pode ser um cliente do sistema gerando docs)
           const { data: clientData } = await supabase
               .from('tbl_clientes')
               .select('*')
@@ -154,15 +154,12 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   const allAvailableTags = useMemo(() => {
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
-      
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
-      // Remove duplicatas mantendo a prioridade para customizadas
       return Array.from(new Set(combined.map(t => t.nome_tag)))
           .map(tagKey => combined.find(t => t.nome_tag === tagKey))
           .filter((t): t is any => !!t)
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-          
   }, [tagsCustomizadas]);
 
   const applyTagsToForm = useCallback((
@@ -178,15 +175,21 @@ const GerarDocumentoSocietario: React.FC = () => {
           let tagValue: string | null = null;
           
           if (tag.origem_dado) {
-              const [sourceTable, sourceField] = tag.origem_dado.split('.');
+              const parts = tag.origem_dado.split('.');
+              const sourceField = parts[parts.length - 1]; // Pega sempre o último termo (ex: endereco)
               
-              // Se a tag é de EMPRESA, busca nos dados do Escritório/Admin
+              // Lógica de Prioridade:
+              // 1. Se a tag é de EMPRESA, busca obrigatoriamente nos dados da Empresa Proprietária (Escritório)
               if (tagKey.startsWith('{{EMPRESA_') && empresa) {
                   tagValue = empresa[sourceField] || null;
               } 
-              // Se a tag é de CLIENTE, busca nos dados do Cliente Selecionado
+              // 2. Se a tag é de CLIENTE, busca obrigatoriamente nos dados do Cliente Selecionado
               else if (tagKey.startsWith('{{CLIENTE_') && cliente) {
+                  // Mapeamento especial para garantir que campos da tbl_clientes funcionem
                   tagValue = (cliente as any)[sourceField] || null;
+                  
+                  // Fallback para campos de documento
+                  if (!tagValue && sourceField === 'documento') tagValue = cliente.cnpj || cliente.cpf || null;
               } 
           }
           
@@ -195,6 +198,7 @@ const GerarDocumentoSocietario: React.FC = () => {
           }
       });
       
+      // Garante que o conteúdo principal não seja perdido
       newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modeloTemplate || '';
       setValue('valores_tags', newTags, { shouldDirty: true });
   }, [allAvailableTags, setValue]);
@@ -202,6 +206,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId || !ownerIdLogado) return;
     
+    // Busca tags específicas da empresa proprietária
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
@@ -209,23 +214,17 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
-        const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
-        const allTags = [...tagsNaoFinanceiras, ...tagsData]
-            .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
-            .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-        setTagsCustomizadas(allTags);
+        setTagsCustomizadas(tagsData);
     }
     
-    // Busca clientes vinculados ao Admin
-    let queryClients = supabase
+    // Busca clientes: tanto da tbl_clientes (sistema) quanto da clientes (avulsos)
+    const { data: clientesSistemaData } = await supabase
         .from('tbl_clientes')
         .select('*')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
-        .neq('id', targetEmpresaId);
+        .neq('id', targetEmpresaId); // Não inclui o próprio admin na lista
         
-    const { data: clientesSistemaData } = await queryClients;
-    
     const { data: clientesCRData } = await supabase
         .from('clientes')
         .select('*')
@@ -234,12 +233,12 @@ const GerarDocumentoSocietario: React.FC = () => {
     const combinedClientsMap = new Map<string, ClienteCRCompleto>();
     
     (clientesSistemaData || []).forEach(c => {
-        combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+        combinedClientsMap.set(c.id, { ...c } as ClienteCRCompleto);
     });
     
     (clientesCRData || []).forEach(c => {
         if (!combinedClientsMap.has(c.id)) {
-            combinedClientsMap.set(c.id, { ...c, proprietario_id: targetEmpresaId } as ClienteCRCompleto);
+            combinedClientsMap.set(c.id, { ...c } as ClienteCRCompleto);
         }
     });
     
@@ -250,7 +249,6 @@ const GerarDocumentoSocietario: React.FC = () => {
     });
         
     setClientesCR(sortedClients);
-    
   }, [ownerIdLogado]);
 
 
@@ -262,7 +260,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setCarregandoDados(true);
     
-    let initialProprietarioDocumentoId = ownerIdLogado;
+    let initialProprietarioId = ownerIdLogado;
     let currentModelo: DocumentoSocietarioModelo | null = null;
     let initialValoresTags: Record<string, string> = {};
     let initialClienteId = '';
@@ -270,38 +268,37 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
-            .select('*, modelos_societarios(tipo_conteudo)')
+            .select('*')
             .eq('id', documentoId)
             .single();
             
         if (docLoadError) {
-            showError('Documento para edição não encontrado.');
-            navigate('/documentos-societarios', { replace: true });
+            showError('Documento não encontrado.');
+            navigate('/documentos-societarios');
             return;
         }
         
-        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
-        initialProprietarioDocumentoId = documento.proprietario_id;
-        initialClienteId = documento.cliente_id || '';
-        initialValoresTags = documento.valores_tags_preenchidos || {};
+        initialProprietarioId = doc.proprietario_id;
+        initialClienteId = doc.cliente_id || '';
+        initialValoresTags = doc.valores_tags_preenchidos || {};
         
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
-            .select('*, tipo_conteudo')
-            .eq('id', documento.modelo_id)
+            .select('*')
+            .eq('id', doc.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
         
     } else if (modeloId) {
         const { data: modeloData, error: modeloError } = await supabase
             .from('modelos_societarios')
-            .select('*, tipo_conteudo')
+            .select('*')
             .eq('id', modeloId)
             .single();
             
         if (modeloError) {
             showError('Modelo não encontrado.');
-            navigate('/documentos-societarios', { replace: true });
+            navigate('/documentos-societarios');
             return;
         }
         currentModelo = modeloData as DocumentoSocietarioModelo;
@@ -310,51 +307,45 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setModelo(currentModelo);
     
-    let empresasContratoList: EmpresaContrato[] = [];
+    // Lista de empresas para o select de proprietário (apenas se for Admin ou funcionário do Admin)
     if (isAdmin || isAdminUsuario) {
-        const { data: clientesData } = await supabase
+        const { data: clientsData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
             .eq('admin_id', ownerIdLogado)
             .eq('aprovado', true)
             .order('nome');
             
-        if (clientesData) {
-            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
-            empresasContratoList = [adminOption, ...(clientesData as EmpresaContrato[])];
-            if (!documentoId) initialProprietarioDocumentoId = empresasContratoList[0].id;
-        }
+        const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Minha Empresa (Admin)' };
+        setEmpresasContrato([adminOption, ...(clientsData || [])]);
     }
-    setEmpresasContrato(empresasContratoList);
     
-    await fetchDependentData(initialProprietarioDocumentoId || ownerIdLogado);
+    await fetchDependentData(initialProprietarioId || ownerIdLogado);
     
     form.reset({
         titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
         cliente_id: initialClienteId,
-        proprietario_documento_id: initialProprietarioDocumentoId || '',
-        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
+        proprietario_documento_id: initialProprietarioId || '',
+        tipo_conteudo: 'html',
         valores_tags: initialValoresTags,
     });
     
     setCarregandoDados(false);
-    
   }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isAdminUsuario, form, fetchDependentData]);
-  
-  useEffect(() => {
-      if (clienteSelecionadoId && modelo && !carregandoDados) {
-          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria, modelo.conteudo_template);
-      }
-  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, dadosEmpresaProprietaria, applyTagsToForm, getValues]);
-
 
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isClient && !isAdminUsuario) {
-        navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient, isAdminUsuario]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados]);
+
+  // Aplica as tags automaticamente quando o cliente ou a empresa proprietária mudam
+  useEffect(() => {
+      if (clienteSelecionadoId && modelo && !carregandoDados) {
+          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria, modelo.conteudo_template);
+      }
+  }, [clienteSelecionadoId, proprietarioDocumentoId, modelo, carregandoDados, clienteSelecionado, dadosEmpresaProprietaria, applyTagsToForm, getValues]);
+
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
@@ -362,56 +353,57 @@ const GerarDocumentoSocietario: React.FC = () => {
   };
   
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
-    let conteudoRenderizado = template;
+    let html = template;
     Object.keys(tags).forEach(tagKey => {
         const regex = new RegExp(tagKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey] || '');
+        html = html.replace(regex, tags[tagKey] || '');
     });
-    return conteudoRenderizado;
+    return html;
   };
   
   const handlePreview = () => {
       if (!modelo) return;
       const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
-      const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
-      setConteudoPreview(conteudoRenderizado);
+      const finalHtml = renderizarConteudo(templateToRender, valoresTags);
+      setConteudoPreview(finalHtml);
       setPreviewTitle(tituloDocumento || modelo.titulo);
       setPreviewOpen(true);
   };
 
   const handleSalvarDocumento = async (status: DocumentoStatus) => {
     const values = getValues();
-    if (!modelo || !values.cliente_id || !ownerIdLogado || !values.titulo_documento || !values.proprietario_documento_id) {
-        showError('Preencha Título, Cliente e Proprietário.');
+    if (!modelo || !values.cliente_id || !values.titulo_documento || !values.proprietario_documento_id) {
+        showError('Preencha o Título, o Cliente e a Empresa Proprietária.');
         return;
     }
+    
     setIsSubmitting(true);
     try {
-        const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
-        if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         const templateToRender = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
         const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
-        const documentoPayload = {
+        
+        const payload = {
             modelo_id: modelo.id,
             cliente_id: values.cliente_id,
             proprietario_id: values.proprietario_documento_id,
             status: status,
             valores_tags_preenchidos: { 
                 ...values.valores_tags, 
-                titulo: values.titulo_documento, 
-                tipo_conteudo: values.tipo_conteudo,
+                titulo: values.titulo_documento,
                 '{{CONTEUDO_PRINCIPAL}}': sanitizeConteudo(values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || ''),
             },
             conteudo_renderizado: conteudoRenderizado,
             data_registro: format(new Date(), 'yyyy-MM-dd'),
         };
+
         if (isEditing && documentoId) {
-            const { error } = await supabase.from('documentos_societarios_gerados').update(documentoPayload).eq('id', documentoId);
+            const { error } = await supabase.from('documentos_societarios_gerados').update(payload).eq('id', documentoId);
             if (error) throw error;
         } else {
-            const { error } = await supabase.from('documentos_societarios_gerados').insert(documentoPayload);
+            const { error } = await supabase.from('documentos_societarios_gerados').insert(payload);
             if (error) throw error;
         }
+
         showSuccess(`Documento salvo com sucesso!`);
         navigate('/documentos-societarios');
     } catch (error: any) {
@@ -420,34 +412,12 @@ const GerarDocumentoSocietario: React.FC = () => {
         setIsSubmitting(false);
     }
   };
-  
-  const tagsParaPreenchimentoManual = useMemo(() => {
-    return allAvailableTags.filter(tag => {
-        const tagKey = tag.nome_tag;
-        if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return false;
-        
-        // Se a tag já tem valor (preenchido automaticamente ou manualmente), não mostra na lista de "manuais pendentes"
-        if (valoresTags[tagKey] && valoresTags[tagKey] !== '') return false;
-        
-        return true;
-    }).map(tag => tag.nome_tag);
-  }, [allAvailableTags, valoresTags]);
 
   if (carregandoSessao || carregandoDados) {
-    return (
-      <LayoutPrincipal>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutPrincipal>
-    );
+    return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
   }
-  
-  if (!modelo) {
-      return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de documento não encontrado.</p></CardContent></Card></LayoutPrincipal>;
-  }
-  
-  const templateContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+
+  const templateContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template;
 
   return (
     <LayoutPrincipal>
@@ -456,7 +426,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             <ChevronLeft className="w-5 h-5" /> Voltar
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Documento' : 'Gerar Documento'}: {modelo.titulo}
+          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Documento' : 'Gerar Documento'}: {modelo?.titulo}
         </h1>
       </div>
       
@@ -471,19 +441,19 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       <FormProvider {...form}>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(() => handleSalvarDocumento('finalizado'))} className="space-y-6">
+          <form className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               <Card className="lg:col-span-1 h-fit">
-                  <CardHeader><CardTitle className="text-xl">Dados e Tags</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-xl">Configurações e Dados</CardTitle></CardHeader>
                   <CardContent className="space-y-6">
                       {isAdmin || isAdminUsuario ? (
                           <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
                               <FormItem className="space-y-2">
-                                  <FormLabel htmlFor="empresa-documento">Empresa Proprietária</FormLabel>
+                                  <FormLabel>Empresa Proprietária (Seu Escritório)</FormLabel>
                                   <Select value={field.value || ''} onValueChange={field.onChange}>
                                       <FormControl>
-                                          <SelectTrigger id="empresa-documento">
+                                          <SelectTrigger>
                                               <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
                                               <SelectValue placeholder="Selecione a Empresa" />
                                           </SelectTrigger>
@@ -494,19 +464,21 @@ const GerarDocumentoSocietario: React.FC = () => {
                               </FormItem>
                           )} />
                       ) : null}
+                      
                       <FormField control={form.control} name="titulo_documento" render={({ field }) => (
                           <FormItem className="space-y-2">
-                              <FormLabel htmlFor="titulo-documento">Título do Documento</FormLabel>
-                              <FormControl><Input id="titulo-documento" placeholder={modelo.titulo} {...field} /></FormControl>
+                              <FormLabel>Título do Documento</FormLabel>
+                              <FormControl><Input placeholder="Ex: Ata de Eleição" {...field} /></FormControl>
                               <FormMessage />
                           </FormItem>
                       )} />
+
                       <FormField control={form.control} name="cliente_id" render={({ field }) => (
                           <FormItem className="space-y-2">
-                              <FormLabel htmlFor="cliente">Cliente (Sendo Documentado)</FormLabel>
+                              <FormLabel>Cliente (Sendo Documentado)</FormLabel>
                               <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
                                   <FormControl>
-                                      <SelectTrigger id="cliente">
+                                      <SelectTrigger>
                                           <SelectValue placeholder="Selecione o Cliente" />
                                       </SelectTrigger>
                                   </FormControl>
@@ -519,25 +491,31 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   </SelectContent>
                               </Select>
                               <FormMessage />
-                              <p className="text-[10px] text-muted-foreground mt-1">Dica: Use tags {'{{CLIENTE_...}}'} para os dados deste cliente.</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                <Info className="w-3 h-3 inline mr-1" /> Use tags {{'{{CLIENTE_...}}'}} para preencher dados desta empresa.
+                              </p>
                           </FormItem>
                       )} />
+                      
                       <Separator />
+                      
                       <div className="space-y-4">
                           <h3 className="font-semibold text-lg flex items-center gap-2">
-                              <Info className="w-4 h-4" /> Tags Pendentes
+                              <Tag className="w-4 h-4" /> Tags Pendentes
                           </h3>
-                          <p className="text-xs text-muted-foreground">Preencha os valores para as tags que não foram encontradas automaticamente.</p>
-                          {tagsParaPreenchimentoManual.length === 0 ? (<p className="text-muted-foreground text-sm italic">Nenhuma tag manual pendente.</p>) : (
-                              tagsParaPreenchimentoManual.map(tagKey => (
-                                  <FormField key={tagKey} control={form.control} name={`valores_tags.${tagKey}`} render={({ field }) => (
-                                          <FormItem className="space-y-1">
-                                              <FormLabel htmlFor={tagKey} className="font-semibold text-xs">{tagKey}</FormLabel>
-                                              <FormControl><Input id={tagKey} placeholder={`Insira o valor`} {...field} value={field.value || ''} onChange={(e) => handleTagChange(tagKey, e.target.value)} /></FormControl>
-                                              <FormMessage />
-                                          </FormItem>
-                                      )}
-                                  />
+                          <p className="text-xs text-muted-foreground">Preencha manualmente as tags não encontradas no cadastro.</p>
+                          {allAvailableTags.filter(t => t.nome_tag !== '{{CONTEUDO_PRINCIPAL}}' && !valoresTags[t.nome_tag]).length === 0 ? (
+                              <p className="text-muted-foreground text-sm italic">Nenhuma tag manual pendente.</p>
+                          ) : (
+                              allAvailableTags.filter(t => t.nome_tag !== '{{CONTEUDO_PRINCIPAL}}' && !valoresTags[t.nome_tag]).map(tag => (
+                                  <div key={tag.nome_tag} className="space-y-1">
+                                      <Label className="text-xs font-semibold">{tag.nome_tag}</Label>
+                                      <Input 
+                                          placeholder={`Insira o valor para ${tag.descricao}`} 
+                                          value={valoresTags[tag.nome_tag] || ''} 
+                                          onChange={(e) => handleTagChange(tag.nome_tag, e.target.value)} 
+                                      />
+                                  </div>
                               ))
                           )}
                       </div>
@@ -549,8 +527,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                   <CardContent className="space-y-4">
                       <FormField control={form.control} name={`valores_tags.{{CONTEUDO_PRINCIPAL}}`} render={({ field }) => (
                               <FormItem>
-                                  <FormLabel>Conteúdo Principal (Editável)</FormLabel>
-                                  <FormControl><Textarea placeholder="Edite o conteúdo..." {...field} rows={15} className="font-mono text-sm" /></FormControl>
+                                  <FormLabel>Edite o Conteúdo Base</FormLabel>
+                                  <FormControl><Textarea placeholder="Edite o conteúdo aqui..." {...field} rows={15} className="font-mono text-sm" /></FormControl>
                                   <FormMessage />
                               </FormItem>
                           )}
@@ -565,17 +543,13 @@ const GerarDocumentoSocietario: React.FC = () => {
                                       dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} 
                                   />
                               ) : (
-                                  <p className="text-muted-foreground italic">Selecione um cliente para ver a prévia.</p>
+                                  <p className="text-muted-foreground italic text-center py-10">Selecione um cliente para processar as tags.</p>
                               )}
                           </div>
                       </div>
                   </CardContent>
               </Card>
-              
             </div>
-            <Button type="submit" className="w-full h-12 text-lg" disabled={isSubmitting || !clienteSelecionadoId}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} {isEditing ? 'Salvar Alterações' : 'Gerar Documento'}
-            </Button>
           </form>
         </Form>
       </FormProvider>
