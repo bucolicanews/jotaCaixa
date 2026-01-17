@@ -21,7 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { sanitizeConteudo } from '@/utils/formatters';
 
 type TipoConteudo = 'html' | 'texto';
@@ -61,7 +61,7 @@ const formSchema = z.object({
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
     tipo_conteudo: z.enum(['html', 'texto']),
     valores_tags: z.record(z.string()).optional(),
-    conteudo_principal_manual: z.string().optional(), // Nome limpo para o campo de texto
+    conteudo_principal_manual: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -169,27 +169,62 @@ const GerarDocumentoSocietario: React.FC = () => {
   ) => {
       const newTags: Record<string, string> = { ...currentTags };
       
+      // PADRÃO CONTRATO: Mapeamento Explícito (DADOS DO CLIENTE)
+      if (cliente) {
+          newTags['{{CLIENTE_NOME}}'] = cliente.nome || '';
+          newTags['{{CLIENTE_RAZAO_SOCIAL}}'] = cliente.razao_social || cliente.nome || '';
+          newTags['{{CLIENTE_NOME_FANTASIA}}'] = cliente.nome_fantasia || '';
+          newTags['{{CLIENTE_DOCUMENTO}}'] = cliente.documento || cliente.cpf || cliente.cnpj || '';
+          newTags['{{CLIENTE_CPF}}'] = cliente.cpf || '';
+          newTags['{{CLIENTE_CNPJ}}'] = cliente.cnpj || '';
+          newTags['{{CLIENTE_RG}}'] = cliente.rg || '';
+          newTags['{{CLIENTE_EMAIL}}'] = cliente.email || '';
+          newTags['{{CLIENTE_TELEFONE}}'] = cliente.telefone || '';
+          newTags['{{CLIENTE_TELEFONE_FIXO}}'] = cliente.telefone_fixo || '';
+          newTags['{{CLIENTE_CEP}}'] = cliente.cep || '';
+          newTags['{{CLIENTE_ENDERECO}}'] = cliente.endereco || '';
+          newTags['{{CLIENTE_NUMERO}}'] = cliente.numero || '';
+          newTags['{{CLIENTE_COMPLEMENTO}}'] = cliente.complemento || '';
+          newTags['{{CLIENTE_BAIRRO}}'] = cliente.bairro || '';
+          newTags['{{CLIENTE_CIDADE}}'] = cliente.cidade || '';
+          newTags['{{CLIENTE_ESTADO}}'] = cliente.estado || '';
+          newTags['{{CLIENTE_DATA_NASCIMENTO}}'] = cliente.data_nascimento ? format(parseISO(cliente.data_nascimento), 'dd/MM/yyyy') : '';
+      }
+
+      // PADRÃO CONTRATO: Mapeamento Explícito (DADOS DA EMPRESA PROPRIETÁRIA)
+      if (empresa) {
+          newTags['{{EMPRESA_NOME}}'] = empresa.nome || empresa.razao_social || '';
+          newTags['{{EMPRESA_DOCUMENTO}}'] = empresa.documento || empresa.cnpj || empresa.cpf || '';
+          newTags['{{EMPRESA_EMAIL}}'] = empresa.email || '';
+          newTags['{{EMPRESA_TELEFONE}}'] = empresa.telefone || '';
+          newTags['{{EMPRESA_CEP}}'] = empresa.cep || '';
+          newTags['{{EMPRESA_ENDERECO}}'] = empresa.endereco || '';
+          newTags['{{EMPRESA_NUMERO}}'] = empresa.numero || '';
+          newTags['{{EMPRESA_COMPLEMENTO}}'] = empresa.complemento || '';
+          newTags['{{EMPRESA_BAIRRO}}'] = empresa.bairro || '';
+          newTags['{{EMPRESA_CIDADE}}'] = empresa.cidade || '';
+          newTags['{{EMPRESA_ESTADO}}'] = empresa.estado || '';
+          newTags['{{EMPRESA_CNPJ}}'] = empresa.cnpj || '';
+          newTags['{{EMPRESA_CPF}}'] = empresa.cpf || '';
+      }
+      
+      // Mapeamento dinâmico para outras tags customizadas (que não começam com CLIENTE_ ou EMPRESA_)
       allAvailableTags.forEach(tag => {
           const tagKey = tag.nome_tag;
-          let tagValue: string | null = null;
-          
-          if (tag.origem_dado) {
-              const parts = tag.origem_dado.split('.');
-              const sourceField = parts[parts.length - 1]; 
-              
-              if (tagKey.startsWith('{{EMPRESA_') && empresa) {
-                  tagValue = empresa[sourceField] || null;
-              } 
-              else if (tagKey.startsWith('{{CLIENTE_') && cliente) {
-                  tagValue = (cliente as any)[sourceField] || null;
-                  if (!tagValue && sourceField === 'documento') tagValue = cliente.cnpj || cliente.cpf || null;
-              } 
-          }
-          
-          if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A' && tagValue !== '') {
-              newTags[tagKey] = String(tagValue);
+          if (!tagKey.startsWith('{{CLIENTE_') && !tagKey.startsWith('{{EMPRESA_')) {
+              // Mantém o valor atual ou preenche se houver origem_dado
+              if (!newTags[tagKey] && tag.origem_dado) {
+                  const parts = tag.origem_dado.split('.');
+                  const sourceField = parts[parts.length - 1];
+                  // Se for tag customizada, tentamos buscar do cliente primeiro
+                  if (cliente && (cliente as any)[sourceField]) {
+                      newTags[tagKey] = String((cliente as any)[sourceField]);
+                  }
+              }
           }
       });
+      
+      newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
       
       setValue('valores_tags', newTags, { shouldDirty: true });
   }, [allAvailableTags, setValue]);
@@ -345,7 +380,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let html = template;
     Object.keys(tags).forEach(tagKey => {
-        if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return; // Ignora o conteúdo base na substituição de tags
+        if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return;
         const regex = new RegExp(tagKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
         html = html.replace(regex, tags[tagKey] || '');
     });
