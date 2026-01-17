@@ -53,3 +53,4 @@ O sistema está preparado para operar em ambiente Sandbox e Produção:
 
 ---
 © 2026 Jota Empresas. Todos os direitos reservados...
+integração bagbank
