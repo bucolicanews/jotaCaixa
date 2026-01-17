@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/pagbank-webhook",
+      "destination": "https://jqoirlswewggyppgvgnv.supabase.co/functions/v1/pagbank-webhook"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
