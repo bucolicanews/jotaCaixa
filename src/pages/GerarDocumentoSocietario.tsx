@@ -55,7 +55,6 @@ interface ClienteCRCompleto {
     data_nascimento?: string | null;
 }
 
-// Esquema de validação simplificado
 const formSchema = z.object({
     titulo_documento: z.string().min(1, 'O título é obrigatório.'),
     cliente_id: z.string().uuid('Selecione um cliente válido.'),
@@ -133,26 +132,23 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (!perfil) return null;
     const profile = perfil as AdminProfile | ClienteProfile;
     
-    const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
-    const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
-    
     return {
         nome: profile.nome, 
         email: profile.email, 
-        documento: isAdmin ? documentoAdmin : documentoCliente,
-        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile)?.cpf, 
-        cnpj: (profile as AdminProfile).cnpj, 
-        rg: (profile as AdminProfile).rg || (profile as ClienteProfile)?.rg, 
-        telefone: (profile as AdminProfile).telefone || (profile as ClienteProfile)?.telefone,
-        cep: (profile as AdminProfile).cep || (profile as ClienteProfile)?.cep, 
-        endereco: (profile as AdminProfile).endereco || (profile as ClienteProfile)?.endereco, 
-        numero: (profile as AdminProfile).numero || (profile as ClienteProfile)?.numero, 
-        complemento: (profile as AdminProfile).complemento || (profile as ClienteProfile)?.complemento,
-        bairro: (profile as AdminProfile).bairro || (profile as ClienteProfile)?.bairro, 
-        cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
-        estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
+        documento: (profile as any).documento || (profile as any).cnpj || (profile as any).cpf,
+        cpf: (profile as any).cpf, 
+        cnpj: (profile as any).cnpj, 
+        rg: (profile as any).rg, 
+        telefone: (profile as any).telefone,
+        cep: (profile as any).cep, 
+        endereco: (profile as any).endereco, 
+        numero: (profile as any).numero, 
+        complemento: (profile as any).complemento,
+        bairro: (profile as any).bairro, 
+        cidade: (profile as any).cidade, 
+        estado: (profile as any).estado,
     };
-  }, [perfil, isAdmin, isClient]);
+  }, [perfil]);
 
   const allAvailableTags = useMemo(() => {
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
@@ -190,22 +186,18 @@ const GerarDocumentoSocietario: React.FC = () => {
           
           if (tag.origem_dado) {
               const [sourceTable, sourceField] = tag.origem_dado.split('.');
-              if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresa) {
-                  const empresaData = empresa as any;
-                  if (empresaData && empresaData[sourceField]) {
-                      tagValue = String(empresaData[sourceField]);
-                  }
+              
+              // Lógica de mapeamento flexível: busca nos dados da empresa ou do cliente conforme o prefixo da tag
+              if (tagKey.startsWith('{{EMPRESA_') && empresa) {
+                  tagValue = empresa[sourceField] || null;
               } 
-              else if (sourceTable === 'clientes' && cliente) {
-                  const clienteData = cliente as any;
-                  if (clienteData && clienteData[sourceField]) {
-                      tagValue = String(clienteData[sourceField]);
-                  }
+              else if (tagKey.startsWith('{{CLIENTE_') && cliente) {
+                  tagValue = (cliente as any)[sourceField] || null;
               } 
           }
           
-          if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
-              newTags[tagKey] = tagValue;
+          if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A' && tagValue !== '') {
+              newTags[tagKey] = String(tagValue);
           } else {
               newTags[tagKey] = currentTags[tagKey] || '';
           }
@@ -234,7 +226,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+        .select('*')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
         .neq('id', targetEmpresaId);
@@ -243,7 +235,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     const { data: clientesCRData } = await supabase
         .from('clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+        .select('*')
         .eq('proprietario_id', targetEmpresaId);
         
     const combinedClientsMap = new Map<string, ClienteCRCompleto>();
@@ -258,7 +250,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
     });
     
-    // NOVO: Ordenação priorizando a Razão Social
     const sortedClients = Array.from(combinedClientsMap.values()).sort((a, b) => {
         const nameA = (a.razao_social || a.nome).toLowerCase();
         const nameB = (b.razao_social || b.nome).toLowerCase();
@@ -386,8 +377,8 @@ const GerarDocumentoSocietario: React.FC = () => {
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
     Object.keys(tags).forEach(tagKey => {
-        const regex = new RegExp(tagKey, 'g');
-        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey]);
+        const regex = new RegExp(tagKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey] || '');
     });
     return conteudoRenderizado;
   };
@@ -444,10 +435,13 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const tagsParaPreenchimentoManual = useMemo(() => {
     return allAvailableTags.filter(tag => {
-        if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
-        if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
-        if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
-        return !valoresTags[tag.nome_tag];
+        const tagKey = tag.nome_tag;
+        if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return false;
+        
+        // Se a tag já tem valor (preenchido automaticamente ou manualmente), não mostra na lista de "manuais pendentes"
+        if (valoresTags[tagKey] && valoresTags[tagKey] !== '') return false;
+        
+        return true;
     }).map(tag => tag.nome_tag);
   }, [allAvailableTags, valoresTags]);
 
@@ -521,7 +515,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                       )} />
                       <FormField control={form.control} name="cliente_id" render={({ field }) => (
                           <FormItem className="space-y-2">
-                              <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
+                              <FormLabel htmlFor="cliente">Cliente (Sendo Documentado)</FormLabel>
                               <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
                                   <FormControl>
                                       <SelectTrigger id="cliente">
@@ -537,16 +531,18 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   </SelectContent>
                               </Select>
                               <FormMessage />
+                              <p className="text-[10px] text-muted-foreground mt-1">Dica: Use tags {{'{{CLIENTE_...}}'}} para os dados deste cliente.</p>
                           </FormItem>
                       )} />
                       <Separator />
                       <div className="space-y-4">
-                          <h3 className="font-semibold text-lg">Tags Manuais</h3>
-                          {tagsParaPreenchimentoManual.length === 0 ? (<p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>) : (
+                          <h3 className="font-semibold text-lg">Tags Pendentes</h3>
+                          <p className="text-xs text-muted-foreground">Preencha os valores para as tags que não foram encontradas automaticamente.</p>
+                          {tagsParaPreenchimentoManual.length === 0 ? (<p className="text-muted-foreground text-sm italic">Nenhuma tag manual pendente.</p>) : (
                               tagsParaPreenchimentoManual.map(tagKey => (
                                   <FormField key={tagKey} control={form.control} name={`valores_tags.${tagKey}`} render={({ field }) => (
                                           <FormItem className="space-y-1">
-                                              <FormLabel htmlFor={tagKey} className="font-semibold">{tagKey}</FormLabel>
+                                              <FormLabel htmlFor={tagKey} className="font-semibold text-xs">{tagKey}</FormLabel>
                                               <FormControl><Input id={tagKey} placeholder={`Insira o valor`} {...field} value={field.value || ''} onChange={(e) => handleTagChange(tagKey, e.target.value)} /></FormControl>
                                               <FormMessage />
                                           </FormItem>
@@ -572,15 +568,22 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <Separator />
                       <div className="space-y-2">
                           <Label>Prévia Renderizada</Label>
-                          <div className="border rounded-md p-4 bg-background shadow-inner max-h-[400px] overflow-y-auto">
-                              {templateContent ? (<div dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} />) : (<p className="text-muted-foreground">Selecione um cliente para ver a prévia.</p>)}
+                          <div className="border rounded-md p-4 bg-white text-zinc-900 shadow-inner max-h-[400px] overflow-y-auto">
+                              {templateContent ? (
+                                  <div 
+                                      className="ql-editor"
+                                      dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} 
+                                  />
+                              ) : (
+                                  <p className="text-muted-foreground italic">Selecione um cliente para ver a prévia.</p>
+                              )}
                           </div>
                       </div>
                   </CardContent>
               </Card>
               
             </div>
-            <Button type="submit" className="w-full" disabled={isSubmitting || !clienteSelecionadoId}>
+            <Button type="submit" className="w-full h-12 text-lg" disabled={isSubmitting || !clienteSelecionadoId}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} {isEditing ? 'Salvar Alterações' : 'Gerar Documento'}
             </Button>
           </form>
