@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -11,6 +11,9 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID().substring(0, 8);
+  console.log(`[pagbank-webhook:${requestId}] Recebido em ${new Date().toISOString()}`);
+
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -18,16 +21,17 @@ serve(async (req) => {
     );
 
     const payload = await req.json();
-    console.log('[pagbank-webhook] Payload recebido:', JSON.stringify(payload, null, 2));
+    console.log(`[pagbank-webhook:${requestId}] Payload:`, JSON.stringify(payload));
 
     if (!payload.reference_id || !payload.reference_id.startsWith('PARCELA_')) {
-      console.warn('[pagbank-webhook] Reference ID ignorado:', payload.reference_id);
-      return new Response(JSON.stringify({ success: true, message: 'Ignorado (não é parcela)' }), { status: 200 });
+      return new Response(JSON.stringify({ success: true, message: 'Ignorado' }), { 
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const parcelaId = payload.reference_id.replace('PARCELA_', '');
 
-    // 1. Buscar a parcela e a conta sintética
+    // 1. Buscar a parcela
     const { data: parcela, error: pError } = await supabaseAdmin
       .from('admin_parcelas_receber')
       .select(`*, admin_contas_receber(*)`)
@@ -35,15 +39,21 @@ serve(async (req) => {
       .single();
 
     if (pError || !parcela) {
-      console.error('[pagbank-webhook] Parcela não encontrada:', parcelaId);
-      return new Response(JSON.stringify({ error: 'Parcela não encontrada' }), { status: 404 });
+      console.error(`[pagbank-webhook:${requestId}] Parcela não encontrada:`, parcelaId);
+      return new Response(JSON.stringify({ error: 'Parcela não encontrada' }), { 
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
-    if (parcela.status === 'paga') {
-      return new Response(JSON.stringify({ success: true, message: 'Parcela já está paga' }), { status: 200 });
+    // Idempotência
+    if (parcela.status === 'paga' && parcela.webhook_processed_at) {
+      console.log(`[pagbank-webhook:${requestId}] IDEMPOTÊNCIA: Já processado em ${parcela.webhook_processed_at}`);
+      return new Response(JSON.stringify({ success: true, message: 'Já processado' }), { 
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
-    // Registrar Log
+    // Logar o evento
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
       proprietario_id: parcela.admin_id,
       transaction_type: 'webhook',
@@ -62,33 +72,33 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
-    // --- PROCESSAR PAGAMENTO ---
+    // Processar Pagamento Confirmado
     const dataPagamento = payload.paid_at ? payload.paid_at.split('T')[0] : new Date().toISOString().split('T')[0];
     const valorBruto = payload.amount.value / 100;
     const taxa = (payload.charges?.[0]?.amount?.fees || 0) / 100;
     const valorLiquido = valorBruto - taxa;
 
-    // Buscar config do admin para obter as contas
     const { data: config } = await supabaseAdmin
       .from('configuracoes_pagbank')
       .select('*')
       .eq('proprietario_id', parcela.admin_id)
       .single();
 
-    if (!config) throw new Error('Configuração PagBank não encontrada para o admin.');
+    if (!config) throw new Error('Configuração PagBank não encontrada.');
 
-    // 2. Atualizar Parcela
+    // Atualizar Parcela
     const { error: updError } = await supabaseAdmin.from('admin_parcelas_receber').update({
         status: 'paga',
         valor_pago: valorBruto,
         data_pagamento: dataPagamento,
         pagbank_status: 'PAID',
         pagbank_updated_at: new Date().toISOString(),
+        webhook_processed_at: new Date().toISOString(),
     }).eq('id', parcelaId);
 
     if (updError) throw updError;
 
-    // 3. Criar Recebimento
+    // Criar Recebimento
     const { data: saldoConta } = await supabaseAdmin
         .from('saldo_contas')
         .select('id')
@@ -113,7 +123,7 @@ serve(async (req) => {
         pagbank_valor_liquido: valorLiquido,
     });
 
-    // 4. Lançamentos Contábeis (Se configurado)
+    // Lançamentos Contábeis
     if (config.conta_sintetica_id && parcela.admin_contas_receber.id_conta_patrimonial) {
         const idAtivo = crypto.randomUUID();
         const idPatrimonial = crypto.randomUUID();
@@ -147,10 +157,14 @@ serve(async (req) => {
         ]);
     }
 
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, parcela_id: parcelaId }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+    });
 
   } catch (error: any) {
-    console.error('[pagbank-webhook] Erro:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    console.error(`[pagbank-webhook:${requestId}] Fatal Error:`, error.message);
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 });

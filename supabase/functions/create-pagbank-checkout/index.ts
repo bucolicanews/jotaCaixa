@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -31,12 +31,7 @@ serve(async (req) => {
         admin_contas_receber (
           *,
           tbl_clientes (
-            nome,
-            email,
-            cpf,
-            cnpj,
-            documento,
-            telefone,
+            nome, email, cpf, cnpj, documento, telefone,
             cep, endereco, numero, bairro, cidade, estado
           )
         )
@@ -60,19 +55,18 @@ serve(async (req) => {
 
     // 3. Processar Token e URL
     const rawToken = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
-    const token = (rawToken || '').trim(); // LIMPEZA CRÍTICA
+    const token = (rawToken || '').trim();
     const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
 
     if (!token) throw new Error(`Token de ${config.ambiente} não configurado.`);
     
-    // LOG DE SEGURANÇA (Para diagnóstico de 401)
-    console.log(`[PagBank] Iniciando Checkout em modo ${config.ambiente.toUpperCase()}`);
-    console.log(`[PagBank] Token Check: ${token.substring(0, 4)}...${token.substring(token.length - 4)} (Len: ${token.length})`);
-
     // 4. Preparar Payload
     let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
     let nomeCliente = cliente.nome.trim();
     if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
+
+    const webhookUrl = config.webhook_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
+    console.log(`[create-pagbank-checkout] Webhook URL: ${webhookUrl}`);
 
     const checkoutRequest = {
       reference_id: `PARCELA_${parcela_id}`,
@@ -92,7 +86,7 @@ serve(async (req) => {
         { type: 'BOLETO' },
         { type: 'CREDIT_CARD', brands: ['VISA', 'MASTERCARD', 'ELO', 'AMEX', 'HIPERCARD'] },
       ],
-      notification_urls: config.webhook_url ? [config.webhook_url] : [],
+      notification_urls: [webhookUrl],
     };
 
     // 5. Executar Chamada
@@ -100,7 +94,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`, // Mantido Bearer, mas com token limpo
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(checkoutRequest),
     });
@@ -108,7 +102,7 @@ serve(async (req) => {
     const responseText = await response.text();
 
     if (!response.ok) {
-      console.error(`[PagBank Error Response] Status ${response.status}:`, responseText);
+      console.error(`[create-pagbank-checkout] Error ${response.status}:`, responseText);
       throw new Error(`PagBank (${response.status}): ${responseText}`);
     }
 
@@ -126,6 +120,18 @@ serve(async (req) => {
       })
       .eq('id', parcela_id);
 
+    // Log de criação
+    await supabaseAdmin.from('pagbank_transaction_logs').insert({
+      proprietario_id: admin_id,
+      transaction_type: 'payment',
+      pagbank_id: checkoutResponse.id,
+      reference_id: `PARCELA_${parcela_id}`,
+      status: 'WAITING',
+      amount: parcela.valor_parcela,
+      request_payload: checkoutRequest,
+      response_payload: checkoutResponse,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -137,7 +143,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('[PagBank Function Error]', error.message);
+    console.error('[create-pagbank-checkout] Fatal Error:', error.message);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
