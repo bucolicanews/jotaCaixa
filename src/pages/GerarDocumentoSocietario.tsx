@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Info, Tag } from 'lucide-react'; // Adicionado Tag
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Info, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
@@ -61,6 +61,7 @@ const formSchema = z.object({
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
     tipo_conteudo: z.enum(['html', 'texto']),
     valores_tags: z.record(z.string()).optional(),
+    conteudo_principal_manual: z.string().optional(), // Nome limpo para o campo de texto
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -110,6 +111,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         proprietario_documento_id: '',
         tipo_conteudo: 'html',
         valores_tags: {},
+        conteudo_principal_manual: '',
     },
   });
   
@@ -119,6 +121,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const proprietarioDocumentoId = watch('proprietario_documento_id');
   const tituloDocumento = watch('titulo_documento');
   const valoresTags = watch('valores_tags') || {};
+  const conteudoPrincipalManual = watch('conteudo_principal_manual') || '';
 
   const clienteSelecionado = useMemo(() => {
       return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
@@ -162,8 +165,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const applyTagsToForm = useCallback((
       currentTags: Record<string, string>, 
       cliente: ClienteCRCompleto | undefined, 
-      empresa: any, 
-      modeloTemplate: string
+      empresa: any
   ) => {
       const newTags: Record<string, string> = { ...currentTags };
       
@@ -189,7 +191,6 @@ const GerarDocumentoSocietario: React.FC = () => {
           }
       });
       
-      newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modeloTemplate || '';
       setValue('valores_tags', newTags, { shouldDirty: true });
   }, [allAvailableTags, setValue]);
   
@@ -252,6 +253,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     let currentModelo: DocumentoSocietarioModelo | null = null;
     let initialValoresTags: Record<string, string> = {};
     let initialClienteId = '';
+    let initialConteudoPrincipal = '';
     
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
@@ -269,6 +271,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         initialProprietarioId = doc.proprietario_id;
         initialClienteId = doc.cliente_id || '';
         initialValoresTags = doc.valores_tags_preenchidos || {};
+        initialConteudoPrincipal = initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] || '';
         
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
@@ -290,7 +293,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         currentModelo = modeloData as DocumentoSocietarioModelo;
-        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = currentModelo.conteudo_template;
+        initialConteudoPrincipal = currentModelo.conteudo_template;
     }
     
     setModelo(currentModelo);
@@ -315,6 +318,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         proprietario_documento_id: initialProprietarioId || '',
         tipo_conteudo: 'html',
         valores_tags: initialValoresTags,
+        conteudo_principal_manual: initialConteudoPrincipal,
     });
     
     setCarregandoDados(false);
@@ -328,7 +332,7 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   useEffect(() => {
       if (clienteSelecionadoId && modelo && !carregandoDados) {
-          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria, modelo.conteudo_template);
+          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria);
       }
   }, [clienteSelecionadoId, proprietarioDocumentoId, modelo, carregandoDados, clienteSelecionado, dadosEmpresaProprietaria, applyTagsToForm, getValues]);
 
@@ -341,6 +345,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let html = template;
     Object.keys(tags).forEach(tagKey => {
+        if (tagKey === '{{CONTEUDO_PRINCIPAL}}') return; // Ignora o conteúdo base na substituição de tags
         const regex = new RegExp(tagKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
         html = html.replace(regex, tags[tagKey] || '');
     });
@@ -349,7 +354,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const handlePreview = () => {
       if (!modelo) return;
-      const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+      const templateToRender = conteudoPrincipalManual || modelo.conteudo_template;
       const finalHtml = renderizarConteudo(templateToRender, valoresTags);
       setConteudoPreview(finalHtml);
       setPreviewTitle(tituloDocumento || modelo.titulo);
@@ -365,7 +370,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setIsSubmitting(true);
     try {
-        const templateToRender = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+        const templateToRender = values.conteudo_principal_manual || modelo.conteudo_template;
         const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
         
         const payload = {
@@ -376,7 +381,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             valores_tags_preenchidos: { 
                 ...values.valores_tags, 
                 titulo: values.titulo_documento,
-                '{{CONTEUDO_PRINCIPAL}}': sanitizeConteudo(values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || ''),
+                '{{CONTEUDO_PRINCIPAL}}': sanitizeConteudo(values.conteudo_principal_manual || ''),
             },
             conteudo_renderizado: conteudoRenderizado,
             data_registro: format(new Date(), 'yyyy-MM-dd'),
@@ -402,8 +407,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
   }
-
-  const templateContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template;
 
   return (
     <LayoutPrincipal>
@@ -478,7 +481,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                               </Select>
                               <FormMessage />
                               <p className="text-[10px] text-muted-foreground mt-1">
-                                <Info className="w-3 h-3 inline mr-1" /> Use tags {{'{{CLIENTE_...}}'}} para preencher dados desta empresa.
+                                <Info className="w-3 h-3 inline mr-1" /> 
+                                {"Use tags {{CLIENTE_...}} para preencher dados desta empresa."}
                               </p>
                           </FormItem>
                       )} />
@@ -511,7 +515,7 @@ const GerarDocumentoSocietario: React.FC = () => {
               <Card className="lg:col-span-2">
                   <CardHeader><CardTitle className="text-xl">Conteúdo do Documento</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                      <FormField control={form.control} name={`valores_tags.{{CONTEUDO_PRINCIPAL}}`} render={({ field }) => (
+                      <FormField control={form.control} name="conteudo_principal_manual" render={({ field }) => (
                               <FormItem>
                                   <FormLabel>Edite o Conteúdo Base</FormLabel>
                                   <FormControl><Textarea placeholder="Edite o conteúdo aqui..." {...field} rows={15} className="font-mono text-sm" /></FormControl>
@@ -523,10 +527,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <div className="space-y-2">
                           <Label>Prévia Renderizada</Label>
                           <div className="border rounded-md p-4 bg-white text-zinc-900 shadow-inner max-h-[400px] overflow-y-auto">
-                              {templateContent ? (
+                              {conteudoPrincipalManual ? (
                                   <div 
                                       className="ql-editor"
-                                      dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} 
+                                      dangerouslySetInnerHTML={{ __html: renderizarConteudo(conteudoPrincipalManual, valoresTags) }} 
                                   />
                               ) : (
                                   <p className="text-muted-foreground italic text-center py-10">Selecione um cliente para processar as tags.</p>
