@@ -57,20 +57,27 @@ export function VisualizarLinkPagBankDialog({
 
       if (error) throw error;
       
-      // LOG DE DEPURAÇÃO PARA O USUÁRIO
+      // LOG DE DEPURAÇÃO MELHORADO
       console.log('%c=== 🔍 INVESTIGAÇÃO DE SINCRONIZAÇÃO ===', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
       console.log('ID Parcela:', parcelaId);
-      console.log('Status Interpretado:', data.status);
-      console.log('Pagamento Detectado?', data.isPaid);
-      console.log('Resposta Bruta da API:', data);
+      console.log('Status do Link:', data.status);
+      console.log('Pagamento Confirmado detectado?', data.isPaid);
+      
+      if (data.rawResponse?.orders) {
+          console.log('📦 Lista de Ordens (Pagamentos) encontradas neste link:', data.rawResponse.orders);
+          if (data.rawResponse.orders.length === 0) {
+              console.warn('⚠️ Nenhuma ordem encontrada. O cliente ainda não tentou pagar ou o pagamento não foi processado pelo PagBank.');
+          }
+      } else {
+          console.log('📄 Resposta Bruta da API:', data.rawResponse);
+      }
       console.log('%c====================================', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
 
       if (data.isPaid) {
           toast.success('Pagamento detectado! A parcela será atualizada em instantes.');
-          // Fecha modal para forçar refresh na lista principal
           setTimeout(() => onOpenChange(false), 2000);
       } else {
-          toast.info(`Status atual: ${data.status}. Nenhum pagamento confirmado ainda.`);
+          toast.info(`Status atual: ${data.status}. Nenhum pagamento confirmado encontrado.`);
       }
       
     } catch (error: any) {
