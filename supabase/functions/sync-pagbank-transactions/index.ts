@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { PagBankClient } from '../_shared/pagbank-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,8 +12,6 @@ serve(async (req) => {
   }
 
   try {
-    console.log("[sync-pagbank] Iniciando sincronização manual...");
-    
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -23,6 +20,8 @@ serve(async (req) => {
     const { parcelaId } = await req.json();
     if (!parcelaId) throw new Error('ID da parcela não informado.');
 
+    console.log(`[sync-pagbank] Sincronizando parcela: ${parcelaId}`);
+
     // 1. Buscar a parcela
     const { data: parcela, error: pError } = await supabaseAdmin
       .from('admin_parcelas_receber')
@@ -30,32 +29,32 @@ serve(async (req) => {
       .eq('id', parcelaId)
       .single();
 
-    if (pError || !parcela) throw new Error('Parcela não encontrada no banco de dados.');
+    if (pError || !parcela) throw new Error('Parcela não encontrada.');
     if (parcela.status === 'paga') {
-        return new Response(JSON.stringify({ success: true, status: 'PAID', message: 'Parcela já estava paga.' }), {
+        return new Response(JSON.stringify({ success: true, status: 'PAID', already_paid: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 
-    // 2. Buscar configuração
+    // 2. Buscar configuração PagBank
     const { data: config } = await supabaseAdmin
       .from('configuracoes_pagbank')
       .select('*')
       .eq('proprietario_id', parcela.admin_id)
       .single();
 
-    if (!config) throw new Error('Configuração PagBank não encontrada.');
+    if (!config) throw new Error('Configuração PagBank não encontrada para este admin.');
 
     const token = (config.ambiente === 'producao' ? config.token_producao : config.token_sandbox)?.trim();
     const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
     
     const resourceId = parcela.pagbank_checkout_id || parcela.pagbank_charge_id;
-    if (!resourceId) throw new Error('Esta parcela não possui uma transação PagBank iniciada.');
+    if (!resourceId) throw new Error('Transação PagBank não iniciada nesta parcela.');
 
     const isCheckout = !!parcela.pagbank_checkout_id;
     const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
     
-    console.log(`[sync-pagbank] Consultando API PagBank: ${endpoint}`);
+    console.log(`[sync-pagbank] Chamando API PagBank: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       headers: { 
@@ -66,7 +65,7 @@ serve(async (req) => {
 
     if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Erro na API PagBank (${response.status}): ${errText}`);
+        throw new Error(`Erro API PagBank (${response.status}): ${errText}`);
     }
 
     const data = await response.json();
@@ -74,61 +73,68 @@ serve(async (req) => {
     let paymentFound = false;
     let chargeData = null;
 
-    // Lógica especial para Checkout: verifica se há cobranças pagas na lista
+    // Lógica para Checkout: vasculha as ordens geradas pelo link
     if (isCheckout && data.orders && data.orders.length > 0) {
-        // Busca a primeira ordem que tenha status PAID ou COMPLETED
-        const paidOrder = data.orders.find((o: any) => o.status === 'PAID' || o.status === 'COMPLETED');
+        // Busca qualquer ordem paga ou concluída
+        const paidOrder = data.orders.find((o: any) => 
+            ['PAID', 'COMPLETED', 'AUTHORIZED', 'IN_ANALYSIS'].includes(o.status)
+        );
+        
         if (paidOrder) {
-            console.log("[sync-pagbank] Pagamento detectado na lista de ordens do checkout.");
-            apiStatus = 'PAID';
-            paymentFound = true;
+            console.log(`[sync-pagbank] Ordem encontrada no checkout. Status: ${paidOrder.status}`);
             chargeData = paidOrder;
+            if (paidOrder.status === 'PAID' || paidOrder.status === 'COMPLETED') {
+                apiStatus = 'PAID';
+                paymentFound = true;
+            }
         }
     } else if (!isCheckout && (apiStatus === 'PAID' || apiStatus === 'COMPLETED')) {
         paymentFound = true;
         chargeData = data;
     }
 
-    console.log(`[sync-pagbank] Status API: ${apiStatus}`);
+    // 3. Atualizar o status do PagBank na parcela
+    console.log(`[sync-pagbank] Status final detectado: ${apiStatus}`);
+    
+    await supabaseAdmin.from('admin_parcelas_receber').update({ 
+        pagbank_status: apiStatus,
+        pagbank_updated_at: new Date().toISOString()
+    }).eq('id', parcela.id);
 
-    // 3. Se o status mudou ou foi detectado pagamento, atualiza o sistema
-    if (apiStatus !== parcela.pagbank_status || paymentFound) {
-      
-      await supabaseAdmin.from('admin_parcelas_receber').update({ 
-          pagbank_status: apiStatus,
-          pagbank_updated_at: new Date().toISOString()
-      }).eq('id', parcela.id);
-      
-      if (paymentFound) {
-          console.log("[sync-pagbank] Disparando processamento de baixa...");
-          
-          // Prepara o payload simulando um webhook para a função de baixa
-          const webhookPayload = {
-              reference_id: `PARCELA_${parcela.id}`,
-              status: 'PAID',
-              id: chargeData?.id || resourceId,
-              amount: { value: Math.round(parcela.valor_parcela * 100) },
-              paid_at: chargeData?.paid_at || new Date().toISOString(),
-              charges: chargeData?.charges || []
-          };
+    // 4. Se foi pago, disparar a baixa via webhook interno
+    if (paymentFound) {
+        console.log("[sync-pagbank] Pagamento detectado! Forçando baixa no sistema...");
+        
+        const webhookPayload = {
+            reference_id: `PARCELA_${parcela.id}`,
+            status: 'PAID',
+            id: chargeData?.id || resourceId,
+            amount: { value: Math.round(parcela.valor_parcela * 100) },
+            paid_at: chargeData?.paid_at || new Date().toISOString(),
+            charges: chargeData?.charges || []
+        };
 
-          // Chama a função de webhook internamente (ou via fetch se preferir)
-          // Aqui usamos fetch para manter a independência das funções
-          const functionUrl = `https://${Deno.env.get('SUPABASE_URL')?.split('//')[1]}/functions/v1/pagbank-webhook`;
-          
-          try {
-              await fetch(functionUrl, {
-                  method: 'POST',
-                  headers: { 
-                      'Content-Type': 'application/json', 
-                      'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` 
-                  },
-                  body: JSON.stringify(webhookPayload)
-              });
-          } catch (webhookErr) {
-              console.error("[sync-pagbank] Erro ao chamar webhook de baixa:", webhookErr);
-          }
-      }
+        const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
+        
+        try {
+            const webhookRes = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` 
+                },
+                body: JSON.stringify(webhookPayload)
+            });
+            
+            if (!webhookRes.ok) {
+                const whErr = await webhookRes.text();
+                console.error(`[sync-pagbank] Erro ao processar baixa: ${whErr}`);
+            } else {
+                console.log("[sync-pagbank] Baixa processada com sucesso.");
+            }
+        } catch (webhookErr) {
+            console.error("[sync-pagbank] Falha ao chamar webhook interno:", webhookErr);
+        }
     }
 
     return new Response(JSON.stringify({ 
@@ -140,11 +146,8 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('[sync-pagbank] Erro crítico:', error.message);
-    return new Response(JSON.stringify({ 
-        success: false, 
-        error: error.message 
-    }), { 
+    console.error('[sync-pagbank] Erro:', error.message);
+    return new Response(JSON.stringify({ success: false, error: error.message }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
