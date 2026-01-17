@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, BlocoSocietario } from '@/types/documentos-societarios';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Separator } from '@/components/ui/separator';
 import DocumentoPreviewDialog from '../documentos-societarios/DocumentoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
@@ -22,7 +22,6 @@ import { sanitizeConteudo } from '@/utils/formatters';
 import RichTextEditor, { RichTextEditorRef } from '@/components/RichTextEditor';
 import { Label } from '@/components/ui/label';
 
-// Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
     tipo_conteudo?: 'html' | 'texto';
 }
@@ -31,7 +30,6 @@ const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
   tipo_documento: z.string().optional(),
-  // Removido tipo_conteudo do schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -39,9 +37,10 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormDocumentoSocietarioModeloProps {
   modeloInicial?: ExtendedDocumentoSocietarioModelo | null;
   onSaveComplete: () => void;
+  ownerId: string | null;
 }
 
-const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps> = ({ modeloInicial, onSaveComplete }) => {
+const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps> = ({ modeloInicial, onSaveComplete, ownerId }) => {
   const isEditing = !!modeloInicial;
   const { role, perfil, usuario } = useSessao();
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
@@ -52,19 +51,16 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const quillRef = useRef<RichTextEditorRef>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   
-  const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+  // Garantimos que o ID do proprietário seja usado corretamente em todos os fetches
+  const targetOwnerId = ownerId;
 
   const fetchBlocos = useCallback(async () => {
+    if (!targetOwnerId) return;
+    
     const { data: blocosData, error: blocosError } = await supabase
       .from('blocos_societarios')
       .select('*')
+      .or(`proprietario_id.eq.${targetOwnerId},proprietario_id.is.null`)
       .order('titulo');
 
     if (blocosError) {
@@ -73,15 +69,15 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     } else {
       setBlocos(blocosData as BlocoSocietario[]);
     }
-  }, []);
+  }, [targetOwnerId]);
 
   const fetchTags = useCallback(async () => {
-    if (!ownerId) return; // Tags dependem do ownerId
+    if (!targetOwnerId) return;
 
     const { data: tagsData, error: tagsError } = await supabase
       .from('contrato_tags')
       .select('*')
-      .eq('empresa_id', ownerId)
+      .eq('empresa_id', targetOwnerId)
       .order('nome_tag', { ascending: true });
 
     if (tagsError) {
@@ -89,12 +85,14 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     } else if (tagsData) {
       setTagsCustomizadas(tagsData as any[]);
     }
-  }, [ownerId]);
+  }, [targetOwnerId]);
 
   useEffect(() => {
-    fetchBlocos();
-    fetchTags();
-  }, [fetchBlocos, fetchTags]);
+    if (targetOwnerId) {
+        fetchBlocos();
+        fetchTags();
+    }
+  }, [targetOwnerId, fetchBlocos, fetchTags]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -105,30 +103,18 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     },
   });
   
-  // O tipo de conteúdo é sempre 'html' (Editor de Texto)
-  const tipoConteudo: 'html' = 'html'; 
-
   const onSubmit = async (values: FormValues) => {
-    if (!ownerId) {
+    if (!targetOwnerId) {
         showError('ID do proprietário não encontrado. Não é possível salvar.');
         return;
     }
     
-    // LOG PARA DEBUG
-    console.log('Payload de Documento Societário Modelo:', {
-        titulo: values.titulo,
-        conteudo_template: values.conteudo_template,
-        tipo_conteudo: 'html', // Forçado
-        tipo_documento: values.tipo_documento,
-    });
-    
     const dataToSave = {
-      proprietario_id: ownerId,
+      proprietario_id: targetOwnerId,
       titulo: values.titulo,
-      // CRÍTICO: Sanitiza, pois o editor é HTML
       conteudo_template: sanitizeConteudo(values.conteudo_template),
-      tipo_conteudo: 'html', // Força o tipo para 'html'
-      tipo_documento: values.tipo_documento || null, // Garante que seja null se for string vazia
+      tipo_conteudo: 'html', 
+      tipo_documento: values.tipo_documento || null,
     };
 
     let error = null;
@@ -156,8 +142,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   
   const handlePreview = () => {
       const template = form.getValues('conteudo_template');
-      
-      // Substituição básica para a prévia (apenas tags padrão)
       let previewContent = template;
       allTags.forEach(tag => {
           const regex = new RegExp(tag.nome_tag, 'g');
@@ -169,20 +153,14 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       setPreviewOpen(true);
   };
   
-  // CORREÇÃO: Usando Map para garantir unicidade das tags
   const allTags = useMemo(() => {
       const tagMap = new Map<string, any>();
-      
-      // Adiciona tags customizadas (prioridade)
       tagsCustomizadas.forEach(tag => tagMap.set(tag.nome_tag, tag));
-      
-      // Adiciona tags padrão (filtrando tags financeiras)
       TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber')).forEach(tag => {
           if (!tagMap.has(tag.nome_tag)) {
               tagMap.set(tag.nome_tag, tag);
           }
       });
-      
       return Array.from(tagMap.values()).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
@@ -195,10 +173,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       } else {
         editor.insertText(range.index, textToInsert, 'user');
       }
-      // Move cursor to the end of inserted text
       editor.setSelection(range.index + textToInsert.length, 0, 'silent');
     } else {
-      // Fallback for plain textarea
       const current = form.getValues("conteudo_template") || "";
       form.setValue("conteudo_template", current + textToInsert, { shouldDirty: true, shouldValidate: true });
     }
@@ -236,12 +212,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
           handleInsertText(text, isHtml);
       }
   };
-  
-  const handleCopyAllTags = () => {
-      const tagsString = allTags.map(t => t.nome_tag).join(', ');
-      navigator.clipboard.writeText(tagsString);
-      showSuccess('Todas as tags copiadas para a área de transferência!');
-  };
 
   return (
     <>
@@ -256,7 +226,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
           </div>
             
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
-            
             <div className="lg:col-span-3 space-y-4 flex flex-col h-full">
                 <Card className={cn("h-full flex flex-col transition-all", isDraggingOver && "ring-2 ring-primary-foreground")}>
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -294,16 +263,12 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
             </div>
             
             <div className="lg:col-span-1 space-y-4 flex flex-col">
-                <Card 
-                    className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
-                >
+                <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <h4 className="font-semibold flex items-center mb-2">Tags Disponíveis</h4>
-                        <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o editor.</p>
-                        
                         <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
                             {allTags.map((tag: any) => (
                                 <div 
@@ -318,13 +283,11 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                 </div>
                             ))}
                         </div>
-                        
                         <Separator className="my-4" />
-                        
                         <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos</h4>
                         <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
                             {blocos.length === 0 ? (
-                                <p data-dyad-id="src\components\formularios\FormDocumentoSocietarioModelo.tsx:330:32" data-dyad-name="p" className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
+                                <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
                             ) : (
                                 blocos.map(bloco => (
                                     <Button 
@@ -346,7 +309,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
             </div>
           </div>
           
-          {/* Campos de Configuração (Movidos para o final) */}
           <Card>
               <CardHeader><CardTitle className="text-xl">Configuração do Documento</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -356,9 +318,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                       render={({ field }) => (
                           <FormItem>
                               <FormLabel>Título do Modelo</FormLabel>
-                              <FormControl>
-                                  <Input placeholder="Ex: Ata de Reunião" {...field} />
-                              </FormControl>
+                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
                               <FormMessage />
                           </FormItem>
                       )}
@@ -394,7 +354,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={true} // Sempre HTML
+        isHtml={true}
       />
     </>
   );

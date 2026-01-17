@@ -6,22 +6,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo } from '@/types/documentos-societarios';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocumentoSocietarioModelo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
-import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
+import { useOwner } from '@/hooks/use-owner';
 
-// Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
   tipo_conteudo?: 'html' | 'texto';
 }
 
 const GerenciarModelosSocietarios: React.FC = () => {
-  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
-  const { ownerId } = useOwner(); // USANDO useOwner
+  const { role, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner(); // Usando o hook centralizado que já lida com Admin, Cliente e Funcionários
+  
   const [modelos, setModelos] = useState<ExtendedDocumentoSocietarioModelo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -29,12 +28,9 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const [activeTab, setActiveTab] = useState('meus_modelos');
 
   const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
-  
-  const proprietarioId = ownerId; // USANDO ownerId
 
   const buscarModelos = useCallback(async () => {
-    if (!proprietarioId && !isAdmin) {
+    if (!ownerId && !isAdmin) {
         setModelos([]);
         setCarregando(false);
         return;
@@ -47,13 +43,10 @@ const GerenciarModelosSocietarios: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente ou Admin, busca seus próprios modelos E modelos globais (proprietario_id is null)
-    if (proprietarioId) {
-        // Construção segura da cláusula OR
-        const orClause = `proprietario_id.eq.${proprietarioId},proprietario_id.is.null`;
-        query = query.or(orClause);
+    // Se não for Admin puro (que vê tudo), filtra pelos modelos do dono ou globais
+    if (!isAdmin && ownerId) {
+        query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
     }
-    // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
 
     const { data, error } = await query;
 
@@ -65,13 +58,13 @@ const GerenciarModelosSocietarios: React.FC = () => {
       setModelos(data as DocumentoSocietarioModelo[]);
     }
     setCarregando(false);
-  }, [proprietarioId, isAdmin, isCliente]);
+  }, [ownerId, isAdmin]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || proprietarioId)) {
+    if (!carregandoSessao && (isAdmin || ownerId)) {
       buscarModelos();
     }
-  }, [carregandoSessao, isAdmin, proprietarioId, buscarModelos]);
+  }, [carregandoSessao, isAdmin, ownerId, buscarModelos]);
   
   const handleSaveComplete = () => {
       setDialogOpen(false);
@@ -109,16 +102,14 @@ const GerenciarModelosSocietarios: React.FC = () => {
   
   const modelosFiltrados = useMemo(() => {
       if (!isAdmin) {
-          // Para usuários comuns, tudo o que retornou da query é "meu modelo"
           return { meusModelos: modelos, modelosClientes: [] };
       }
       
-      // Admin: Separa modelos próprios (proprietario_id = ownerId) e modelos de clientes (proprietario_id != ownerId)
-      const meusModelos = modelos.filter(m => m.proprietario_id === proprietarioId || m.proprietario_id === null);
-      const modelosClientes = modelos.filter(m => m.proprietario_id !== proprietarioId && m.proprietario_id !== null);
+      const meusModelos = modelos.filter(m => m.proprietario_id === ownerId || m.proprietario_id === null);
+      const modelosClientes = modelos.filter(m => m.proprietario_id !== ownerId && m.proprietario_id !== null);
       
       return { meusModelos, modelosClientes };
-  }, [modelos, isAdmin, proprietarioId]);
+  }, [modelos, isAdmin, ownerId]);
   
   const modelosParaExibir = isAdmin && activeTab === 'modelos_clientes' 
       ? modelosFiltrados.modelosClientes 
@@ -129,8 +120,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const renderModelosList = (list: DocumentoSocietarioModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
           {list.map((modelo) => {
-              // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-              const isOwner = modelo.proprietario_id === proprietarioId || (isAdmin && !isSupervisao);
+              const canManage = modelo.proprietario_id === ownerId || (isAdmin && !isSupervisao);
 
               return (
                 <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
@@ -149,8 +139,8 @@ const GerenciarModelosSocietarios: React.FC = () => {
                             variant="outline" 
                             size="icon" 
                             onClick={() => handleEdit(modelo)} 
-                            disabled={!isOwner} 
-                            title={isOwner ? "Editar Modelo" : "Apenas visualização"}
+                            disabled={!canManage} 
+                            title={canManage ? "Editar Modelo" : "Apenas visualização"}
                         >
                             <Edit className="w-4 h-4" />
                         </Button>
@@ -158,8 +148,8 @@ const GerenciarModelosSocietarios: React.FC = () => {
                             variant="destructive" 
                             size="icon" 
                             onClick={() => handleDelete(modelo.id)} 
-                            disabled={!isOwner} 
-                            title={isOwner ? "Excluir Modelo" : "Apenas visualização"}
+                            disabled={!canManage} 
+                            title={canManage ? "Excluir Modelo" : "Apenas visualização"}
                         >
                             <Trash2 className="w-4 h-4" />
                         </Button>
@@ -169,7 +159,6 @@ const GerenciarModelosSocietarios: React.FC = () => {
           })}
       </div>
   );
-
 
   if (carregandoSessao) {
     return (
@@ -181,7 +170,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
     );
   }
   
-  if (!carregandoSessao && !proprietarioId && !isAdmin) {
+  if (!carregandoSessao && !ownerId && !isAdmin) {
       return (
           <LayoutPrincipal>
               <Card><CardContent className="p-6">Você não tem permissão para acessar esta área ou seu vínculo de empresa não foi encontrado.</CardContent></Card>
@@ -224,7 +213,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
                           <FormDocumentoSocietarioModelo
                               modeloInicial={modeloSelecionado}
                               onSaveComplete={handleSaveComplete}
-                              ownerId={proprietarioId}
+                              ownerId={ownerId}
                           />
                       </DialogContent>
                   </Dialog>
@@ -265,7 +254,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
               </TabsList>
               
               <TabsContent value={activeTab} className="mt-4">
-                  {/* Conteúdo já renderizado acima, esta seção é apenas para o layout de tabs */}
+                  {/* Conteúdo já renderizado acima */}
               </TabsContent>
           </Tabs>
       )}
