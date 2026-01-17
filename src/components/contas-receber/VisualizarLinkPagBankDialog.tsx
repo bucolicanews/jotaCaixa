@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, Check, QrCode, Send, Mail, Loader2 } from 'lucide-react';
+import { Copy, Check, QrCode, Send, Mail, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -42,8 +42,31 @@ export function VisualizarLinkPagBankDialog({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const linkToUse = checkoutLink || paymentLink;
+
+  const handleSyncStatus = async () => {
+    if (!parcelaId) return;
+    
+    try {
+      setSyncing(true);
+      const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
+        body: { parcelaId }
+      });
+
+      if (error) throw error;
+      
+      toast.success('Status atualizado com sucesso!');
+      // Pequeno delay para o banco processar e fechar modal para forçar refresh na lista
+      setTimeout(() => onOpenChange(false), 1000);
+    } catch (error: any) {
+      console.error('Erro ao sincronizar:', error);
+      toast.error('Falha ao sincronizar: ' + error.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleCopyLink = async (text: string, type: 'link' | 'pix') => {
     try {
@@ -146,11 +169,23 @@ export function VisualizarLinkPagBankDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Status:</span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-              {getStatusLabel(status)}
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                {getStatusLabel(status)}
+                </span>
+            </div>
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleSyncStatus} 
+                disabled={syncing || status === 'PAID'}
+                className="h-8 text-xs"
+            >
+                {syncing ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <RefreshCw className="h-3 w-3 mr-2" />}
+                Sincronizar Status
+            </Button>
           </div>
 
           {qrCode && (
