@@ -3,14 +3,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Copy, Check, CreditCard, FileText, QrCode, ShoppingCart, Send, Mail } from 'lucide-react';
+import { Loader2, Copy, Check, CreditCard, FileText, QrCode, ShoppingCart, Send, Mail, Terminal } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
 
-type PaymentMethodType = 'pix' | 'boleto' | 'credit_card' | 'checkout';
+type PaymentMethodType = 'pix' | 'boleto' | 'checkout';
 
 interface GerarLinkPagBankDialogProps {
   open: boolean;
@@ -37,7 +36,6 @@ export function GerarLinkPagBankDialog({
 }: GerarLinkPagBankDialogProps) {
   const { ownerId } = useSessao();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('checkout');
-  const [installments, setInstallments] = useState('1');
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
@@ -53,87 +51,44 @@ export function GerarLinkPagBankDialog({
     try {
       setLoading(true);
 
-      if (!ownerId) {
-        throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
-      }
+      if (!ownerId) throw new Error('Sessão não identificada.');
 
-      if (paymentMethod === 'checkout' || paymentMethod === 'credit_card') {
+      if (paymentMethod === 'checkout') {
         functionName = 'create-pagbank-checkout';
-        body = {
-          parcela_id: parcelaId,
-          admin_id: ownerId,
-        };
-      } else { // pix or boleto
+        body = { parcela_id: parcelaId, admin_id: ownerId };
+      } else {
         functionName = 'create-pagbank-payment';
-        body = {
-          parcela_id: parcelaId,
-          payment_method: paymentMethod,
-          admin_id: ownerId,
-        };
+        body = { parcela_id: parcelaId, payment_method: paymentMethod, admin_id: ownerId };
       }
 
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body,
-      });
-
-      console.log('[GerarLinkPagBank] Resposta Bruta:', { data, error });
-
-      // LOG PARA HOMOLOGAÇÃO PAGBANK
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (SUCESSO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Data:', JSON.stringify(data, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao gerar link');
 
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao gerar link de pagamento');
-      }
+      // EXIBIÇÃO DE LOGS PARA HOMOLOGAÇÃO (CONFORME SOLICITADO PELO PAGBANK)
+      console.log('%c=== 🧾 LOG DE HOMOLOGAÇÃO PAGBANK ===', 'background: #1e40af; color: #fff; font-weight: bold; padding: 4px;');
+      console.log('Ambiente:', data.checkout_id?.startsWith('CHEC_') ? 'PRODUÇÃO' : 'TESTE/SANDBOX');
+      console.log('📍 Função Chamada:', functionName);
+      console.log('📤 REQUEST BODY:', JSON.stringify(body, null, 2));
+      console.log('📥 RESPONSE DATA:', JSON.stringify(data, null, 2));
+      console.log('%c=== FIM DO LOG - COPIE O CONTEÚDO ACIMA ===', 'background: #1e40af; color: #fff; font-weight: bold; padding: 4px;');
 
-      toast.success('Link de pagamento gerado com sucesso!');
+      toast.success('Link gerado! Logs de homologação exibidos no Console (F12).');
       
-      if (paymentMethod === 'checkout' || paymentMethod === 'credit_card') {
+      if (paymentMethod === 'checkout') {
         setPaymentLink(data.checkout_link);
       } else {
         setQrCode(data.qr_code);
         setQrCodeText(data.qr_code_text);
-        if (data.boleto_pdf_url) {
-          setPaymentLink(data.boleto_pdf_url);
-        }
+        if (data.boleto_pdf_url) setPaymentLink(data.boleto_pdf_url);
       }
       setClienteInfo(data.cliente);
       
-      if (onSuccess) {
-        onSuccess();
-      }
+      if (onSuccess) onSuccess();
     } catch (error: any) {
-      console.error('Erro ao gerar link PagBank:', error);
-      let errorMessage = 'Erro ao gerar link de pagamento. Verifique os logs da função.';
-      let errorResponse = null;
-
-      if (error.context && typeof error.context.json === 'function') {
-        try {
-          const errorBody = await error.context.json();
-          errorResponse = errorBody;
-          if (errorBody.error) {
-            errorMessage = errorBody.error;
-          }
-        } catch (e) {
-          // Ignore if JSON parsing fails
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
-      // LOG PARA HOMOLOGAÇÃO PAGBANK (ERRO)
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (ERRO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Error:', JSON.stringify(errorResponse || error, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
-
-      toast.error(errorMessage);
+      console.error('Erro PagBank:', error);
+      toast.error(error.message || 'Falha na comunicação com o PagBank');
     } finally {
       setLoading(false);
     }
@@ -143,238 +98,88 @@ export function GerarLinkPagBankDialog({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success('Copiado!');
+      toast.success('Copiado para a área de transferência!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      toast.error('Erro ao copiar link');
+      toast.error('Erro ao copiar');
     }
   };
 
   const handleSendWhatsApp = () => {
-    if (!clienteInfo?.telefone) {
-      toast.error('Telefone do cliente nao encontrado');
-      return;
-    }
-
+    if (!clienteInfo?.telefone) return toast.error('Telefone do cliente não encontrado');
     const telefone = clienteInfo.telefone.replace(/\D/g, '');
-    const telefoneFormatado = telefone.startsWith('55') ? telefone : `55${telefone}`;
-    
-    let mensagem = '';
-    if (paymentLink) {
-      mensagem = `Ola ${clienteInfo.nome}! Segue o link para pagamento de R$ ${valorParcela.toFixed(2)} referente a ${descricao}: ${paymentLink}`;
-    } else if (qrCodeText) {
-      mensagem = `Ola ${clienteInfo.nome}! Segue o codigo PIX para pagamento de R$ ${valorParcela.toFixed(2)} referente a ${descricao}:\n\n${qrCodeText}`;
-    } else {
-      toast.error('Nenhum link ou codigo PIX disponivel');
-      return;
-    }
-    
-    const url = `https://wa.me/${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
-    
-    window.open(url, '_blank');
-    toast.success('Abrindo WhatsApp...');
-  };
-
-  const handleSendEmail = async () => {
-    if (!parcelaId || !ownerId) {
-      toast.error('Dados incompletos para envio de email');
-      return;
-    }
-
-    try {
-      setSendingEmail(true);
-
-      const { data, error } = await supabase.functions.invoke('send-payment-email', {
-        body: {
-          parcela_id: parcelaId,
-          admin_id: ownerId,
-        },
-      });
-
-      if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao enviar email');
-      }
-
-      toast.success(data.message || 'Email enviado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao enviar email:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao enviar email');
-    } finally {
-      setSendingEmail(false);
-    }
-  };
-
-  const handleClose = () => {
-    setPaymentLink(null);
-    setQrCode(null);
-    setQrCodeText(null);
-    setPaymentMethod('checkout');
-    setInstallments('1');
-    setCopied(false);
-    setClienteInfo(null);
-    onOpenChange(false);
-  };
-
-  const handleReset = () => {
-    setPaymentLink(null);
-    setQrCode(null);
-    setQrCodeText(null);
-    setCopied(false);
-    setClienteInfo(null);
+    const msg = `Olá ${clienteInfo.nome}! Segue o link para pagamento: ${paymentLink || qrCodeText}`;
+    window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Gerar Link de Pagamento PagBank</DialogTitle>
-          <DialogDescription>
-            Valor: R$ {valorParcela.toFixed(2)} - {descricao}
-          </DialogDescription>
+          <DialogTitle>PagBank: Gerar Cobrança</DialogTitle>
+          <DialogDescription>Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorParcela)}</DialogDescription>
         </DialogHeader>
 
         {!(paymentLink || qrCode) ? (
           <div className="space-y-4 py-4">
-            <div className="space-y-3">
-              <Label>Forma de Pagamento</Label>
-              <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethodType)}>
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent bg-primary/5 border-primary" onClick={() => setPaymentMethod('checkout')}>
-                  <RadioGroupItem value="checkout" id="checkout" />
-                  <Label htmlFor="checkout" className="flex items-center gap-2 cursor-pointer flex-1">
-                    <ShoppingCart className="h-4 w-4" />
-                    <div>
-                      <div className="font-medium">Checkout (Recomendado)</div>
-                      <div className="text-xs text-muted-foreground">Cliente escolhe PIX, Boleto ou Cartao</div>
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('pix')}>
-                  <RadioGroupItem value="pix" id="pix" />
-                  <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer flex-1">
-                    <QrCode className="h-4 w-4" />
-                    PIX (QR Code e Copia e Cola)
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
+            <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethodType)}>
+              <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('checkout')}>
+                <RadioGroupItem value="checkout" id="checkout" />
+                <Label htmlFor="checkout" className="flex-1 cursor-pointer">
+                  <div className="font-bold flex items-center gap-2"><ShoppingCart className="w-4 h-4"/> Checkout PagBank</div>
+                  <p className="text-xs text-muted-foreground">Cartão, PIX e Boleto em uma única tela (Recomendado)</p>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('pix')}>
+                <RadioGroupItem value="pix" id="pix" />
+                <Label htmlFor="pix" className="flex-1 cursor-pointer">
+                  <div className="font-bold flex items-center gap-2"><QrCode className="w-4 h-4"/> PIX Direto</div>
+                  <p className="text-xs text-muted-foreground">Gera QR Code e código Copia e Cola imediato</p>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
         ) : (
           <div className="space-y-4 py-4">
-            <Alert className="bg-green-50 border-green-200">
-              <AlertDescription className="text-green-800">
-                Link de pagamento gerado com sucesso! Compartilhe com o cliente.
-              </AlertDescription>
+            <Alert className="bg-blue-50 border-blue-200">
+                <Terminal className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                    Para homologação de produção: Abra o console (F12) para copiar os logs de Request/Response.
+                </AlertDescription>
             </Alert>
 
-            {paymentMethod === 'pix' && qrCode && (
-              <div className="space-y-3">
-                <div className="flex justify-center">
-                  <img src={qrCode} alt="QR Code PIX" className="w-48 h-48 border rounded-lg" />
-                </div>
-                {qrCodeText && (
-                  <div className="space-y-2">
-                    <Label>PIX Copia e Cola</Label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={qrCodeText} 
-                        readOnly 
-                        className="flex-1 p-2 border rounded text-sm bg-muted"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCopyLink(qrCodeText, 'pix')}
-                      >
-                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+            {qrCode && (
+              <div className="flex flex-col items-center gap-3">
+                <img src={qrCode} className="w-40 h-40 border p-2 rounded bg-white" alt="QR Code" />
+                <Button variant="outline" size="sm" onClick={() => handleCopyLink(qrCodeText || '')} className="w-full">
+                    {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar Código PIX
+                </Button>
               </div>
             )}
 
             {paymentLink && (
-            <div className="space-y-2">
-              <Label>Link de Pagamento</Label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={paymentLink} 
-                  readOnly 
-                  className="flex-1 p-2 border rounded text-sm bg-muted"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleCopyLink(paymentLink, 'link')}
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
+              <div className="space-y-2">
+                <Label className="text-xs">Link de Pagamento / Boleto</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={paymentLink} className="text-xs bg-muted" />
+                  <Button size="icon" variant="outline" onClick={() => handleCopyLink(paymentLink)}><Copy className="w-4 h-4"/></Button>
+                </div>
               </div>
-            </div>
             )}
 
-            <div className="border-t pt-4">
-              <Label className="mb-3 block">Enviar para o Cliente</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSendWhatsApp}
-                  disabled={!clienteInfo?.telefone}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  WhatsApp
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSendEmail}
-                  disabled={sendingEmail || !clienteInfo?.email || !parcelaId}
-                >
-                  {sendingEmail ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Mail className="h-4 w-4 mr-2" />
-                  )}
-                  Email
-                </Button>
-              </div>
-              {clienteInfo && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Cliente: {clienteInfo.nome} 
-                  {clienteInfo.telefone && ` | Tel: ${clienteInfo.telefone}`}
-                  {clienteInfo.email && ` | Email: ${clienteInfo.email}`}
-                </p>
-              )}
+            <div className="grid grid-cols-2 gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={handleSendWhatsApp} disabled={!clienteInfo?.telefone}><Send className="w-4 h-4 mr-2" /> WhatsApp</Button>
+                <Button variant="outline" onClick={() => toast.info('Funcionalidade de e-mail em breve')}><Mail className="w-4 h-4 mr-2" /> E-mail</Button>
             </div>
           </div>
         )}
 
         <DialogFooter>
-          {!(paymentLink || qrCode) ? (
-            <>
-              <Button variant="outline" onClick={handleClose} disabled={loading}>
-                Cancelar
-              </Button>
-              <Button onClick={handleGerarLink} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Gerar Link
-              </Button>
-            </>
-          ) : (
-            <div className="flex gap-2 w-full">
-              <Button variant="outline" onClick={handleReset} className="flex-1">
-                Gerar Novamente
-              </Button>
-              <Button onClick={handleClose} className="flex-1">
-                Fechar
-              </Button>
-            </div>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {!(paymentLink || qrCode) && (
+            <Button onClick={handleGerarLink} disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : 'Gerar Agora'}
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
