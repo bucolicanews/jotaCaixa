@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, Check, QrCode, Send, Mail, Loader2, RefreshCw } from 'lucide-react';
+import { Copy, Check, QrCode, Send, Mail, Loader2, RefreshCw, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -57,9 +57,22 @@ export function VisualizarLinkPagBankDialog({
 
       if (error) throw error;
       
-      toast.success('Status atualizado com sucesso!');
-      // Pequeno delay para o banco processar e fechar modal para forçar refresh na lista
-      setTimeout(() => onOpenChange(false), 1000);
+      // LOG DE DEPURAÇÃO PARA O USUÁRIO
+      console.log('%c=== 🔍 INVESTIGAÇÃO DE SINCRONIZAÇÃO ===', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
+      console.log('ID Parcela:', parcelaId);
+      console.log('Status Interpretado:', data.status);
+      console.log('Pagamento Detectado?', data.isPaid);
+      console.log('Resposta Bruta da API:', data);
+      console.log('%c====================================', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
+
+      if (data.isPaid) {
+          toast.success('Pagamento detectado! A parcela será atualizada em instantes.');
+          // Fecha modal para forçar refresh na lista principal
+          setTimeout(() => onOpenChange(false), 2000);
+      } else {
+          toast.info(`Status atual: ${data.status}. Nenhum pagamento confirmado ainda.`);
+      }
+      
     } catch (error: any) {
       console.error('Erro ao sincronizar:', error);
       toast.error('Falha ao sincronizar: ' + error.message);
@@ -181,12 +194,21 @@ export function VisualizarLinkPagBankDialog({
                 size="sm" 
                 onClick={handleSyncStatus} 
                 disabled={syncing || status === 'PAID'}
-                className="h-8 text-xs"
+                className="h-8 text-xs bg-amber-50 hover:bg-amber-100 text-amber-700"
             >
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <RefreshCw className="h-3 w-3 mr-2" />}
                 Sincronizar Status
             </Button>
           </div>
+
+          {status !== 'PAID' && (
+              <Alert className="bg-amber-50 border-amber-200">
+                  <Terminal className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-xs text-amber-700">
+                      Abra o console (F12) após sincronizar para ver os detalhes da resposta da API.
+                  </AlertDescription>
+              </Alert>
+          )}
 
           {qrCode && (
             <div className="flex flex-col items-center space-y-2">
@@ -239,15 +261,6 @@ export function VisualizarLinkPagBankDialog({
                 </Button>
               </div>
             </div>
-          )}
-
-          {!qrCode && !qrCodeText && !linkToUse && (
-            <Alert>
-              <QrCode className="h-4 w-4" />
-              <AlertDescription>
-                Nenhum link de pagamento disponivel para esta parcela.
-              </AlertDescription>
-            </Alert>
           )}
 
           {linkToUse && (
