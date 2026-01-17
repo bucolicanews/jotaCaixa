@@ -17,8 +17,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { parcelaId, manualOrderId } = await req.json();
+    const body = await req.json();
+    const { parcelaId, manualOrderId } = body;
+    
     if (!parcelaId) throw new Error('ID da parcela não informado.');
+
+    console.log(`[Sync] Iniciando para parcela: ${parcelaId} (Manual: ${manualOrderId || 'Não'})`);
 
     // 1. Buscar a parcela
     const { data: parcela, error: pError } = await supabaseAdmin
@@ -27,7 +31,7 @@ serve(async (req) => {
       .eq('id', parcelaId)
       .single();
 
-    if (pError || !parcela) throw new Error('Parcela não encontrada.');
+    if (pError || !parcela) throw new Error('Parcela não encontrada no banco de dados.');
 
     // 2. Buscar configuração PagBank
     const { data: config } = await supabaseAdmin
@@ -36,11 +40,13 @@ serve(async (req) => {
       .eq('proprietario_id', parcela.admin_id)
       .single();
 
-    if (!config) throw new Error('Configuração PagBank não encontrada.');
+    if (!config) throw new Error('Configuração PagBank não encontrada para este administrador.');
 
     const token = (config.ambiente === 'producao' ? config.token_producao : config.token_sandbox)?.trim();
     const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
     
+    if (!token) throw new Error('Token do PagBank não configurado.');
+
     let apiStatus = 'UNKNOWN';
     let paymentConfirmed = false;
     let chargeData = null;
@@ -50,19 +56,26 @@ serve(async (req) => {
     
     if (manualOrderId) {
         // BUSCA FORÇADA VIA ORDER ID
-        console.log(`[Sync] Forçando busca via Order ID: ${manualOrderId}`);
+        console.log(`[Sync] Buscando Order ID: ${manualOrderId}`);
         const response = await fetch(`${baseUrl}/orders/${manualOrderId}`, {
-            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+            headers: { 
+                'Authorization': `Bearer ${token}`, 
+                'Accept': 'application/json' 
+            }
         });
         
-        if (!response.ok) throw new Error(`Ordem ${manualOrderId} não encontrada no PagBank.`);
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[Sync] Erro PagBank Order:`, errText);
+            throw new Error(`Transação ${manualOrderId} não encontrada ou token inválido.`);
+        }
         
         rawData = await response.json();
         
-        // VALIDAÇÃO CRÍTICA: Verifica se a ordem pertence a ESTA parcela
+        // VALIDAÇÃO: Verifica se a ordem pertence a ESTA parcela
         const expectedRef = `PARCELA_${parcela.id}`;
         if (rawData.reference_id !== expectedRef) {
-            throw new Error(`A transação informada pertence a outra cobrança (Ref: ${rawData.reference_id}).`);
+            throw new Error(`O ID informado pertence a outra cobrança (Ref: ${rawData.reference_id}). Verifique se copiou o ID correto.`);
         }
         
         apiStatus = rawData.status;
@@ -72,16 +85,23 @@ serve(async (req) => {
     } else {
         // BUSCA AUTOMÁTICA VIA CHECKOUT OU CHARGE
         const resourceId = parcela.pagbank_checkout_id || parcela.pagbank_charge_id;
-        if (!resourceId) throw new Error('Transação PagBank não iniciada nesta parcela.');
+        if (!resourceId) throw new Error('Nenhum link ou checkout foi gerado para esta parcela ainda.');
 
         const isCheckout = !!parcela.pagbank_checkout_id;
         const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
         
         const response = await fetch(endpoint, {
-            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+            headers: { 
+                'Authorization': `Bearer ${token}`, 
+                'Accept': 'application/json' 
+            }
         });
 
-        if (!response.ok) throw new Error(`Recurso ${resourceId} não encontrado.`);
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[Sync] Erro PagBank Sync:`, errText);
+            throw new Error(`Erro na API PagBank (${response.status}). O link pode ter expirado ou o token é inválido.`);
+        }
         
         rawData = await response.json();
         apiStatus = rawData.status;
@@ -106,10 +126,10 @@ serve(async (req) => {
 
     // --- EXECUÇÃO DA BAIXA ---
     if (paymentConfirmed && parcela.status !== 'paga') {
-        console.log(`[Sync] Iniciando baixa financeira automática para parcela ${parcela.id}`);
+        console.log(`[Sync] Sucesso! Baixando parcela ${parcela.id} via Webhook interno.`);
         
         const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
-        await fetch(webhookUrl, {
+        const webRes = await fetch(webhookUrl, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -124,8 +144,13 @@ serve(async (req) => {
                 charges: chargeData?.charges || []
             })
         });
-    } else if (!paymentConfirmed) {
-        // Atualiza o status visual
+        
+        if (!webRes.ok) {
+            const webErr = await webRes.text();
+            throw new Error(`O pagamento foi detectado, mas a baixa interna falhou: ${webErr}`);
+        }
+    } else {
+        // Atualiza apenas o status visual se não estiver pago
         await supabaseAdmin.from('admin_parcelas_receber').update({ 
             pagbank_status: apiStatus,
             pagbank_updated_at: new Date().toISOString()
@@ -139,6 +164,7 @@ serve(async (req) => {
         rawResponse: rawData
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200
     });
 
   } catch (error: any) {

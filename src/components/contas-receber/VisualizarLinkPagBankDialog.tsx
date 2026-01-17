@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check, QrCode, Send, Mail, Loader2, RefreshCw, Terminal, Search, AlertCircle } from 'lucide-react';
+import { Copy, Check, QrCode, Send, Mail, Loader2, RefreshCw, Terminal, Search, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -55,14 +55,26 @@ export function VisualizarLinkPagBankDialog({
     
     try {
       setSyncing(true);
-      const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
+      const { data, error: invokeError } = await supabase.functions.invoke('sync-pagbank-transactions', {
         body: { 
             parcelaId,
             manualOrderId: forceId || null
         }
       });
 
-      if (error) throw error;
+      // TRATAMENTO DE ERRO ROBUSTO
+      if (invokeError) {
+          let errorMsg = 'Falha na comunicação com o servidor.';
+          try {
+              const errorContext = await invokeError.context?.json();
+              errorMsg = errorContext?.error || invokeError.message;
+          } catch (e) {
+              errorMsg = invokeError.message;
+          }
+          throw new Error(errorMsg);
+      }
+      
+      if (!data.success) throw new Error(data.error || 'Erro ao sincronizar');
       
       console.log('%c=== 🔍 INVESTIGAÇÃO DE SINCRONIZAÇÃO ===', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
       console.log('ID Parcela:', parcelaId);
@@ -82,7 +94,10 @@ export function VisualizarLinkPagBankDialog({
       
     } catch (error: any) {
       console.error('Erro ao sincronizar:', error);
-      toast.error(error.message);
+      toast.error(error.message, {
+          icon: <AlertTriangle className="text-red-500" />,
+          duration: 5000
+      });
     } finally {
       setSyncing(false);
     }
