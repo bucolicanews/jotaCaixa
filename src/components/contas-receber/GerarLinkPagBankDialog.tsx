@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Copy, Check, CreditCard, FileText, QrCode, ShoppingCart, Send, Mail, Terminal } from 'lucide-react';
+import { Loader2, Copy, Check, CreditCard, FileText, QrCode, ShoppingCart, Send, Mail, Terminal, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
@@ -37,7 +37,6 @@ export function GerarLinkPagBankDialog({
   const { ownerId } = useSessao();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('checkout');
   const [loading, setLoading] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrCodeText, setQrCodeText] = useState<string | null>(null);
@@ -61,20 +60,31 @@ export function GerarLinkPagBankDialog({
         body = { parcela_id: parcelaId, payment_method: paymentMethod, admin_id: ownerId };
       }
 
-      const { data, error } = await supabase.functions.invoke(functionName, { body });
+      const { data, error: invokeError } = await supabase.functions.invoke(functionName, { body });
 
-      if (error) throw error;
+      // TRATAMENTO DE ERRO DETALHADO (Lê o corpo do erro 400)
+      if (invokeError) {
+          let errorMsg = 'Falha na comunicação com o servidor.';
+          try {
+              // Tenta extrair a mensagem de erro específica enviada pela Edge Function
+              const errorContext = await invokeError.context?.json();
+              errorMsg = errorContext?.error || invokeError.message;
+          } catch (e) {
+              errorMsg = invokeError.message;
+          }
+          throw new Error(errorMsg);
+      }
+      
       if (!data.success) throw new Error(data.error || 'Erro ao gerar link');
 
-      // EXIBIÇÃO DE LOGS PARA HOMOLOGAÇÃO (CONFORME SOLICITADO PELO PAGBANK)
+      // EXIBIÇÃO DE LOGS PARA HOMOLOGAÇÃO
       console.log('%c=== 🧾 LOG DE HOMOLOGAÇÃO PAGBANK ===', 'background: #1e40af; color: #fff; font-weight: bold; padding: 4px;');
-      console.log('Ambiente:', data.checkout_id?.startsWith('CHEC_') ? 'PRODUÇÃO' : 'TESTE/SANDBOX');
       console.log('📍 Função Chamada:', functionName);
       console.log('📤 REQUEST BODY:', JSON.stringify(body, null, 2));
       console.log('📥 RESPONSE DATA:', JSON.stringify(data, null, 2));
-      console.log('%c=== FIM DO LOG - COPIE O CONTEÚDO ACIMA ===', 'background: #1e40af; color: #fff; font-weight: bold; padding: 4px;');
+      console.log('%c=== FIM DO LOG ===', 'background: #1e40af; color: #fff; font-weight: bold; padding: 4px;');
 
-      toast.success('Link gerado! Logs de homologação exibidos no Console (F12).');
+      toast.success('Link gerado com sucesso!');
       
       if (paymentMethod === 'checkout') {
         setPaymentLink(data.checkout_link);
@@ -88,7 +98,11 @@ export function GerarLinkPagBankDialog({
       if (onSuccess) onSuccess();
     } catch (error: any) {
       console.error('Erro PagBank:', error);
-      toast.error(error.message || 'Falha na comunicação com o PagBank');
+      // Aqui o toast mostrará o erro real (ex: "CPF inválido")
+      toast.error(error.message, {
+          duration: 5000,
+          icon: <AlertTriangle className="text-red-500" />
+      });
     } finally {
       setLoading(false);
     }
@@ -98,7 +112,7 @@ export function GerarLinkPagBankDialog({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success('Copiado para a área de transferência!');
+      toast.success('Copiado!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       toast.error('Erro ao copiar');
@@ -127,14 +141,14 @@ export function GerarLinkPagBankDialog({
                 <RadioGroupItem value="checkout" id="checkout" />
                 <Label htmlFor="checkout" className="flex-1 cursor-pointer">
                   <div className="font-bold flex items-center gap-2"><ShoppingCart className="w-4 h-4"/> Checkout PagBank</div>
-                  <p className="text-xs text-muted-foreground">Cartão, PIX e Boleto em uma única tela (Recomendado)</p>
+                  <p className="text-xs text-muted-foreground">Cartão, PIX e Boleto em uma única tela (Produção)</p>
                 </Label>
               </div>
               <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-accent" onClick={() => setPaymentMethod('pix')}>
                 <RadioGroupItem value="pix" id="pix" />
                 <Label htmlFor="pix" className="flex-1 cursor-pointer">
                   <div className="font-bold flex items-center gap-2"><QrCode className="w-4 h-4"/> PIX Direto</div>
-                  <p className="text-xs text-muted-foreground">Gera QR Code e código Copia e Cola imediato</p>
+                  <p className="text-xs text-muted-foreground">Gera QR Code imediato para o cliente</p>
                 </Label>
               </div>
             </RadioGroup>
@@ -144,7 +158,7 @@ export function GerarLinkPagBankDialog({
             <Alert className="bg-blue-50 border-blue-200">
                 <Terminal className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                    Para homologação de produção: Abra o console (F12) para copiar os logs de Request/Response.
+                    Logs de homologação gerados! Copie os dados do console (F12) se necessário.
                 </AlertDescription>
             </Alert>
 
@@ -152,14 +166,14 @@ export function GerarLinkPagBankDialog({
               <div className="flex flex-col items-center gap-3">
                 <img src={qrCode} className="w-40 h-40 border p-2 rounded bg-white" alt="QR Code" />
                 <Button variant="outline" size="sm" onClick={() => handleCopyLink(qrCodeText || '')} className="w-full">
-                    {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar Código PIX
+                    {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />} Copiar Código PIX
                 </Button>
               </div>
             )}
 
             {paymentLink && (
               <div className="space-y-2">
-                <Label className="text-xs">Link de Pagamento / Boleto</Label>
+                <Label className="text-xs">Link de Pagamento</Label>
                 <div className="flex gap-2">
                   <Input readOnly value={paymentLink} className="text-xs bg-muted" />
                   <Button size="icon" variant="outline" onClick={() => handleCopyLink(paymentLink)}><Copy className="w-4 h-4"/></Button>
@@ -167,9 +181,10 @@ export function GerarLinkPagBankDialog({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={handleSendWhatsApp} disabled={!clienteInfo?.telefone}><Send className="w-4 h-4 mr-2" /> WhatsApp</Button>
-                <Button variant="outline" onClick={() => toast.info('Funcionalidade de e-mail em breve')}><Mail className="w-4 h-4 mr-2" /> E-mail</Button>
+            <div className="grid grid-cols-1 gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={handleSendWhatsApp} disabled={!clienteInfo?.telefone} className="w-full">
+                    <Send className="w-4 h-4 mr-2" /> Enviar via WhatsApp
+                </Button>
             </div>
           </div>
         )}

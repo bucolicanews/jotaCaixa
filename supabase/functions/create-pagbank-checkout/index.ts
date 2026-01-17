@@ -19,14 +19,11 @@ serve(async (req) => {
 
     const { parcela_id, admin_id, redirect_url } = await req.json();
 
-    console.log('=== INICIO ===');
-    console.log('Requisição:', { parcela_id, admin_id });
-
     if (!parcela_id || !admin_id) {
-      throw new Error('parcela_id e admin_id obrigatórios');
+      throw new Error('Parâmetros ausentes: parcela_id e admin_id são obrigatórios.');
     }
 
-    // 1. Buscar parcela
+    // 1. Buscar parcela e dados do cliente
     const { data: parcela, error: parcelaError } = await supabaseAdmin
       .from('admin_parcelas_receber')
       .select(`
@@ -46,105 +43,47 @@ serve(async (req) => {
       .eq('id', parcela_id)
       .single();
 
-    if (parcelaError || !parcela) {
-      console.error('Erro ao buscar parcela:', parcelaError);
-      throw new Error('Parcela não encontrada');
-    }
+    if (parcelaError || !parcela) throw new Error('Parcela não encontrada.');
+    if (parcela.status === 'paga') throw new Error('Esta parcela já está quitada.');
 
-    console.log('Parcela:', parcela.id);
-
-    if (parcela.status === 'paga') {
-      throw new Error('Parcela já paga');
-    }
-
-    if (parcela.pagbank_checkout_id) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          checkout_id: parcela.pagbank_checkout_id,
-          checkout_link: parcela.pagbank_checkout_link,
-          message: 'Checkout já existe',
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const clienteId = parcela.admin_contas_receber?.cliente_id;
-    if (!clienteId) {
-      throw new Error('Cliente não vinculado');
-    }
-
-    console.log('Cliente ID:', clienteId);
-
-    // 2. Buscar cliente
     const cliente = parcela.admin_contas_receber?.tbl_clientes;
-    if (!cliente) {
-      throw new Error('Cliente não encontrado na parcela');
-    }
+    if (!cliente) throw new Error('Dados do cliente não encontrados na parcela.');
 
-    console.log('Cliente:', cliente.nome);
-
-    // 3. Buscar config
+    // 2. Buscar config do PagBank
     const { data: config, error: configError } = await supabaseAdmin
       .from('configuracoes_pagbank')
       .select('*')
       .eq('proprietario_id', admin_id)
       .single();
 
-    if (configError || !config) {
-      throw new Error('Configuração PagBank não encontrada');
+    if (configError || !config) throw new Error('Configuração PagBank não encontrada para este administrador.');
+
+    // 3. Validação do Nome (PagBank exige pelo menos duas strings no nome)
+    let nomeCliente = cliente.nome.trim();
+    if (!nomeCliente.includes(' ')) {
+        // Fallback: Adiciona um sobrenome genérico se for apenas um nome (comum em cadastros incompletos)
+        nomeCliente = `${nomeCliente} Cliente`;
     }
 
     // 4. Processar CPF/CNPJ
-    let taxId = '';
-    if (cliente.cpf) {
-      taxId = cliente.cpf.replace(/\D/g, '');
-    } else if (cliente.cnpj) {
-      taxId = cliente.cnpj.replace(/\D/g, '');
-    } else if (cliente.documento) {
-      taxId = cliente.documento.replace(/\D/g, '');
-    }
-
-    console.log('CPF/CNPJ:', taxId);
-
+    let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
     if (!taxId || (taxId.length !== 11 && taxId.length !== 14)) {
-      return new Response(
-        JSON.stringify({ error: `CPF/CNPJ inválido ou não cadastrado para o cliente "${cliente.nome}".` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      throw new Error(`CPF/CNPJ inválido (${taxId || 'vazio'}) para o cliente "${cliente.nome}".`);
     }
 
-    // 5. Processar telefone
-    let telefoneArea = '11';
-    let telefoneNumero = '999999999';
-
-    if (cliente.telefone) {
-      const telefoneClean = cliente.telefone.replace(/\D/g, '');
-      console.log('Telefone limpo:', telefoneClean);
-
-      if (telefoneClean.length >= 10) {
-        telefoneArea = telefoneClean.substring(0, 2);
-        telefoneNumero = telefoneClean.substring(2);
-      } else if (telefoneClean.length >= 8) {
-        telefoneNumero = telefoneClean;
-      }
-    }
-
-    console.log('Telefone: DDD', telefoneArea, 'Numero', telefoneNumero);
-
-    // 6. Montar payload
+    // 5. Configurações de API
     const valorEmCentavos = Math.round(parcela.valor_parcela * 100);
     const referenceId = `PARCELA_${parcela_id}`;
-    const token = config.ambiente === 'sandbox' ? config.token_sandbox : config.token_producao;
-    const baseUrl = config.ambiente === 'sandbox' 
-      ? 'https://sandbox.api.pagseguro.com' 
-      : 'https://api.pagseguro.com';
+    const token = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
+    const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
+
+    if (!token) throw new Error(`Token de ${config.ambiente} não configurado.`);
 
     const checkoutRequest = {
       reference_id: referenceId,
       customer: {
-        name: cliente.nome,
-        email: cliente.email || 'cliente.sem.email@jotaempresas.com',
+        name: nomeCliente,
+        email: cliente.email || 'cobranca@jotaempresas.com',
         tax_id: taxId,
       },
       customer_modifiable: true,
@@ -157,26 +96,15 @@ serve(async (req) => {
         { type: 'PIX' },
         { type: 'BOLETO' },
         { type: 'CREDIT_CARD', brands: ['VISA', 'MASTERCARD', 'ELO', 'AMEX', 'HIPERCARD'] },
-        { type: 'DEBIT_CARD', brands: ['VISA', 'MASTERCARD', 'ELO'] },
       ],
       payment_methods_configs: [{
         type: 'CREDIT_CARD',
         config_options: [{ option: 'INSTALLMENTS_LIMIT', value: '12' }],
       }],
       notification_urls: config.webhook_url ? [config.webhook_url] : [],
-      payment_notification_urls: config.webhook_url ? [config.webhook_url] : [],
     };
 
-    if (redirect_url) {
-      checkoutRequest.redirect_url = redirect_url;
-    }
-
-    console.log('=== PAYLOAD ===');
-    console.log(JSON.stringify(checkoutRequest, null, 2));
-    console.log('===============');
-
-    // 7. Enviar ao PagBank
-    console.log('Enviando ao PagBank:', baseUrl + '/checkouts');
+    console.log(`[PagBank] Criando checkout em ${config.ambiente} para: ${nomeCliente}`);
 
     const response = await fetch(`${baseUrl}/checkouts`, {
       method: 'POST',
@@ -188,55 +116,55 @@ serve(async (req) => {
     });
 
     const responseText = await response.text();
-    console.log('=== RESPOSTA ===');
-    console.log('Status:', response.status);
-    console.log('Body:', responseText);
-    console.log('================');
 
     if (!response.ok) {
-      throw new Error(`PagBank error ${response.status}: ${responseText}`);
+      // Extrai erro detalhado do PagBank
+      let errorDetail = responseText;
+      try {
+          const errObj = JSON.parse(responseText);
+          if (errObj.error_messages) errorDetail = errObj.error_messages.map((m: any) => m.description).join(', ');
+      } catch (e) {}
+      throw new Error(`PagBank (${response.status}): ${errorDetail}`);
     }
 
     const checkoutResponse = JSON.parse(responseText);
     const payLink = checkoutResponse.links?.find((l: any) => l.rel === 'PAY')?.href || '';
 
-    // 8. Salvar no banco
+    // Salvar no banco
     await supabaseAdmin
       .from('admin_parcelas_receber')
       .update({
         pagbank_checkout_id: checkoutResponse.id,
         pagbank_checkout_link: payLink,
-        pagbank_status: checkoutResponse.status,
+        pagbank_status: 'WAITING',
         pagbank_updated_at: new Date().toISOString(),
       })
       .eq('id', parcela_id);
 
+    // Log de Auditoria
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
       proprietario_id: admin_id,
       transaction_type: 'checkout',
       pagbank_id: checkoutResponse.id,
       reference_id: referenceId,
-      status: checkoutResponse.status,
+      status: 'SUCCESS',
       amount: parcela.valor_parcela,
       request_payload: checkoutRequest,
       response_payload: checkoutResponse,
     });
-
-    console.log('=== SUCESSO ===');
 
     return new Response(
       JSON.stringify({
         success: true,
         checkout_id: checkoutResponse.id,
         checkout_link: payLink,
-        status: checkoutResponse.status,
-        cliente: { nome: cliente.nome, email: cliente.email, telefone: cliente.telefone },
+        cliente: { nome: nomeCliente, email: cliente.email, telefone: cliente.telefone },
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error: any) {
-    console.error('=== ERRO ===', error.message);
+    console.error('[PagBank Error]', error.message);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
