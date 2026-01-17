@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Info } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Info, Tag } from 'lucide-react'; // Adicionado Tag
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
@@ -124,9 +124,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
-  // Busca os dados da empresa proprietária selecionada (o escritório/admin)
   const fetchEmpresaProprietaria = useCallback(async (id: string) => {
-      // Tenta buscar primeiro como Admin Central
       const { data, error } = await supabase
           .from('tbl_admins')
           .select('*')
@@ -136,7 +134,6 @@ const GerarDocumentoSocietario: React.FC = () => {
       if (data && !error) {
           setDadosEmpresaProprietaria(data);
       } else {
-          // Se não for admin central, busca na tbl_clientes (pode ser um cliente do sistema gerando docs)
           const { data: clientData } = await supabase
               .from('tbl_clientes')
               .select('*')
@@ -176,19 +173,13 @@ const GerarDocumentoSocietario: React.FC = () => {
           
           if (tag.origem_dado) {
               const parts = tag.origem_dado.split('.');
-              const sourceField = parts[parts.length - 1]; // Pega sempre o último termo (ex: endereco)
+              const sourceField = parts[parts.length - 1]; 
               
-              // Lógica de Prioridade:
-              // 1. Se a tag é de EMPRESA, busca obrigatoriamente nos dados da Empresa Proprietária (Escritório)
               if (tagKey.startsWith('{{EMPRESA_') && empresa) {
                   tagValue = empresa[sourceField] || null;
               } 
-              // 2. Se a tag é de CLIENTE, busca obrigatoriamente nos dados do Cliente Selecionado
               else if (tagKey.startsWith('{{CLIENTE_') && cliente) {
-                  // Mapeamento especial para garantir que campos da tbl_clientes funcionem
                   tagValue = (cliente as any)[sourceField] || null;
-                  
-                  // Fallback para campos de documento
                   if (!tagValue && sourceField === 'documento') tagValue = cliente.cnpj || cliente.cpf || null;
               } 
           }
@@ -198,7 +189,6 @@ const GerarDocumentoSocietario: React.FC = () => {
           }
       });
       
-      // Garante que o conteúdo principal não seja perdido
       newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modeloTemplate || '';
       setValue('valores_tags', newTags, { shouldDirty: true });
   }, [allAvailableTags, setValue]);
@@ -206,7 +196,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId || !ownerIdLogado) return;
     
-    // Busca tags específicas da empresa proprietária
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
@@ -217,13 +206,12 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTagsCustomizadas(tagsData);
     }
     
-    // Busca clientes: tanto da tbl_clientes (sistema) quanto da clientes (avulsos)
     const { data: clientesSistemaData } = await supabase
         .from('tbl_clientes')
         .select('*')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
-        .neq('id', targetEmpresaId); // Não inclui o próprio admin na lista
+        .neq('id', targetEmpresaId);
         
     const { data: clientesCRData } = await supabase
         .from('clientes')
@@ -307,7 +295,6 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setModelo(currentModelo);
     
-    // Lista de empresas para o select de proprietário (apenas se for Admin ou funcionário do Admin)
     if (isAdmin || isAdminUsuario) {
         const { data: clientsData } = await supabase
             .from('tbl_clientes')
@@ -339,7 +326,6 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
-  // Aplica as tags automaticamente quando o cliente ou a empresa proprietária mudam
   useEffect(() => {
       if (clienteSelecionadoId && modelo && !carregandoDados) {
           applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria, modelo.conteudo_template);
