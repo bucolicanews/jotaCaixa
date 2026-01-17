@@ -47,6 +47,8 @@ serve(async (req) => {
     const isCheckout = !!parcela.pagbank_checkout_id;
     const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
     
+    console.log(`[Sync] Consultando PagBank: ${endpoint}`);
+
     const response = await fetch(endpoint, {
       headers: { 
           'Authorization': `Bearer ${token}`, 
@@ -54,41 +56,51 @@ serve(async (req) => {
       }
     });
 
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro API PagBank (${response.status}): ${errorText}`);
+    }
+
     const rawData = await response.json();
     let apiStatus = rawData.status;
     let paymentConfirmed = false;
     let chargeData = null;
 
-    // Lógica rigorosa de detecção de pagamento
-    if (isCheckout && rawData.orders && rawData.orders.length > 0) {
-        // Procuramos por QUALQUER ordem que tenha sido paga dentro deste checkout
-        const paidOrder = rawData.orders.find((o: any) => 
-            ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status)
-        );
-        
-        if (paidOrder) {
-            chargeData = paidOrder;
-            apiStatus = 'PAID';
-            paymentConfirmed = true;
-            console.log(`[Sync] Pagamento confirmado encontrado na ordem ${paidOrder.id}`);
-        } else {
-            // Se não houver nenhuma paga, pegamos o status da tentativa mais recente apenas para informação visual
-            const sortedOrders = [...rawData.orders].sort((a: any, b: any) => b.id.localeCompare(a.id));
-            apiStatus = sortedOrders[0].status;
-            console.log(`[Sync] Nenhuma ordem paga encontrada. Status visual definido como: ${apiStatus}`);
+    // Lógica para detecção de pagamento em Checkout
+    if (isCheckout) {
+        // No Checkout, o status do link pode ser ACTIVE, mas as ordens internas podem estar PAID
+        if (rawData.orders && rawData.orders.length > 0) {
+            // Procuramos por QUALQUER ordem que tenha sido paga
+            const paidOrder = rawData.orders.find((o: any) => 
+                ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status)
+            );
+            
+            if (paidOrder) {
+                chargeData = paidOrder;
+                apiStatus = 'PAID';
+                paymentConfirmed = true;
+                console.log(`[Sync] Pagamento encontrado na ordem ${paidOrder.id}`);
+            } else {
+                // Se não houver nenhuma paga, pegamos o status da mais recente para exibir
+                const sortedOrders = [...rawData.orders].sort((a: any, b: any) => b.id.localeCompare(a.id));
+                apiStatus = sortedOrders[0].status;
+            }
         }
-    } else if (!isCheckout && (apiStatus === 'PAID' || apiStatus === 'COMPLETED')) {
-        paymentConfirmed = true;
-        chargeData = rawData;
+    } else {
+        // Para cobranças diretas (não checkout)
+        if (apiStatus === 'PAID' || apiStatus === 'COMPLETED') {
+            paymentConfirmed = true;
+            chargeData = rawData;
+        }
     }
 
-    // --- BLOQUEIO DE SEGURANÇA ---
-    // A baixa financeira (recebimento/contabilidade) SÓ acontece se paymentConfirmed for TRUE
+    // --- EXECUÇÃO DA BAIXA ---
     if (paymentConfirmed && parcela.status !== 'paga') {
-        console.log(`[Sync] Iniciando processo de baixa financeira para parcela ${parcela.id}`);
+        console.log(`[Sync] Iniciando baixa financeira manual para parcela ${parcela.id}`);
         
+        // Chamamos o webhook interno para processar a baixa contábil e financeira
         const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
-        const webhookResponse = await fetch(webhookUrl, {
+        await fetch(webhookUrl, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -103,13 +115,8 @@ serve(async (req) => {
                 charges: chargeData?.charges || []
             })
         });
-
-        if (!webhookResponse.ok) {
-            console.error('[Sync] Falha ao processar baixa via webhook interno');
-        }
     } else {
-        // Se não está pago, APENAS atualizamos o status visual da etiqueta no banco
-        // Isso não altera saldos nem marca a parcela como 'paga' na coluna de controle financeiro
+        // Se ainda não estiver pago, apenas atualizamos o status visual da etiqueta
         await supabaseAdmin.from('admin_parcelas_receber').update({ 
             pagbank_status: apiStatus,
             pagbank_updated_at: new Date().toISOString()
@@ -120,12 +127,13 @@ serve(async (req) => {
         success: true, 
         status: apiStatus,
         isPaid: paymentConfirmed,
-        rawResponse: rawData 
+        rawResponse: rawData // Enviamos a resposta bruta para ver no F12
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: any) {
+    console.error('[Sync Error]', error.message);
     return new Response(JSON.stringify({ success: false, error: error.message }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
