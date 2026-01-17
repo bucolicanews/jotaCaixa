@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Save, Check, AlertCircle, ShieldCheck, Globe, Info } from 'lucide-react';
+import { Badge } from '@/components/ui/badge'; // Importação adicionada
+import { Loader2, Save, Globe, ShieldCheck, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
@@ -21,7 +22,7 @@ interface PlanoContas {
 
 interface Historico {
   id: string;
-  codigo: string;
+  codigo: string | null;
   descricao: string;
 }
 
@@ -36,12 +37,9 @@ export default function ConfiguracoesPagBank() {
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
 
-  useEffect(() => {
+  const carregarDados = useCallback(async () => {
     if (!ownerId) return;
-    carregarDados();
-  }, [ownerId]);
-
-  const carregarDados = async () => {
+    
     try {
       setLoading(true);
 
@@ -67,8 +65,7 @@ export default function ConfiguracoesPagBank() {
       if (configRes.data) {
         setConfig(configRes.data);
       } else {
-        // Default webhook URL if not set
-        const projectId = window.location.hostname.split('.')[0];
+        // Define URL padrão do webhook se não existir
         setConfig(prev => ({
             ...prev,
             webhook_url: `https://jqoirlswewggyppgvgnv.supabase.co/functions/v1/pagbank-webhook`
@@ -76,14 +73,18 @@ export default function ConfiguracoesPagBank() {
       }
 
       if (planoRes.data) setPlanoContas(planoRes.data);
-      if (histRes.data) setHistoricos(histRes.data);
+      if (histRes.data) setHistoricos(histRes.data as Historico[]);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
       toast.error('Erro ao carregar configurações');
     } finally {
       setLoading(false);
     }
-  };
+  }, [ownerId]);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
 
   const handleSave = async () => {
     if (!config.token_producao && config.ambiente === 'producao') {
