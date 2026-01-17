@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2 } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
@@ -84,22 +84,19 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [previewTitle, setPreviewTitle] = useState('');
   
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [empresaLogada, setEmpresaLogada] = useState<any>(null);
+  const [dadosEmpresaProprietaria, setDadosEmpresaProprietaria] = useState<any>(null);
   
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam;
 
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
+  const isAdminUsuario = role === 'Usuario' && !!(perfil as any)?.admin_id;
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isClient) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') {
-      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-      if ('admin_id' in user && user.admin_id) return user.admin_id;
-      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-    }
+    if (isAdminUsuario) return (perfil as any).admin_id;
     return null;
   };
   
@@ -128,48 +125,44 @@ const GerarDocumentoSocietario: React.FC = () => {
       return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
-  const empresaLogadaMemo = useMemo(() => {
-    if (!perfil) return null;
-    const profile = perfil as AdminProfile | ClienteProfile;
-    
-    return {
-        nome: profile.nome, 
-        email: profile.email, 
-        documento: (profile as any).documento || (profile as any).cnpj || (profile as any).cpf,
-        cpf: (profile as any).cpf, 
-        cnpj: (profile as any).cnpj, 
-        rg: (profile as any).rg, 
-        telefone: (profile as any).telefone,
-        cep: (profile as any).cep, 
-        endereco: (profile as any).endereco, 
-        numero: (profile as any).numero, 
-        complemento: (profile as any).complemento,
-        bairro: (profile as any).bairro, 
-        cidade: (profile as any).cidade, 
-        estado: (profile as any).estado,
-    };
-  }, [perfil]);
+  // Busca os dados da empresa proprietária selecionada (o escritório)
+  const fetchEmpresaProprietaria = useCallback(async (id: string) => {
+      const { data, error } = await supabase
+          .from('tbl_admins')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+      if (data && !error) {
+          setDadosEmpresaProprietaria(data);
+      } else {
+          // Se não for admin central, tenta na tbl_clientes
+          const { data: clientData } = await supabase
+              .from('tbl_clientes')
+              .select('*')
+              .eq('id', id)
+              .single();
+          setDadosEmpresaProprietaria(clientData || null);
+      }
+  }, []);
+
+  useEffect(() => {
+      if (proprietarioDocumentoId) {
+          fetchEmpresaProprietaria(proprietarioDocumentoId);
+      }
+  }, [proprietarioDocumentoId, fetchEmpresaProprietaria]);
 
   const allAvailableTags = useMemo(() => {
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
       
-      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
-          acc[tag.nome_tag] = tag;
-          return acc;
-      }, {} as Record<string, any>);
-      
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
-      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => {
-              const customTag = customTagsMap[tagKey];
-              const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
-              return customTag || defaultTag;
-          })
+      // Remove duplicatas mantendo a prioridade para customizadas
+      return Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => combined.find(t => t.nome_tag === tagKey))
           .filter((t): t is any => !!t)
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
           
-      return uniqueTags;
   }, [tagsCustomizadas]);
 
   const applyTagsToForm = useCallback((
@@ -178,7 +171,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       empresa: any, 
       modeloTemplate: string
   ) => {
-      const newTags: Record<string, string> = {};
+      const newTags: Record<string, string> = { ...currentTags };
       
       allAvailableTags.forEach(tag => {
           const tagKey = tag.nome_tag;
@@ -187,10 +180,11 @@ const GerarDocumentoSocietario: React.FC = () => {
           if (tag.origem_dado) {
               const [sourceTable, sourceField] = tag.origem_dado.split('.');
               
-              // Lógica de mapeamento flexível: busca nos dados da empresa ou do cliente conforme o prefixo da tag
+              // Se a tag é de EMPRESA, busca nos dados do Escritório/Admin
               if (tagKey.startsWith('{{EMPRESA_') && empresa) {
                   tagValue = empresa[sourceField] || null;
               } 
+              // Se a tag é de CLIENTE, busca nos dados do Cliente Selecionado
               else if (tagKey.startsWith('{{CLIENTE_') && cliente) {
                   tagValue = (cliente as any)[sourceField] || null;
               } 
@@ -198,8 +192,6 @@ const GerarDocumentoSocietario: React.FC = () => {
           
           if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A' && tagValue !== '') {
               newTags[tagKey] = String(tagValue);
-          } else {
-              newTags[tagKey] = currentTags[tagKey] || '';
           }
       });
       
@@ -224,6 +216,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTagsCustomizadas(allTags);
     }
     
+    // Busca clientes vinculados ao Admin
     let queryClients = supabase
         .from('tbl_clientes')
         .select('*')
@@ -318,10 +311,11 @@ const GerarDocumentoSocietario: React.FC = () => {
     setModelo(currentModelo);
     
     let empresasContratoList: EmpresaContrato[] = [];
-    if (isAdmin) {
+    if (isAdmin || isAdminUsuario) {
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
+            .eq('admin_id', ownerIdLogado)
             .eq('aprovado', true)
             .order('nome');
             
@@ -343,31 +337,24 @@ const GerarDocumentoSocietario: React.FC = () => {
         valores_tags: initialValoresTags,
     });
     
-    setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
     
-  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form, fetchDependentData]);
-  
-  useEffect(() => {
-      if (proprietarioDocumentoId) {
-          fetchDependentData(proprietarioDocumentoId);
-      }
-  }, [proprietarioDocumentoId, fetchDependentData]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isAdminUsuario, form, fetchDependentData]);
   
   useEffect(() => {
       if (clienteSelecionadoId && modelo && !carregandoDados) {
-          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, empresaLogada, modelo.conteudo_template);
+          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria, modelo.conteudo_template);
       }
-  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, applyTagsToForm, getValues]);
+  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, dadosEmpresaProprietaria, applyTagsToForm, getValues]);
 
 
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isClient) {
+    } else if (!carregandoSessao && !isAdmin && !isClient && !isAdminUsuario) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient, isAdminUsuario]);
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
@@ -402,7 +389,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     try {
         const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
-        const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, values.valores_tags || {});
+        const templateToRender = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+        const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
         const documentoPayload = {
             modelo_id: modelo.id,
             cliente_id: values.cliente_id,
@@ -489,7 +477,7 @@ const GerarDocumentoSocietario: React.FC = () => {
               <Card className="lg:col-span-1 h-fit">
                   <CardHeader><CardTitle className="text-xl">Dados e Tags</CardTitle></CardHeader>
                   <CardContent className="space-y-6">
-                      {isAdmin && (
+                      {isAdmin || isAdminUsuario ? (
                           <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
                               <FormItem className="space-y-2">
                                   <FormLabel htmlFor="empresa-documento">Empresa Proprietária</FormLabel>
@@ -505,7 +493,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   <FormMessage />
                               </FormItem>
                           )} />
-                      )}
+                      ) : null}
                       <FormField control={form.control} name="titulo_documento" render={({ field }) => (
                           <FormItem className="space-y-2">
                               <FormLabel htmlFor="titulo-documento">Título do Documento</FormLabel>
@@ -531,12 +519,14 @@ const GerarDocumentoSocietario: React.FC = () => {
                                   </SelectContent>
                               </Select>
                               <FormMessage />
-                              <p className="text-[10px] text-muted-foreground mt-1">Dica: Use tags {{'{{CLIENTE_...}}'}} para os dados deste cliente.</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">Dica: Use tags {'{{CLIENTE_...}}'} para os dados deste cliente.</p>
                           </FormItem>
                       )} />
                       <Separator />
                       <div className="space-y-4">
-                          <h3 className="font-semibold text-lg">Tags Pendentes</h3>
+                          <h3 className="font-semibold text-lg flex items-center gap-2">
+                              <Info className="w-4 h-4" /> Tags Pendentes
+                          </h3>
                           <p className="text-xs text-muted-foreground">Preencha os valores para as tags que não foram encontradas automaticamente.</p>
                           {tagsParaPreenchimentoManual.length === 0 ? (<p className="text-muted-foreground text-sm italic">Nenhuma tag manual pendente.</p>) : (
                               tagsParaPreenchimentoManual.map(tagKey => (
@@ -589,7 +579,7 @@ const GerarDocumentoSocietario: React.FC = () => {
           </form>
         </Form>
       </FormProvider>
-      <DocumentoPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} conteudoHtml={conteudoPreview} titulo={previewTitle} isHtml={tipoConteudo === 'html'} />
+      <DocumentoPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} conteudoHtml={conteudoPreview} titulo={previewTitle} isHtml={true} />
     </LayoutPrincipal>
   );
 };
