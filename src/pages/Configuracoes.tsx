@@ -12,7 +12,7 @@ import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Sc
 import FormConfiguracaoTabelasPadrao from '@/components/formularios/FormConfiguracaoTabelasPadrao';
 import { ClienteProfile } from '@/types/usuario';
 import { cn } from '@/lib/utils';
-import ResetConfiguracoesPadrao from '@/components/formularios/ResetConfiguracoesPadrao'; // NOVO IMPORT
+import ResetConfiguracoesPadrao from '@/components/formularios/ResetConfiguracoesPadrao';
 
 const Configuracoes = () => {
   const { role, usuario, perfil, refetch } = useSessao();
@@ -29,12 +29,6 @@ const Configuracoes = () => {
       </h1>
       
       <Tabs defaultValue={canAccessContabil ? "contabil" : "geral"} className="w-full">
-        {/* MELHORIA DE RESPONSIVIDADE:
-            - overflow-x-auto: Permite deslizar as abas lateralmente no celular.
-            - whitespace-nowrap: Impede que o texto das abas quebre em duas linhas.
-            - flex: Alinha as abas em linha única.
-            - no-scrollbar: Remove a barra visual (opcional).
-        */}
         <div className="w-full overflow-x-auto no-scrollbar mb-4 bg-muted p-1 rounded-lg">
           <TabsList className="flex h-9 items-center justify-start bg-transparent w-max sm:w-full sm:justify-center">
             <TabsTrigger value="geral" className="min-w-[100px] whitespace-nowrap">Geral</TabsTrigger>
@@ -79,7 +73,6 @@ const Configuracoes = () => {
           </TabsList>
         </div>
         
-        {/* Conteúdos das Abas (Mantidos conforme sua lógica) */}
         <div className="mt-6">
             <TabsContent value="geral">
               <div className="space-y-6">
@@ -92,12 +85,10 @@ const Configuracoes = () => {
                   </CardContent>
                 </Card>
                 
-                {/* NOVO: Botão de Reset */}
                 {proprietarioId && (
                     <ResetConfiguracoesPadrao 
                         proprietarioId={proprietarioId} 
                         onResetComplete={() => {
-                            // Após o reset, forçamos o recarregamento da página para atualizar o Plano de Contas
                             window.location.reload();
                         }}
                     />
