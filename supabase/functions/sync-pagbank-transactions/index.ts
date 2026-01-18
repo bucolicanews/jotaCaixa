@@ -32,13 +32,13 @@ serve(async (req) => {
     if (pError || !parcela) throw new Error('Parcela não encontrada no banco.');
 
     // 2. Buscar configuração PagBank
-    const { data: config } = await supabaseAdmin
+    const { data: config, error: configError } = await supabaseAdmin
       .from('configuracoes_pagbank')
       .select('*')
       .eq('proprietario_id', parcela.admin_id)
       .single();
 
-    if (!config) throw new Error('Configuração PagBank não encontrada.');
+    if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
 
     const token = (config.ambiente === 'producao' ? config.token_producao : config.token_sandbox)?.trim();
     const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
@@ -52,69 +52,46 @@ serve(async (req) => {
 
     // --- LÓGICA DE BUSCA FLEXÍVEL ---
     
-    if (manualOrderId) {
-        // Normalização do ID: se não começar com ORDE_ ou CHAR_, adiciona ORDE_
-        let searchId = manualOrderId.trim();
-        if (!searchId.startsWith('ORDE_') && !searchId.startsWith('CHAR_') && !searchId.startsWith('CHEC_')) {
-            searchId = `ORDE_${searchId}`;
+    let resourceId = manualOrderId || parcela.pagbank_checkout_id || parcela.pagbank_charge_id;
+    if (!resourceId) throw new Error('Nenhum ID de transação (manual ou automático) encontrado para esta parcela.');
+
+    // Normalização do ID
+    resourceId = resourceId.trim();
+    if (!resourceId.startsWith('ORDE_') && !resourceId.startsWith('CHAR_') && !resourceId.startsWith('CHEC_')) {
+        resourceId = `ORDE_${resourceId}`;
+    }
+
+    const isCheckout = resourceId.startsWith('CHEC_');
+    const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
+    
+    const response = await fetch(endpoint, {
+        headers: { 
+            'Authorization': `Bearer ${token}`, 
+            'Accept': 'application/json' 
         }
+    });
 
-        console.log(`[Sync] Buscando ID Normalizado: ${searchId} em ${config.ambiente}`);
+    if (!response.ok) {
+        const errStatus = response.status;
+        const errText = await response.text();
+        console.error(`[Sync] Erro PagBank (${errStatus}):`, errText);
         
-        const response = await fetch(`${baseUrl}/orders/${searchId}`, {
-            headers: { 
-                'Authorization': `Bearer ${token}`, 
-                'Accept': 'application/json' 
-            }
-        });
-        
-        if (!response.ok) {
-            const errStatus = response.status;
-            const errText = await response.text();
-            console.error(`[Sync] Erro PagBank (${errStatus}):`, errText);
-            
-            if (errStatus === 401) throw new Error('Token Inválido ou Sem Permissão. Verifique se o token é de Sandbox ou Produção.');
-            if (errStatus === 404) throw new Error(`Transação ${searchId} não encontrada no ambiente ${config.ambiente}.`);
-            throw new Error(`Erro na API PagBank: ${errStatus}`);
-        }
-        
-        rawData = await response.json();
-        apiStatus = rawData.status;
-        paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
-        chargeData = rawData;
+        if (errStatus === 401) throw new Error('Token Inválido ou Sem Permissão.');
+        if (errStatus === 404) throw new Error(`Transação ${resourceId} não encontrada no ambiente ${config.ambiente}.`);
+        throw new Error(`Erro na API PagBank: ${errStatus}`);
+    }
+    
+    rawData = await response.json();
 
-    } else {
-        // BUSCA AUTOMÁTICA
-        const resourceId = parcela.pagbank_checkout_id || parcela.pagbank_charge_id;
-        if (!resourceId) throw new Error('Nenhum pagamento foi gerado para esta parcela ainda.');
+    // EXTRAÇÃO ROBUSTA DE STATUS E DADOS DA COBRANÇA
+    const chargeDetail = rawData.charges?.[0] || rawData.orders?.[0] || rawData;
+    apiStatus = chargeDetail.status || rawData.status || 'UNKNOWN';
+    paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
+    chargeData = chargeDetail;
 
-        const isCheckout = !!parcela.pagbank_checkout_id;
-        const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
-        
-        const response = await fetch(endpoint, {
-            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-        });
-
-        if (!response.ok) throw new Error(`Link expirado ou token inválido (${response.status}).`);
-        
-        rawData = await response.json();
-        apiStatus = rawData.status;
-
-        if (isCheckout) {
-            if (rawData.orders && rawData.orders.length > 0) {
-                const paidOrder = rawData.orders.find((o: any) => ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status));
-                if (paidOrder) {
-                    chargeData = paidOrder;
-                    apiStatus = 'PAID';
-                    paymentConfirmed = true;
-                } else {
-                    apiStatus = rawData.orders[0].status;
-                }
-            }
-        } else {
-            paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
-            chargeData = rawData;
-        }
+    if (isCheckout && paymentConfirmed) {
+        const paidOrder = rawData.orders?.find((o: any) => ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status));
+        if (paidOrder) chargeData = paidOrder;
     }
 
     // --- EXECUÇÃO DA BAIXA ---
@@ -144,7 +121,7 @@ serve(async (req) => {
         }).eq('id', parcela.id);
     }
 
-    return new Response(JSON.stringify({ success: true, status: apiStatus, isPaid: paymentConfirmed }), {
+    return new Response(JSON.stringify({ success: true, status: apiStatus, isPaid: paymentConfirmed, rawResponse: rawData }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
