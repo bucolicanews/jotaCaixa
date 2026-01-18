@@ -83,16 +83,25 @@ serve(async (req) => {
     
     rawData = await response.json();
 
-    // EXTRAÇÃO ROBUSTA DE STATUS E DADOS DA COBRANÇA
-    const chargeDetail = rawData.charges?.[0] || rawData.orders?.[0] || rawData;
-    apiStatus = chargeDetail.status || rawData.status || 'UNKNOWN';
-    paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
-    chargeData = chargeDetail;
-
-    if (isCheckout && paymentConfirmed) {
+    // --- EXTRAÇÃO DE STATUS CORRIGIDA ---
+    if (isCheckout) {
+        // Para checkouts, o status PAGO está dentro do array 'orders'
         const paidOrder = rawData.orders?.find((o: any) => ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status));
-        if (paidOrder) chargeData = paidOrder;
+        if (paidOrder) {
+            paymentConfirmed = true;
+            chargeData = paidOrder;
+            apiStatus = paidOrder.status;
+        } else {
+            apiStatus = rawData.status || 'UNKNOWN';
+        }
+    } else {
+        // Para orders/charges, o status está na raiz
+        const chargeDetail = rawData.charges?.[0] || rawData;
+        apiStatus = chargeDetail.status || rawData.status || 'UNKNOWN';
+        paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
+        chargeData = chargeDetail;
     }
+    // --- FIM DA CORREÇÃO ---
 
     // --- EXECUÇÃO DA BAIXA ---
     if (paymentConfirmed && parcela.status !== 'paga') {
