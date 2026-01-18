@@ -38,6 +38,7 @@ const formSchema = z.object({
   valor_recebido: z.coerce.number().positive('O valor deve ser maior que zero.'),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
+  codigo_transacao: z.string().optional(),
   conta_id: z.string().uuid('Selecione a conta de destino.').nullable(),
   acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
   nova_data_vencimento: z.date().optional(),
@@ -66,7 +67,7 @@ interface RegistrarPagamentoDialogProps {
 // =================================================================================
 
 interface SavePaymentArgs {
-    values: FormValues;
+    values: FormValues & { observacao?: string | null };
     parcela: ParcelaParaPagamento;
     proprietarioDaSessao: string;
     isAdmin: boolean;
@@ -148,8 +149,9 @@ export async function saveRecebimentoAndLancamentos({
             id_conta_contabil: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
             historico_id: values.historico_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
-            anexo_url: comprovanteUrl, // NOVO CAMPO
-            observacao: values.observacao || null, // NOVO CAMPO
+            anexo_url: comprovanteUrl,
+            observacao: values.observacao || null,
+            codigo_transacao: values.codigo_transacao || null,
         };
     } else {
         recebimentoBasePayload = { 
@@ -158,8 +160,9 @@ export async function saveRecebimentoAndLancamentos({
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
-            anexo_url: comprovanteUrl, // NOVO CAMPO
-            observacao: values.observacao || null, // NOVO CAMPO
+            anexo_url: comprovanteUrl,
+            observacao: values.observacao || null,
+            codigo_transacao: values.codigo_transacao || null,
         };
     }
 
@@ -398,6 +401,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       valor_recebido: 0,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
+      codigo_transacao: '',
       conta_id: null,
       acao_saldo_restante: 'reprogramar',
       numero_novas_parcelas: 2,
@@ -484,6 +488,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         valor_recebido: saldoDevedor,
         data_pagamento: new Date(),
         forma_pagamento: 'Pix',
+        codigo_transacao: '',
         conta_id: contasDestino.length > 0 ? contasDestino[0].id : null,
         acao_saldo_restante: 'reprogramar',
         numero_novas_parcelas: 2,
@@ -672,8 +677,22 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="codigo_transacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Código da Transação</FormLabel>
+                    <FormControl>
+                      <Input placeholder="ID da transação externa" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-              {/* Conta Caixa */}
+            {/* Conta Caixa */}
               <FormField
                 control={form.control}
                 name="conta_id"
@@ -725,7 +744,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   </FormItem>
                 )}
               />
-            </div>
 
             {/* CONTA PATRIMONIAL */}
             <FormField
@@ -1072,6 +1090,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             dataPagamento={pendingPaymentData.data_pagamento}
             historicoId={pendingPaymentData.historico_id}
             contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
+            codigoTransacao={pendingPaymentData.codigo_transacao}
             contasDestino={contasDestino}
             isPagamentoParcial={pendingPaymentData.isPagamentoParcial}
             saldoRestante={pendingPaymentData.saldoRestante}
