@@ -15,7 +15,6 @@ import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import useSaldoContaCalculado, { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
@@ -28,10 +27,11 @@ import FormExtratoManualCR from './FormExtratoManualCR';
 interface ParcelaParaPagamento {
   id: string;
   conta_receber_id: string;
-  empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
+  empresa_id: string;
   valor_parcela: number;
   valor_pago: number;
-  cliente_id: string | null; // ID do cliente real (tbl_clientes)
+  cliente_id: string | null;
+  status?: string;
 }
 
 const formSchema = z.object({
@@ -44,12 +44,8 @@ const formSchema = z.object({
   nova_data_vencimento: z.date().optional(),
   numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
   intervalo_dias_novas_parcelas: z.coerce.number().int().min(1).optional(),
-  
-  // Campos de Histórico
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
-  
-  // NOVO CAMPO: Conta Patrimonial (Direito a Receber)
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial válida.').nullable(),
 });
 
@@ -58,13 +54,9 @@ type FormValues = z.infer<typeof formSchema>;
 interface RegistrarPagamentoDialogProps {
   parcela: ParcelaParaPagamento | null;
   open: boolean;
-  onOpenChange: (open: (open: boolean) => void) => void;
+  onOpenChange: (open: boolean) => void;
   onSaveComplete: () => void;
 }
-
-// =================================================================================
-// FUNÇÃO AUXILIAR PARA SALVAR O PAGAMENTO (REUTILIZADA PELO MODAL DE EXTRATO MANUAL)
-// =================================================================================
 
 interface SavePaymentArgs {
     values: FormValues & { observacao?: string | null };
@@ -94,7 +86,6 @@ export async function saveRecebimentoAndLancamentos({
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Contas Contábeis Mapeadas (Admin e Cliente)
     const { data: configCRData, error: configCRError } = await supabase
         .from('configuracao_contas_receber')
         .select('tipo_registro, conta_contabil_id')
@@ -106,9 +97,8 @@ export async function saveRecebimentoAndLancamentos({
     
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
-    const contaDesconto = configMap['desconto_concedido']; // Conta de Desconto Concedido (Despesa)
+    const contaDesconto = configMap['desconto_concedido'];
     
-    // 0. Buscar a descrição da Conta Sintética
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
         .select('descricao, id_conta_resultado')
@@ -117,20 +107,16 @@ export async function saveRecebimentoAndLancamentos({
         
     if (csError) throw csError;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
-    const contaReceitaResultado = contaSintetica?.id_conta_resultado; // Conta de Receita (DRE)
+    const contaReceitaResultado = contaSintetica?.id_conta_resultado;
 
-    // CORREÇÃO DE FUSO HORÁRIO
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
     
-    // CRÍTICO: Inicializa o array de payloads de lançamentos
     const lancamentosPayload: any[] = [];
     
-    // 1. Registrar o recebimento (Histórico)
     let recebimentoBasePayload;
     
-    // Determina a chave do proprietário para a tabela de recebimentos
     const ownerKeyRecebimento = isAdmin ? 'admin_id' : 'empresa_id';
 
     if (isAdmin) {
@@ -142,27 +128,27 @@ export async function saveRecebimentoAndLancamentos({
         
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
-            [ownerKeyRecebimento]: proprietarioDaSessao, // USANDO ownerKeyRecebimento
+            [ownerKeyRecebimento]: proprietarioDaSessao,
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
-            id_conta_contabil: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
+            id_conta_contabil: contaRecebimento,
             historico_id: values.historico_id,
-            id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
+            id_conta_resultado: contaReceitaResultado,
             anexo_url: comprovanteUrl,
-            observacoes: values.observacao || null, // CORRIGIDO: observacao -> observacoes
-            codigo_transacao: values.codigo_transacao || null, // NOVO CAMPO
+            observacao: values.observacao || null,
+            codigo_transacao: values.codigo_transacao || null,
         };
     } else {
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
-            [ownerKeyRecebimento]: proprietarioDaSessao, // USANDO ownerKeyRecebimento
+            [ownerKeyRecebimento]: proprietarioDaSessao,
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
-            id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
+            id_conta_resultado: contaReceitaResultado,
             anexo_url: comprovanteUrl,
-            observacoes: values.observacao || null, // CORRIGIDO: observacao -> observacoes
-            codigo_transacao: values.codigo_transacao || null, // NOVO CAMPO
+            observacao: values.observacao || null,
+            codigo_transacao: values.codigo_transacao || null,
         };
     }
 
@@ -175,10 +161,6 @@ export async function saveRecebimentoAndLancamentos({
     
     if (recebimentoError) throw recebimentoError;
     
-    // 2. Lidar com a parcela original
-    let finalStatus: ParcelaParaPagamento['status'] = 'paga';
-    let observacaoFinal: string | null = values.observacao || null;
-    
     if (quitouComPagamentoAtual) {
         await supabase.from(tabelaParcelas).update({
             status: 'paga',
@@ -186,7 +168,7 @@ export async function saveRecebimentoAndLancamentos({
             data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
             ...(contaParcela && { id_conta_contabil: contaParcela })
         }).eq('id', parcela.id);
-    } else { // Pagamento parcial
+    } else {
         if (values.acao_saldo_restante === 'desconto') {
           await supabase.from(tabelaParcelas).update({
             status: 'paga',
@@ -196,53 +178,44 @@ export async function saveRecebimentoAndLancamentos({
             ...(contaParcela && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
           
-          // LANÇAMENTO DE DESCONTO (DÉBITO na Despesa/Custo)
-          // Validação: Se tentar dar desconto sem conta configurada, lança erro
           if (!contaDesconto) {
-              console.warn('Aviso: Conta de Desconto Concedido não configurada. Configure em Configurações > Contas a Receber.');
-              throw new Error('Conta de Desconto Concedido não configurada. Configure em Configurações > Contas a Receber antes de conceder descontos.');
+              throw new Error('Conta de Desconto Concedido não configurada.');
           }
           
           if (!values.conta_patrimonial_id) {
-              console.warn('Aviso: Conta Patrimonial (Clientes a Receber) não selecionada.');
-              throw new Error('Selecione a Conta Patrimonial (Clientes a Receber) para registrar o desconto.');
+              throw new Error('Selecione a Conta Patrimonial para registrar o desconto.');
           }
           
-          // CRÍTICO: Geração de IDs e Referência Cruzada
           const idDescontoDespesa = crypto.randomUUID();
           const idDescontoPatrimonial = crypto.randomUUID();
           
-          // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA (Aumenta Despesa Credora)
-          const lancamentoDescontoPayload = {
+          lancamentosPayload.push({
               id: idDescontoDespesa,
               proprietario_id: proprietarioDaSessao,
               data_movimentacao: dataPagamentoISO,
               descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
               valor: saldoRestanteCalculado,
-              tipo: 'Entrada' as const, // DÉBITO (Aumenta Despesa Credora)
+              tipo: 'Entrada' as const,
               conta_bancaria_id: null,
-              conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
+              conta_contabil_id: contaDesconto,
               origem: 'recebimento_manual',
               historico_id: values.historico_id,
-              conta_resultado_id: idDescontoPatrimonial, // REFERÊNCIA CRUZADA
-          };
-          lancamentosPayload.push(lancamentoDescontoPayload);
+              conta_resultado_id: idDescontoPatrimonial,
+          });
           
-          // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA (Diminui Ativo Devedor)
-          const lancamentoPatrimonialDescontoPayload = {
+          lancamentosPayload.push({
               id: idDescontoPatrimonial,
               proprietario_id: proprietarioDaSessao,
               data_movimentacao: dataPagamentoISO,
               descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
               valor: saldoRestanteCalculado,
-              tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
+              tipo: 'Saida' as const,
               conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
+              conta_contabil_id: values.conta_patrimonial_id,
               historico_id: values.historico_id,
               origem: 'recebimento_manual',
-              conta_resultado_id: idDescontoDespesa, // REFERÊNCIA CRUZADA
-          };
-          lancamentosPayload.push(lancamentoPatrimonialDescontoPayload);
+              conta_resultado_id: idDescontoDespesa,
+          });
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
           await supabase.from(tabelaParcelas).update({
@@ -266,7 +239,7 @@ export async function saveRecebimentoAndLancamentos({
                 data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
                 status: 'reprogramada'
             });
-          } else { // Parcelar
+          } else {
             const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
             const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
                 conta_receber_id: parcela.conta_receber_id,
@@ -287,7 +260,6 @@ export async function saveRecebimentoAndLancamentos({
         }
     }
     
-    // 3. Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
     const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
     const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
     
@@ -295,54 +267,44 @@ export async function saveRecebimentoAndLancamentos({
         throw new Error('Conta de destino não possui vínculo contábil.');
     }
     
-    // CRÍTICO: Geração de IDs e Referência Cruzada
     const idAtivo = crypto.randomUUID();
     const idPatrimonial = crypto.randomUUID();
     
-    // 4. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
-    // D: CAIXA/BANCO (AUMENTA O CAIXA)
-    const lancamentoAtivoPayload = {
+    lancamentosPayload.push({
         id: idAtivo,
         proprietario_id: proprietarioDaSessao,
         data_movimentacao: dataPagamentoISO,
         descricao: `Recebimento Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
         valor: valorRecebido,
-        tipo: 'Entrada' as const, // Entrada no Ativo (Débito) - CORRECT
+        tipo: 'Entrada' as const,
         conta_bancaria_id: values.conta_id,
-        conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
+        conta_contabil_id: contaContabilCaixaBanco,
         historico_id: values.historico_id,
         origem: 'recebimento_manual',
-        conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
-    };
+        conta_resultado_id: idPatrimonial,
+    });
     
-    lancamentosPayload.push(lancamentoAtivoPayload);
-    
-    // 5. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
-    // C: CLIENTES (DIMINUI O DIREITO A RECEBER)
     if (values.conta_patrimonial_id) {
-        const lancamentoPatrimonialPayload = {
+        lancamentosPayload.push({
             id: idPatrimonial,
             proprietario_id: proprietarioDaSessao,
             data_movimentacao: dataPagamentoISO,
             descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
             valor: valorRecebido,
-            tipo: 'Saida' as const, // Saída do Ativo (Crédito) - CORRECT
+            tipo: 'Saida' as const,
             conta_bancaria_id: null,
-            conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
+            conta_contabil_id: values.conta_patrimonial_id,
             historico_id: values.historico_id,
             origem: 'recebimento_manual',
-            conta_resultado_id: idAtivo, // REFERÊNCIA CRUZADA
-        };
-        lancamentosPayload.push(lancamentoPatrimonialPayload);
+            conta_resultado_id: idAtivo,
+        });
     } else {
         console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
     }
     
-    // 6. Inserir os lançamentos de uma vez
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
     if (lancamentoError) throw lancamentoError;
     
-    // 7. Salvar Histórico Padrão (se marcado) - Delete + Insert para evitar conflito
     if (values.salvar_como_padrao && values.historico_id) {
         await supabase
             .from('configuracao_historico_padrao')
@@ -362,39 +324,29 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const { role, usuario, perfil } = useSessao();
   const { configMap } = useContabilConfig();
 
-  // Detectar Admin direto OU funcionário do admin
   const isDirectAdmin = role === 'Admin';
   const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
   const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
   const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
-  const isAdmin = isAdminOrEmployee; // Manter compatibilidade com código existente
+  const isAdmin = isAdminOrEmployee;
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  // NOVO ESTADO: Loading manual
   const [loading, setLoading] = useState(false); 
-  
-  // NOVO ESTADO: Modal de Extrato Manual
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<FormValues & { isPagamentoParcial: boolean, saldoRestante: number } | null>(null);
   
-  // Determina as tabelas de destino
   const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
   
-  // Resolver proprietarioId correto
   const proprietarioDaSessao = isDirectAdmin ? usuario?.id : (isAdminUsuario ? adminIdFromProfile : ((perfil as any)?.cliente_id || (perfil as any)?.id));
 
-
-  // Usamos o hook de saldo calculado para obter as contas de destino
   const { contas: contasDestino, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
-  // 1. Definição do formulário (movida para o início)
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -412,8 +364,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     },
   });
   
-  // Desestruturando setValue e reset para usar nas funções de callback
-  const { setValue, reset } = form;
+  const { reset } = form;
 
   const fetchHistoricos = useCallback(async () => {
     if (!proprietarioDaSessao) return;
@@ -438,8 +389,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     setLoadingContasPatrimoniais(true);
     
     const ativoCode = configMap.Ativo || '1';
-    const passivoCode = configMap.Passivo || '2';
-    const plCode = configMap['Patrimonio Liquido'] || '3';
     
     const { data, error } = await supabase
         .from('plano_contas')
@@ -447,8 +396,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .eq('proprietario_id', proprietarioDaSessao)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
-        .eq('is_a_receber', true) // NOVO FILTRO: Apenas contas marcadas como Contas a Receber
-        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
+        .eq('is_a_receber', true)
+        .like('Conta', `${ativoCode}.%`)
         .order('Conta');
         
     if (error) {
@@ -458,12 +407,11 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [proprietarioDaSessao, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
+  }, [proprietarioDaSessao, configMap.Ativo]);
   
   const fetchConfigAndDefaults = useCallback(async () => {
     if (!parcela || !proprietarioDaSessao) return;
     
-    // 1. Buscar Histórico Padrão
     const { data: historicoData } = await supabase
         .from('configuracao_historico_padrao')
         .select('historico_id')
@@ -474,7 +422,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         
     const defaultHistoricoId = historicoData?.historico_id || null;
     
-    // 2. Buscar Conta Patrimonial da Conta Sintética (Direito a Receber)
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
         .select('id_conta_patrimonial')
@@ -483,7 +430,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         
     const contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
     
-    // 3. Resetar o formulário com os valores iniciais
     reset({
         valor_recebido: saldoDevedor,
         data_pagamento: new Date(),
@@ -495,39 +441,34 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         intervalo_dias_novas_parcelas: 30,
         historico_id: defaultHistoricoId,
         salvar_como_padrao: false,
-        conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
+        conta_patrimonial_id: contaPatrimonialId,
     });
     
     setIsInitialized(true);
     
-  }, [parcela, proprietarioDaSessao, reset, tabelaContasReceber, contasDestino, saldoDevedor, isAdmin]);
+  }, [parcela, proprietarioDaSessao, reset, tabelaContasReceber, contasDestino, saldoDevedor]);
 
   useEffect(() => {
       if (open && !isInitialized) {
-          // 1. Força o refetch dos dados externos
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
           
-          // 2. Inicializa o formulário APENAS quando a parcela estiver disponível
           if (parcela) {
               fetchConfigAndDefaults();
           }
       }
       
-      // Limpa o estado de inicialização ao fechar
       if (!open) {
           setIsInitialized(false);
       }
   }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, parcela]);
-
 
   const valorRecebido = form.watch('valor_recebido');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
   const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
   const saldoRestante = saldoDevedor - valorRecebido;
 
-  // --- FUNÇÃO DE SALVAMENTO DIRETO (SEM EXTRATO MANUAL) ---
   const saveDirectPayment = async (values: FormValues) => {
     if (!parcela || !proprietarioDaSessao || !values.conta_id || !values.conta_patrimonial_id) {
         showError('Dados incompletos. Selecione a conta de destino e a conta patrimonial.');
@@ -538,7 +479,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
     try {
         await saveRecebimentoAndLancamentos({
-            values: { ...values, observacao: null }, // Passa observacao nula para o save
+            values: { ...values, observacao: null },
             parcela,
             proprietarioDaSessao,
             isAdmin,
@@ -566,11 +507,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         return;
     }
     
-    // 1. Verificar se a conta de destino é um BANCO
     const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
     const isBankPayment = contaDestinoDetalhe?.plano_contas?.is_banco === true;
     
-    // 2. Se for pagamento via Banco, abre o modal de Extrato Manual
     if (isBankPayment) {
         setPendingPaymentData({ 
             ...values, 
@@ -578,457 +517,354 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             saldoRestante: saldoRestante 
         });
         setExtratoManualDialog(true);
-        // O fluxo de salvamento será continuado no FormExtratoManualCR
         return;
     }
     
-    // 3. Se for apenas Caixa ou outras contas (não Banco), salva diretamente
     await saveDirectPayment(values);
     onOpenChange(false);
   };
 
   return (
-  <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Registrar Recebimento</DialogTitle>
-          <DialogDescription>
-            Saldo devedor da parcela:{" "}
-            {new Intl.NumberFormat("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            }).format(saldoDevedor)}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Registrar Recebimento</DialogTitle>
+            <DialogDescription>
+              Saldo devedor da parcela:{" "}
+              {new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              }).format(saldoDevedor)}
+            </DialogDescription>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* ======================= CAMPOS INICIAIS ======================= */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="valor_recebido"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor Recebido</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="data_pagamento"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Data</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yy", { locale: ptBR })
-                            ) : (
-                              <span>Data</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                          locale={ptBR}
-                        />
-                      </PopoverContent>
-                    </Popover>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="forma_pagamento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Forma de Pagamento</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="codigo_transacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Código da Transação</FormLabel>
-                    <FormControl>
-                      <Input placeholder="ID da transação externa" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Conta Caixa */}
-              <FormField
-                control={form.control}
-                name="conta_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
-
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || "0"}
-                      disabled={loadingContas}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              loadingContas
-                                ? "Carregando Contas..."
-                                : "Selecione a conta"
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-
-                      <SelectContent>
-                        <SelectItem value="0" disabled>
-                          Selecione a conta
-                        </SelectItem>
-
-                        {contasDestino.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.nome} ({c.tipo_saldo})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <FormMessage />
-
-                    {contasDestino.length === 0 && (
-                      <p className="text-sm text-red-500">
-                        Nenhuma conta de saldo encontrada. Crie uma em{" "}
-                        <a href="/bancos" className="underline">
-                          Bancos / Caixas
-                        </a>
-                        .
-                      </p>
-                    )}
-                  </FormItem>
-                )}
-              />
-
-            {/* CONTA PATRIMONIAL */}
-            <FormField
-              control={form.control}
-              name="conta_patrimonial_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
-
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value || "0"}
-                    disabled={loadingContasPatrimoniais}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            loadingContasPatrimoniais
-                              ? "Carregando Contas..."
-                              : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-
-                    <SelectContent>
-                      <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
-
-                      {contasPatrimoniais.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.Conta} - {c.Descricao}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <FormMessage />
-
-                  {contasPatrimoniais.length === 0 &&
-                    !loadingContasPatrimoniais && (
-                      <p className="text-sm text-red-500">
-                        Nenhuma conta Patrimonial marcada como Contas a Receber
-                        no Plano de Contas.
-                      </p>
-                    )}
-                </FormItem>
-              )}
-            />
-
-            {/* ================= HISTÓRICO (Somente admin) ================= */}
-            {isAdmin && (
-              <div className="space-y-2 pt-2 border-t">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="historico_id"
+                  name="valor_recebido"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
+                      <FormLabel>Valor Recebido</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
+                <FormField
+                  control={form.control}
+                  name="data_pagamento"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Data</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd/MM/yy", { locale: ptBR })
+                              ) : (
+                                <span>Data</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                            locale={ptBR}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="forma_pagamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma de Pagamento</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="codigo_transacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Código da Transação</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ID da transação externa" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+                <FormField
+                  control={form.control}
+                  name="conta_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value || "0"}
-                        disabled={loadingHistoricos}
+                        disabled={loadingContas}
                       >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue
                               placeholder={
-                                loadingHistoricos
-                                  ? "Carregando Históricos..."
-                                  : "Selecione o histórico"
+                                loadingContas
+                                  ? "Carregando Contas..."
+                                  : "Selecione a conta"
                               }
                             />
                           </SelectTrigger>
                         </FormControl>
 
                         <SelectContent>
-                          <SelectItem value="0">Nenhum</SelectItem>
+                          <SelectItem value="0" disabled>
+                            Selecione a conta
+                          </SelectItem>
 
-                          {historicos.map((h) => (
-                            <SelectItem key={h.id} value={String(h.id)}>
-                              {h.codigo && (
-                                <span className="font-mono text-xs mr-2">
-                                  [{h.codigo}]
-                                </span>
-                              )}
-                              {h.descricao}
+                          {contasDestino.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.nome} ({c.tipo_saldo})
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-
                       <FormMessage />
+                      {contasDestino.length === 0 && !loadingContas &&(
+                        <p className="text-sm text-red-500">
+                          Nenhuma conta de saldo encontrada. Crie uma em{" "}
+                          <a href="/bancos" className="underline">
+                            Bancos / Caixas
+                          </a>
+                          .
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="salvar_como_padrao"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormField
+                control={form.control}
+                name="conta_patrimonial_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || "0"}
+                      disabled={loadingContasPatrimoniais}
+                    >
                       <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={!form.watch("historico_id")}
-                        />
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              loadingContasPatrimoniais
+                                ? "Carregando Contas..."
+                                : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`
+                            }
+                          />
+                        </SelectTrigger>
                       </FormControl>
+                      <SelectContent>
+                        <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
+                        {contasPatrimoniais.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.Conta} - {c.Descricao}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasPatrimoniais.length === 0 &&
+                      !loadingContasPatrimoniais && (
+                        <p className="text-sm text-red-500">
+                          Nenhuma conta Patrimonial marcada como Contas a Receber
+                          no Plano de Contas.
+                        </p>
+                      )}
+                  </FormItem>
+                )}
+              />
 
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          Definir este Histórico como Padrão para Recebimentos
-                        </FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            {/* ==================== PAGAMENTO PARCIAL ===================== */}
-            {isPagamentoParcial && (
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-semibold text-destructive">
-                  Saldo restante:{" "}
-                  {new Intl.NumberFormat("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  }).format(saldoRestante)}
-                </h3>
-
-                {/* Seleção do tratamento do saldo */}
-                <FormField
-                  control={form.control}
-                  name="acao_saldo_restante"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>O que fazer com o saldo restante?</FormLabel>
-
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="space-y-2"
-                        >
-                          <FormItem className="flex items-center space-x-2">
-                            <FormControl>
-                              <RadioGroupItem value="desconto" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Conceder Desconto (Perdoar)
-                            </FormLabel>
-                          </FormItem>
-
-                          <FormItem className="flex items-center space-x-2">
-                            <FormControl>
-                              <RadioGroupItem value="reprogramar" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Reprogramar Saldo
-                            </FormLabel>
-                          </FormItem>
-
-                          <FormItem className="flex items-center space-x-2">
-                            <FormControl>
-                              <RadioGroupItem value="parcelar" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Parcelar Saldo
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
-
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* CAMPOS: Reprogramar */}
-                {acaoSaldoRestante === "reprogramar" && (
+              {isAdmin && (
+                <div className="space-y-2 pt-2 border-t">
                   <FormField
                     control={form.control}
-                    name="nova_data_vencimento"
+                    name="historico_id"
                     render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Nova Data de Vencimento</FormLabel>
-
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
+                      <FormItem>
+                        <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "0"}
+                          disabled={loadingHistoricos}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  loadingHistoricos
+                                    ? "Carregando Históricos..."
+                                    : "Selecione o histórico"
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="0">Nenhum</SelectItem>
+                            {historicos.map((h) => (
+                              <SelectItem key={h.id} value={String(h.id)}>
+                                {h.codigo && (
+                                  <span className="font-mono text-xs mr-2">
+                                    [{h.codigo}]
+                                  </span>
                                 )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP", { locale: ptBR })
-                                ) : (
-                                  <span>Escolha a data</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
-                              locale={ptBR}
-                            />
-                          </PopoverContent>
-                        </Popover>
-
+                                {h.descricao}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
 
-                {/* CAMPOS: Parcelar */}
-                {acaoSaldoRestante === "parcelar" && (
-                  <div className="grid grid-cols-3 gap-4 items-end">
-                    <FormField
-                      control={form.control}
-                      name="numero_novas_parcelas"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nº Parcelas</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <FormField
+                    control={form.control}
+                    name="salvar_como_padrao"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!form.watch("historico_id")}
+                          />
+                        </FormControl>
 
-                    <FormField
-                      control={form.control}
-                      name="intervalo_dias_novas_parcelas"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Intervalo</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>
+                            Definir este Histórico como Padrão para Recebimentos
+                          </FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
+              {isPagamentoParcial && (
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="font-semibold text-destructive">
+                    Saldo restante:{" "}
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(saldoRestante)}
+                  </h3>
+
+                  <FormField
+                    control={form.control}
+                    name="acao_saldo_restante"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>O que fazer com o saldo restante?</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            className="space-y-2"
+                          >
+                            <FormItem className="flex items-center space-x-2">
+                              <FormControl>
+                                <RadioGroupItem value="desconto" />
+                              </FormControl>
+                              <FormLabel className="font-normal">
+                                Conceder Desconto (Perdoar)
+                              </FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2">
+                              <FormControl>
+                                <RadioGroupItem value="reprogramar" />
+                              </FormControl>
+                              <FormLabel className="font-normal">
+                                Reprogramar Saldo
+                              </FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2">
+                              <FormControl>
+                                <RadioGroupItem value="parcelar" />
+                              </FormControl>
+                              <FormLabel className="font-normal">
+                                Parcelar Saldo
+                              </FormLabel>
+                            </FormItem>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {acaoSaldoRestante === "reprogramar" && (
                     <FormField
                       control={form.control}
                       name="nova_data_vencimento"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>1º Venc.</FormLabel>
-
+                          <FormLabel>Nova Data de Vencimento</FormLabel>
                           <Popover>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
                                   variant="outline"
                                   className={cn(
-                                    "w-full text-left font-normal",
+                                    "w-full pl-3 text-left font-normal",
                                     !field.value && "text-muted-foreground"
                                   )}
                                 >
                                   {field.value ? (
-                                    format(field.value, "dd/MM/yy")
+                                    format(field.value, "PPP", { locale: ptBR })
                                   ) : (
-                                    <span>Data</span>
+                                    <span>Escolha a data</span>
                                   )}
                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-
                             <PopoverContent className="w-auto p-0">
                               <Calendar
                                 mode="single"
@@ -1039,66 +875,137 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                               />
                             </PopoverContent>
                           </Popover>
-
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
+                  )}
+
+                  {acaoSaldoRestante === "parcelar" && (
+                    <div className="grid grid-cols-3 gap-4 items-end">
+                      <FormField
+                        control={form.control}
+                        name="numero_novas_parcelas"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nº Parcelas</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="intervalo_dias_novas_parcelas"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Intervalo</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="nova_data_vencimento"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>1º Venc.</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    className={cn(
+                                      "w-full text-left font-normal",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, "dd/MM/yy")
+                                    ) : (
+                                      <span>Data</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={field.onChange}
+                                  initialFocus
+                                  locale={ptBR}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || form.formState.isSubmitting}
+              >
+                {!loading && !form.formState.isSubmitting ? (
+                  'Confirmar Recebimento'
+                ) : (
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                  />
                 )}
-              </div>
-            )}
-
-            {/* BOTÃO FINAL */}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || form.formState.isSubmitting}
-            >
-              <Loader2
-                className={cn(
-                  "mr-2 h-4 w-4 animate-spin",
-                  (loading || form.formState.isSubmitting) && "hidden"
-                )}
-              />
-              Confirmar Recebimento
-            </Button>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-
-    {/* ======================= MODAL EXTRATO MANUAL ====================== */}
-    {extratoManualDialog && pendingPaymentData && parcela && (
-      <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Registro de Extrato Manual</DialogTitle>
-            <DialogDescription>
-              Confirme os detalhes do extrato para evitar duplicidade na
-              conciliação.
-            </DialogDescription>
-          </DialogHeader>
-
-          <FormExtratoManualCR
-            parcela={parcela}
-            recebimentoDetalhes={{
-              conta_id: pendingPaymentData.conta_id!,
-              valor_recebido: pendingPaymentData.valor_recebido,
-            }}
-            formaPagamento={pendingPaymentData.forma_pagamento}
-            dataPagamento={pendingPaymentData.data_pagamento}
-            historicoId={pendingPaymentData.historico_id}
-            contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
-            codigoTransacao={pendingPaymentData.codigo_transacao}
-            contasDestino={contasDestino}
-            isPagamentoParcial={pendingPaymentData.isPagamentoParcial}
-            saldoRestante={pendingPaymentData.saldoRestante}
-            onSaveComplete={onSaveComplete}
-            onClose={() => setExtratoManualDialog(false)}
-          />
+              </Button>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
-    )}
-  </>
-);
+
+      {extratoManualDialog && pendingPaymentData && parcela && (
+        <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
+          <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Registro de Extrato Manual</DialogTitle>
+              <DialogDescription>
+                Confirme os detalhes do extrato para evitar duplicidade na
+                conciliação.
+              </DialogDescription>
+            </DialogHeader>
+
+            <FormExtratoManualCR
+              parcela={parcela}
+              recebimentoDetalhes={{
+                conta_id: pendingPaymentData.conta_id!,
+                valor_recebido: pendingPaymentData.valor_recebido,
+              }}
+              formaPagamento={pendingPaymentData.forma_pagamento}
+              dataPagamento={pendingPaymentData.data_pagamento}
+              historicoId={pendingPaymentData.historico_id}
+              contaPatrimonialId={pendingPaymenta.conta_patrimonial_id}
+              codigoTransacao={pendingPaymentData.codigo_transacao}
+              contasDestino={contasDestino}
+              isPagamentoParcial={pendingPaymentData.isPagamentoParcial}
+              saldoRestante={pendingPaymentData.saldoRestante}
+              onSaveComplete={onSaveComplete}
+              onClose={() => setExtratoManualDialog(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+};
+
+export default RegistrarPagamentoDialog;
