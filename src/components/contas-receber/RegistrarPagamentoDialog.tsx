@@ -538,7 +538,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
     try {
         await saveRecebimentoAndLancamentos({
-            values,
+            values: { ...values, observacao: null }, // Passa observacao nula para o save
             parcela,
             proprietarioDaSessao,
             isAdmin,
