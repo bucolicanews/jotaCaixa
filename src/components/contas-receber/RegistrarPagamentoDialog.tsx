@@ -150,7 +150,7 @@ export async function saveRecebimentoAndLancamentos({
             historico_id: values.historico_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
             anexo_url: comprovanteUrl,
-            observacao: values.observacao || null,
+            observacoes: values.observacao || null, // CORRIGIDO: observacao -> observacoes
             codigo_transacao: values.codigo_transacao || null, // NOVO CAMPO
         };
     } else {
@@ -161,7 +161,7 @@ export async function saveRecebimentoAndLancamentos({
             conta_id: values.conta_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
             anexo_url: comprovanteUrl,
-            observacao: values.observacao || null,
+            observacoes: values.observacao || null, // CORRIGIDO: observacao -> observacoes
             codigo_transacao: values.codigo_transacao || null, // NOVO CAMPO
         };
     }
@@ -1102,5 +1102,3 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     )}
   </>
 );
-
-export default RegistrarPagamentoDialog;

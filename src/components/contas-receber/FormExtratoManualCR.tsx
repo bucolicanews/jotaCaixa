@@ -66,6 +66,7 @@ interface FormExtratoManualCRProps {
     dataPagamento: Date;
     historicoId: string | null;
     contaPatrimonialId: string | null;
+    codigoTransacao: string | null; // NOVO PROP
     contasDestino: SaldoCalculado[];
     isPagamentoParcial: boolean;
     saldoRestante: number;
@@ -176,6 +177,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     dataPagamento,
     historicoId,
     contaPatrimonialId,
+    codigoTransacao,
     contasDestino,
     isPagamentoParcial,
     saldoRestante,
@@ -358,6 +360,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 conta_id: contaDestinoId,
                 historico_id: historicoId,
                 conta_patrimonial_id: contaPatrimonialId,
+                codigo_transacao: codigoTransacao, // NOVO CAMPO
                 acao_saldo_restante: isPagamentoParcial ? values.acao_saldo_restante : undefined,
                 nova_data_vencimento: isPagamentoParcial ? values.nova_data_vencimento : undefined,
                 numero_novas_parcelas: isPagamentoParcial ? values.numero_novas_parcelas : undefined,
