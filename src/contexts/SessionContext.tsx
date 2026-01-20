@@ -103,7 +103,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
     
-    const { ownerId, ownerType } = resolveOwnerContext(role, perfil, user);
+    const { ownerId, ownerType } = resolveOwnerContext(role, perfil, user?.id);
     const setupStatus = await fetchSetupStatus(ownerId);
 
     // 🚨 NOVO LOG DE DEBUG

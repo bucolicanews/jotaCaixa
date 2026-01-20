@@ -33,9 +33,58 @@ O **Jota App** é uma plataforma ERP multi-tenant completa, projetada para unifi
 ## 🛡️ Arquitetura de Segurança (RLS)
 
 O sistema segue padrões rigorosos para evitar vazamento de dados:
+
 - **Tabela `admin_user_lookup`:** Atua como cache de permissões para evitar recursão infinita em políticas RLS.
 - **Função `get_my_admin_id()`:** Helper central que identifica o proprietário dos dados, permitindo que funcionários acessem informações de sua empresa de forma segura.
 - **Isolamento de Storage:** Buckets organizados por `user_id` com políticas que restringem o acesso apenas ao proprietário ou gestor.
+
+### Políticas RLS - extratos
+
+**Estrutura:**
+- Coluna chave: `empresa_id` (FK para Admin ou Cliente)
+- Admin/Cliente: `empresa_id = auth.uid()`
+- AdminUsuario: `empresa_id = admin_id` (do Admin que trabalha)
+
+**Políticas Ativas:**
+
+**SELECT**
+```sql
+USING (
+  empresa_id = auth.uid()  -- Admin/Cliente vê próprio
+  OR empresa_id IN (SELECT admin_id FROM admin_usuarios WHERE id = auth.uid())  -- AdminUsuario
+)
+```
+
+**INSERT**
+```sql
+WITH CHECK (
+  empresa_id = auth.uid()
+  OR empresa_id IN (SELECT admin_id FROM admin_usuarios WHERE id = auth.uid())
+)
+```
+
+**UPDATE**
+```sql
+USING (empresa_id = auth.uid() OR empresa_id IN (...))
+WITH CHECK (empresa_id = auth.uid() OR empresa_id IN (...))
+```
+
+**DELETE**
+```sql
+USING (
+  empresa_id = auth.uid()
+  OR empresa_id IN (SELECT admin_id FROM admin_usuarios WHERE id = auth.uid())
+)
+```
+
+**Hierarquia de Acesso:**
+
+| Tipo de Usuário | SELECT | INSERT | UPDATE | DELETE |
+|-----------------|--------|--------|--------|--------|
+| Admin           | ✅ Seus extratos | ✅ | ✅ | ✅ |
+| AdminUsuario    | ✅ Extratos do Admin | ✅ | ✅ | ✅ |
+| Cliente         | ✅ Seus extratos | ✅ | ✅ | ✅ |
+| Outros          | ❌ | ❌ | ❌ | ❌ |
 
 ## 💳 Integração PagBank (Homologado)
 

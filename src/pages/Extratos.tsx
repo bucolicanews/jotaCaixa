@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { Input } from '@/components/ui/input';
@@ -56,7 +57,7 @@ const Extratos: React.FC = () => {
   const [extratoParaEditar, setExtratoParaEditar] = useState<ExtratoRecord | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  const ownerId = usuario?.id;
+  const { ownerId } = useOwner();
 
   const fetchContas = useCallback(async () => {
     if (!ownerId) return;
