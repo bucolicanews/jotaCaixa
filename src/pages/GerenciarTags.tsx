@@ -162,7 +162,7 @@ const GerenciarTags = () => {
   };
   // -----------------------------------
 
-  if (carregandoSessao || carregandoTags) {
+  if (carregandoSessao || carregandoTags || !proprietarioId) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
