@@ -44,7 +44,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
             </div>
             
             <Card>
-                <CardHeader><CardTitle>Parcelas a Pagar</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Parcelas a Pagar (Analítico)</CardTitle></CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
                         <Table>
@@ -54,7 +54,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                     <TableHead>Fornecedor</TableHead>
                                     <TableHead>Descrição</TableHead>
                                     <TableHead className="text-right">Valor Parcela</TableHead>
-                                    <TableHead className="text-right">Valor Pago</TableHead>
+                                    <TableHead className="text-right">Valor Pago</TableHead> {/* COLUNA ADICIONADA */}
                                     <TableHead>Status</TableHead>
                                     <TableHead>Data Pagamento</TableHead>
                                     <TableHead>Origem</TableHead>
@@ -82,7 +82,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                                 <TableCell>{fornecedor}</TableCell>
                                                 <TableCell>{descricao}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
-                                                <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                                                <TableCell className="text-right font-semibold text-green-600">{formatCurrency(p.valor_pago || 0)}</TableCell> {/* VALOR PAGO */}
                                                 <TableCell><Badge variant={statusVariant}>{p.status}</Badge></TableCell>
                                                 <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
                                                 <TableCell>{formatarOrigem(origem)}</TableCell>
