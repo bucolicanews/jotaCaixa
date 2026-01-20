@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -60,6 +60,8 @@ serve(async (req) => {
 
     if (!token) throw new Error(`Token de ${config.ambiente} não configurado.`);
     
+    console.log(`[create-pagbank-checkout] Ambiente: ${config.ambiente}. Token status: ${token.length > 10 ? 'Found' : 'Missing/Short'}`);
+
     // 4. Preparar Payload
     let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
     let nomeCliente = cliente.nome.trim();

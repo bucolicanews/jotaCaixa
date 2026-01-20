@@ -49,7 +49,15 @@ serve(async (req) => {
 
     const valorEmCentavos = Math.round(parcela.valor_parcela * 100);
     
-    // 2. Preparar Request
+    // 2. Processar Token e URL
+    const rawToken = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
+    const token = (rawToken || '').trim();
+    
+    if (!token) throw new Error(`Token de ${config.ambiente} não configurado.`);
+    
+    console.log(`[create-pagbank-payment] Ambiente: ${config.ambiente}. Token status: ${token.length > 10 ? 'Found' : 'Missing/Short'}`);
+
+    // 3. Preparar Request
     let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
     let nomeCliente = cliente.nome.trim();
     if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
@@ -77,14 +85,14 @@ serve(async (req) => {
       chargeRequest.qr_codes = [{ amount: { value: valorEmCentavos }, expiration_date: vcto.toISOString() }];
     }
 
-    // 3. Executar PagBank Client
-    const pagbankClient = new PagBankClient(config as any); // Passando config para o cliente
+    // 4. Executar PagBank Client
+    const pagbankClient = new PagBankClient(config as any);
     const chargeResponse = await pagbankClient.createCharge(chargeRequest);
 
     const qrCode = chargeResponse.qr_codes?.[0]?.links?.find((link: any) => link.media === 'image/png')?.href || null;
     const qrCodeText = chargeResponse.qr_codes?.[0]?.text || null;
 
-    // 4. Salvar no banco
+    // 5. Salvar no banco
     await supabaseAdmin.from('admin_parcelas_receber').update({
       pagbank_charge_id: chargeResponse.id,
       pagbank_payment_method: payment_method,
@@ -94,7 +102,7 @@ serve(async (req) => {
       pagbank_updated_at: new Date().toISOString(),
     }).eq('id', parcela_id);
 
-    // 5. Log de auditoria
+    // 6. Log de auditoria
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
       proprietario_id: admin_id,
       transaction_type: 'payment',
