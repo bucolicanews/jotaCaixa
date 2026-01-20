@@ -56,9 +56,30 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
   const getProprietarioId = (): string | null => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Admin') {
+      return usuario?.id || null;
+    }
+    
+    if (role === 'Cliente') {
+      return (perfil as ClienteProfile)?.id;
+    }
+    
+    if (role === 'Usuario') {
+      // Detectar se é AdminUsuario ou UsuarioCliente
+      const adminIdFromProfile = (perfil as any)?.admin_id;
+      const clienteIdFromProfile = (perfil as UsuarioProfile)?.cliente_id;
+      
+      // Se tem admin_id, é AdminUsuario → retornar admin_id
+      if (adminIdFromProfile) {
+        return adminIdFromProfile;
+      }
+      
+      // Se tem cliente_id, é UsuarioCliente → retornar cliente_id
+      if (clienteIdFromProfile) {
+        return clienteIdFromProfile;
+      }
+    }
+    
     return null;
   };
   
