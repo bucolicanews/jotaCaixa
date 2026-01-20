@@ -8,12 +8,13 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, Globe, ShieldCheck, Info } from 'lucide-react';
+import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
 import { BASE_URL } from '@/config/app-config';
 import type { PagBankConfig } from '@/types/pagbank';
+import { Textarea } from '@/components/ui/textarea';
 
 interface PlanoContas {
   id: string;
@@ -34,6 +35,7 @@ export default function ConfiguracoesPagBank() {
   const [config, setConfig] = useState<Partial<PagBankConfig>>({
     ambiente: 'sandbox',
     webhook_url: `${BASE_URL}/api/pagbank-webhook`,
+    whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
   });
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
@@ -67,12 +69,14 @@ export default function ConfiguracoesPagBank() {
         // Se já existe no banco, usa o que está lá, mas garante que a URL está correta
         setConfig({
             ...configRes.data,
-            webhook_url: configRes.data.webhook_url || `${BASE_URL}/api/pagbank-webhook`
+            webhook_url: configRes.data.webhook_url || `${BASE_URL}/api/pagbank-webhook`,
+            whatsapp_template: configRes.data.whatsapp_template || 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
         });
       } else {
         setConfig(prev => ({
             ...prev,
-            webhook_url: `${BASE_URL}/api/pagbank-webhook`
+            webhook_url: `${BASE_URL}/api/pagbank-webhook`,
+            whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
         }));
       }
 
@@ -199,6 +203,25 @@ export default function ConfiguracoesPagBank() {
                         </div>
                     </CardContent>
                 </Card>
+                
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <MessageSquare className="w-5 h-5 text-primary" /> Template WhatsApp
+                        </CardTitle>
+                        <CardDescription>
+                            Personalize a mensagem enviada ao cliente. Use as tags: <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{link}'}</code>.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Textarea
+                            rows={4}
+                            value={config.whatsapp_template || ''}
+                            onChange={(e) => setConfig({ ...config, whatsapp_template: e.target.value })}
+                            placeholder="Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}"
+                        />
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardHeader>
@@ -293,6 +316,24 @@ export default function ConfiguracoesPagBank() {
                                 value={config.webhook_secret || ''} 
                                 onChange={(e) => setConfig({...config, webhook_secret: e.target.value})}
                                 placeholder="Secret para validação HMAC"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Email Remetente (Resend)</Label>
+                            <Input 
+                                type="email" 
+                                value={config.email_remetente || ''} 
+                                onChange={(e) => setConfig({...config, email_remetente: e.target.value})}
+                                placeholder="cobranca@suaempresa.com"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Resend API Key</Label>
+                            <Input 
+                                type="password" 
+                                value={config.resend_api_key || ''} 
+                                onChange={(e) => setConfig({...config, resend_api_key: e.target.value})}
+                                placeholder="re_..."
                             />
                         </div>
                     </CardContent>
