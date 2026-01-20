@@ -37,12 +37,20 @@ export const resolveOwnerContext = (
   if (role === 'Usuario' && perfil) {
     // Prioridade 1: Usuário de Admin (usa admin_id)
     if (hasAdminId(perfil)) {
+      // Log de debug para AdminUsuario
+      console.log(`[resolveOwnerContext] Resolvido AdminUsuario: ID=${perfil.id}, AdminId=${perfil.admin_id}`);
       return { ownerId: perfil.admin_id, ownerType: 'AdminUsuario', sourceProfileId: perfil.id };
     }
     // Prioridade 2: Usuário de Cliente (usa cliente_id)
     if (hasClienteId(perfil)) {
       return { ownerId: perfil.cliente_id, ownerType: 'ClienteUsuario', sourceProfileId: perfil.id };
     }
+  }
+
+  // Fallback: Se o usuário está logado mas não tem perfil mapeado (ex: recém-criado)
+  if (usuarioId) {
+      console.log(`[resolveOwnerContext] Fallback: Usuário logado, mas sem perfil mapeado. ID=${usuarioId}`);
+      return { ownerId: usuarioId, ownerType: 'Unknown', sourceProfileId: usuarioId };
   }
 
   return { ownerId: null, ownerType: 'Unknown', sourceProfileId: usuarioId ?? null };

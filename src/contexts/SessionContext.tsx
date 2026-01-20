@@ -12,6 +12,7 @@ import {
 } from '@/types/usuario';
 import { SetupStatus } from '@/types/setup';
 import { fetchSetupStatus } from '@/utils/setup-status';
+import { resolveOwnerContext } from '@/utils/owner'; // Importando resolveOwnerContext
 
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
@@ -24,35 +25,7 @@ const DEFAULT_SETUP_STATUS: SetupStatus = {
   missingSteps: [],
 };
 
-const resolveOwnerId = (
-  role: UserRole,
-  perfil: AnyProfile,
-  usuario: User | null,
-): string | null => {
-  if (!role || !usuario) return null;
-
-  if (role === 'Admin') {
-    return usuario.id;
-  }
-
-  if (role === 'Cliente') {
-    return (perfil as ClienteProfile)?.id || usuario.id;
-  }
-
-  if (role === 'Usuario' && perfil) {
-    const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
-
-    if ('cliente_id' in userProfile && userProfile?.cliente_id) {
-      return userProfile.cliente_id;
-    }
-
-    if ('admin_id' in userProfile && (userProfile as AdminUsuarioProfile)?.admin_id) {
-      return (userProfile as AdminUsuarioProfile).admin_id;
-    }
-  }
-
-  return null;
-};
+// Removendo a função resolveOwnerId daqui, pois ela está em src/utils/owner.ts
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [estado, setEstado] = useState<DadosSessao>({
@@ -130,8 +103,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
     
-    const ownerId = resolveOwnerId(role, perfil, user);
+    const { ownerId, ownerType } = resolveOwnerContext(role, perfil, user);
     const setupStatus = await fetchSetupStatus(ownerId);
+
+    // 🚨 NOVO LOG DE DEBUG
+    console.log(`[SessionContext] Final Owner Context: Role=${role}, OwnerId=${ownerId}, OwnerType=${ownerType}`);
+    // --------------------
 
     setEstado({ usuario: user, perfil, role, carregando: false, setupStatus, ownerId });
   }, []);
