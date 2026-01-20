@@ -79,7 +79,7 @@ serve(async (req) => {
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
       proprietario_id: parcela.admin_id,
       transaction_type: 'webhook',
-      pagbank_id: charge.id,
+      pagbank_id: chargeDetail.id || charge.id,
       reference_id: String(referenceId),
       status: currentStatus,
       amount: (chargeDetail.amount?.value || charge.amount?.value || 0) / 100,
@@ -134,7 +134,7 @@ serve(async (req) => {
       valor_pago: valorBruto,
       data_pagamento: dataPagamento,
       pagbank_status: 'PAID',
-      pagbank_charge_id: charge.id,
+      pagbank_charge_id: chargeDetail.id || charge.id,
       pagbank_updated_at: new Date().toISOString(),
       webhook_processed_at: new Date().toISOString(),
     }).eq('id', parcelaId);
@@ -149,7 +149,7 @@ serve(async (req) => {
       forma_pagamento: 'PagBank',
       id_conta_contabil: config.conta_sintetica_id,
       id_conta_resultado: config.id_conta_resultado,
-      pagbank_charge_id: charge.id,
+      pagbank_charge_id: chargeDetail.id || charge.id,
       pagbank_taxa_valor: taxa,
       pagbank_valor_liquido: valorLiquido,
     });
