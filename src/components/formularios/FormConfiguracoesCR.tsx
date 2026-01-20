@@ -32,6 +32,7 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' },
   { key: 'desconto_concedido', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' },
   { key: 'estorno_desconto_concedido', label: 'Estorno Desconto Concedido (Receita)', tipo: 'Resultado', analitica: 'Sim' },
+  { key: 'taxas_bancarias', label: 'Taxas Bancárias (Despesa)', tipo: 'Resultado', analitica: 'Sim' },
 ];
 
 /* ---------------- PADRÕES ---------------- */
@@ -41,6 +42,7 @@ const PADROES_CONTAS_CR = {
   parcela: { Conta: '1.1.02.0003', Descricao: 'Clientes a Receber Avulso' },
   desconto_concedido: { Conta: '5.1.01.0003', Descricao: 'Desconto Concedido' },
   estorno_desconto_concedido: { Conta: '4.1.03.0001', Descricao: 'Receita Estorno do desconto' },
+  taxas_bancarias: { Conta: '6.1.01.0004', Descricao: 'Taxas Bancárias' },
 };
 
 /* ---------------- FORM ---------------- */
@@ -50,6 +52,7 @@ const formSchema = z.object({
   parcela: z.string().nullable(),
   desconto_concedido: z.string().nullable(),
   estorno_desconto_concedido: z.string().nullable(),
+  taxas_bancarias: z.string().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -71,6 +74,7 @@ const FormConfiguracoesCR: React.FC = () => {
       parcela: null,
       desconto_concedido: null,
       estorno_desconto_concedido: null,
+      taxas_bancarias: null,
     },
   });
 

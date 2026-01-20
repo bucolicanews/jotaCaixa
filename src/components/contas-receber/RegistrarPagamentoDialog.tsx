@@ -40,7 +40,7 @@ const formSchema = z.object({
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
   codigo_transacao: z.string().optional(),
   conta_id: z.string().uuid('Selecione a conta de destino.').nullable(),
-  acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
+  acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar', 'taxas_bancarias']).optional(),
   nova_data_vencimento: z.date().optional(),
   numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
   intervalo_dias_novas_parcelas: z.coerce.number().int().min(1).optional(),
@@ -98,6 +98,7 @@ export async function saveRecebimentoAndLancamentos({
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
     const contaDesconto = configMap['desconto_concedido'];
+    const contaTaxasBancarias = configMap['taxas_bancarias'];
     
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
@@ -215,6 +216,54 @@ export async function saveRecebimentoAndLancamentos({
               historico_id: values.historico_id,
               origem: 'recebimento_manual',
               conta_resultado_id: idDescontoDespesa,
+          });
+          
+        } else if (values.acao_saldo_restante === 'taxas_bancarias') {
+          await supabase.from(tabelaParcelas).update({
+            status: 'paga',
+            valor_pago: novoValorPagoTotal,
+            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de taxas bancárias. ${values.observacao || ''}`,
+            ...(contaParcela && { id_conta_contabil: contaParcela })
+          }).eq('id', parcela.id);
+          
+          if (!contaTaxasBancarias) {
+              throw new Error('Conta de Taxas Bancárias não configurada.');
+          }
+          
+          if (!values.conta_patrimonial_id) {
+              throw new Error('Selecione a Conta Patrimonial para registrar as taxas bancárias.');
+          }
+          
+          const idTaxasDespesa = crypto.randomUUID();
+          const idTaxasPatrimonial = crypto.randomUUID();
+          
+          lancamentosPayload.push({
+              id: idTaxasDespesa,
+              proprietario_id: proprietarioDaSessao,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Taxas Bancárias: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+              valor: saldoRestanteCalculado,
+              tipo: 'Entrada' as const,
+              conta_bancaria_id: null,
+              conta_contabil_id: contaTaxasBancarias,
+              origem: 'recebimento_manual',
+              historico_id: values.historico_id,
+              conta_resultado_id: idTaxasPatrimonial,
+          });
+          
+          lancamentosPayload.push({
+              id: idTaxasPatrimonial,
+              proprietario_id: proprietarioDaSessao,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Estorno Patrimonial Taxas Bancárias CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+              valor: saldoRestanteCalculado,
+              tipo: 'Saida' as const,
+              conta_bancaria_id: null,
+              conta_contabil_id: values.conta_patrimonial_id,
+              historico_id: values.historico_id,
+              origem: 'recebimento_manual',
+              conta_resultado_id: idTaxasDespesa,
           });
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
@@ -814,6 +863,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                               </FormControl>
                               <FormLabel className="font-normal">
                                 Conceder Desconto (Perdoar)
+                              </FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2">
+                              <FormControl>
+                                <RadioGroupItem value="taxas_bancarias" />
+                              </FormControl>
+                              <FormLabel className="font-normal">
+                                Taxas Bancárias (Despesa)
                               </FormLabel>
                             </FormItem>
                             <FormItem className="flex items-center space-x-2">
