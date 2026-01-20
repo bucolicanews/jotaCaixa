@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useOwner } from '@/hooks/use-owner';
 
 const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -184,8 +185,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     onSaveComplete,
     onClose,
 }) => {
-    const { role, usuario, perfil } = useSessao();
-    const isAdmin = role === 'Admin';
+    const { ownerId, ownerType } = useOwner();
     
     const [loading, setLoading] = useState(false);
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
@@ -199,14 +199,14 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     const [dialogNovaDescricao, setDialogNovaDescricao] = useState(false);
     const [dialogNovoIdentificador, setDialogNovoIdentificador] = useState(false);
     
-    const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
-
     const valorRecebido = recebimentoDetalhes.valor_recebido;
     const contaDestinoId = recebimentoDetalhes.conta_id;
     
-    const tabelaDescricao = isAdmin ? 'admin_descricao_extrato' : 'descricao_extrato';
-    const tabelaIdentificacao = isAdmin ? 'admin_identificacao_extrato' : 'identificacao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+    const isSupervisao = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+    const proprietarioDaSessao = ownerId;
+    const tabelaDescricao = isSupervisao ? 'admin_descricao_extrato' : 'descricao_extrato';
+    const tabelaIdentificacao = isSupervisao ? 'admin_identificacao_extrato' : 'identificacao_extrato';
+    const campoId = isSupervisao ? 'admin_id' : 'empresa_id';
     
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -330,7 +330,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             
             if (contaDestinoDetalhe?.plano_contas?.is_banco) { 
                 const valorExtrato = Math.abs(valorRecebido); 
-                const contaContabilRecebimento = isAdmin 
+                const contaContabilRecebimento = isSupervisao 
                     ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
                     : null;
                 
@@ -368,10 +368,10 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             };
 
             await saveRecebimentoAndLancamentos({
-                values: fullValues,
+                values: { ...fullValues, observacao: values.observacao },
                 parcela,
                 proprietarioDaSessao,
-                isAdmin,
+                isAdmin: isSupervisao,
                 contasDestino,
                 comprovanteUrl,
             });
@@ -521,7 +521,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                         <FormNovoItem
                             tipo="descricao"
                             proprietarioId={proprietarioDaSessao}
-                            isAdmin={isAdmin}
+                            isAdmin={isSupervisao}
                             proximaOrdem={proximaOrdemDescricao}
                             onSaveComplete={handleNovaDescricaoSalva}
                             onClose={() => setDialogNovaDescricao(false)}
@@ -537,7 +537,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                         <FormNovoItem
                             tipo="identificacao"
                             proprietarioId={proprietarioDaSessao}
-                            isAdmin={isAdmin}
+                            isAdmin={isSupervisao}
                             proximaOrdem={proximaOrdemIdentificador}
                             onSaveComplete={handleNovoIdentificadorSalvo}
                             onClose={() => setDialogNovoIdentificador(false)}
