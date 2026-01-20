@@ -159,12 +159,104 @@ serve(async (req) => {
     });
 
     if (config.conta_sintetica_id && parcela.admin_contas_receber.id_conta_patrimonial) {
-      const idAtivo = crypto.randomUUID();
-      const idPatrimonial = crypto.randomUUID();
-      await supabaseAdmin.from('lancamentos').insert([
-        { id: idAtivo, proprietario_id: parcela.admin_id, data_movimentacao: dataPagamento, descricao: `Recebimento PagBank: ${parcela.admin_contas_receber.descricao}`, valor: valorLiquido, tipo: 'Entrada', conta_contabil_id: config.conta_sintetica_id, origem: 'recebimento_pagbank', conciliado: true, conta_resultado_id: idPatrimonial },
-        { id: idPatrimonial, proprietario_id: parcela.admin_id, data_movimentacao: dataPagamento, descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`, valor: valorLiquido, tipo: 'Saida', conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial, origem: 'recebimento_pagbank', conciliado: true, conta_resultado_id: idAtivo }
-      ]);
+      const lancamentosPayload = [];
+      
+      if (taxa > 0 && config.conta_despesa_taxa_id) {
+        const idPagBank = crypto.randomUUID();
+        const idTaxa = crypto.randomUUID();
+        const idPatrimonial = crypto.randomUUID();
+        
+        lancamentosPayload.push({
+          id: idPagBank,
+          proprietario_id: parcela.admin_id,
+          data_movimentacao: dataPagamento,
+          descricao: `Recebimento PagBank: ${parcela.admin_contas_receber.descricao}`,
+          valor: valorLiquido,
+          tipo: 'Entrada',
+          conta_contabil_id: config.conta_sintetica_id,
+          origem: 'recebimento_pagbank',
+          conciliado: true,
+          historico_id: config.historico_padrao_id || null,
+          conta_resultado_id: idPatrimonial,
+          conta_bancaria_id: null
+        });
+        
+        lancamentosPayload.push({
+          id: idTaxa,
+          proprietario_id: parcela.admin_id,
+          data_movimentacao: dataPagamento,
+          descricao: `Taxa PagBank: ${parcela.admin_contas_receber.descricao}`,
+          valor: taxa,
+          tipo: 'Entrada',
+          conta_contabil_id: config.conta_despesa_taxa_id,
+          origem: 'recebimento_pagbank',
+          conciliado: true,
+          historico_id: config.historico_taxa_id || config.historico_padrao_id || null,
+          conta_resultado_id: idPatrimonial,
+          conta_bancaria_id: null
+        });
+        
+        lancamentosPayload.push({
+          id: idPatrimonial,
+          proprietario_id: parcela.admin_id,
+          data_movimentacao: dataPagamento,
+          descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`,
+          valor: valorBruto,
+          tipo: 'Saida',
+          conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial,
+          origem: 'recebimento_pagbank',
+          conciliado: true,
+          historico_id: config.historico_padrao_id || null,
+          conta_resultado_id: idPagBank,
+          conta_bancaria_id: null
+        });
+        
+        console.log(`[pagbank-webhook:${requestId}] Lançamento com taxa: PagBank R$ ${valorLiquido.toFixed(2)} + Taxa R$ ${taxa.toFixed(2)} = Baixa R$ ${valorBruto.toFixed(2)}`);
+      } else {
+        const idAtivo = crypto.randomUUID();
+        const idPatrimonial = crypto.randomUUID();
+        
+        lancamentosPayload.push({
+          id: idAtivo,
+          proprietario_id: parcela.admin_id,
+          data_movimentacao: dataPagamento,
+          descricao: `Recebimento PagBank: ${parcela.admin_contas_receber.descricao}`,
+          valor: valorBruto,
+          tipo: 'Entrada',
+          conta_contabil_id: config.conta_sintetica_id,
+          origem: 'recebimento_pagbank',
+          conciliado: true,
+          historico_id: config.historico_padrao_id || null,
+          conta_resultado_id: idPatrimonial,
+          conta_bancaria_id: null
+        });
+        
+        lancamentosPayload.push({
+          id: idPatrimonial,
+          proprietario_id: parcela.admin_id,
+          data_movimentacao: dataPagamento,
+          descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`,
+          valor: valorBruto,
+          tipo: 'Saida',
+          conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial,
+          origem: 'recebimento_pagbank',
+          conciliado: true,
+          historico_id: config.historico_padrao_id || null,
+          conta_resultado_id: idAtivo,
+          conta_bancaria_id: null
+        });
+        
+        console.log(`[pagbank-webhook:${requestId}] Lançamento sem taxa: Valor total R$ ${valorBruto.toFixed(2)}`);
+      }
+      
+      const { error: lancError } = await supabaseAdmin.from('lancamentos').insert(lancamentosPayload);
+      
+      if (lancError) {
+        console.error(`[pagbank-webhook:${requestId}] ERRO ao inserir lançamentos:`, lancError);
+        throw new Error(`Falha ao criar lançamentos contábeis: ${lancError.message}`);
+      }
+      
+      console.log(`[pagbank-webhook:${requestId}] ${lancamentosPayload.length} lançamentos criados com partida dobrada completa.`);
     }
 
     console.log(`[pagbank-webhook:${requestId}] Sucesso total para parcela ${parcelaId}`);

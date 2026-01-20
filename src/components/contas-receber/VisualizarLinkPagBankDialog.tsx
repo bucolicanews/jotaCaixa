@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -47,8 +47,29 @@ export function VisualizarLinkPagBankDialog({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manualOrderId, setManualOrderId] = useState('');
+  const [whatsappTemplate, setWhatsappTemplate] = useState('Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}');
 
   const linkToUse = checkoutLink || paymentLink;
+
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      if (!ownerId) return;
+      
+      const { data } = await supabase
+        .from('configuracoes_pagbank')
+        .select('whatsapp_template')
+        .eq('proprietario_id', ownerId)
+        .maybeSingle();
+        
+      if (data?.whatsapp_template) {
+        setWhatsappTemplate(data.whatsapp_template);
+      }
+    };
+    
+    if (open) {
+      fetchTemplate();
+    }
+  }, [open, ownerId]);
 
   const handleSyncStatus = async (forceId?: string) => {
     if (!parcelaId) return;
@@ -201,7 +222,11 @@ export function VisualizarLinkPagBankDialog({
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => {
                     const telefone = clienteTelefone?.replace(/\D/g, '');
-                    const msg = `Olá ${clienteNome || 'Cliente'}! Segue o link para pagamento de R$ ${valorParcela.toFixed(2)}: ${linkToUse}`;
+                    const msg = whatsappTemplate
+                      .replace('{nome}', clienteNome || 'Cliente')
+                      .replace('{valor}', valorParcela.toFixed(2))
+                      .replace('{descricao}', descricao)
+                      .replace('{link}', linkToUse || '');
                     window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(msg)}`, '_blank');
                 }} disabled={!clienteTelefone}>
                   <Send className="h-4 w-4 mr-2" /> WhatsApp
