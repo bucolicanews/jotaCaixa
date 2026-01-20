@@ -1,66 +1,58 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface VisualizarCodigoDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
   code: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
 }
 
 export function VisualizarCodigoDialog({
+  open,
+  onOpenChange,
   title,
   description,
   code,
-  open,
-  onOpenChange,
 }: VisualizarCodigoDialogProps) {
   const [copied, setCopied] = React.useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    toast.success('Código copiado para a área de transferência.');
-    setCopied(true);
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
-  };
-
-  React.useEffect(() => {
-    if (!open) {
-      setCopied(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success('Código copiado!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast.error('Erro ao copiar');
     }
-  }, [open]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <div className="flex items-center space-x-2">
-          <Input id="code-display" value={code} readOnly className="h-9 font-mono text-xs" />
-          <Button type="button" size="sm" className="px-3" onClick={handleCopy}>
-            <span className="sr-only">Copiar</span>
-            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          </Button>
+
+        <div className="space-y-4">
+          <div className="p-3 bg-muted rounded-lg overflow-x-auto">
+            <code className="font-mono text-xs whitespace-nowrap select-all">
+              {code}
+            </code>
+          </div>
         </div>
-        <DialogFooter className="sm:justify-end">
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-            Fechar
+
+        <DialogFooter>
+          <Button onClick={handleCopy} disabled={copied} className="w-full">
+            {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+            {copied ? 'Copiado!' : 'Copiar Código'}
           </Button>
         </DialogFooter>
       </DialogContent>
