@@ -28,17 +28,8 @@ interface FormContratoTagProps {
 
 const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveComplete }) => {
   const isEditing = !!tagInicial;
-  const { role, perfil, usuario } = useSessao();
+  const { ownerId } = useSessao(); // Usando ownerId resolvido pela sessão
   
-  const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -58,7 +49,7 @@ const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveCom
       nome_tag: values.nome_tag,
       descricao: values.descricao,
       origem_dado: values.origem_dado || null,
-      empresa_id: ownerId, // Usando o ID do Admin/Cliente
+      empresa_id: ownerId, // Usando o ownerId
     };
 
     let error = null;
