@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
+import ReciboRecebimentoDialog from './ReciboRecebimentoDialog'; // NOVO IMPORT
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
@@ -57,6 +58,13 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     onVisualizarLinkPagBank,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
+    const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
+    const [parcelaParaRecibo, setParcelaParaRecibo] = useState<string | null>(null);
+
+    const handleOpenRecibo = (parcelaId: string) => {
+        setParcelaParaRecibo(parcelaId);
+        setReciboDialogOpen(true);
+    };
 
     return (
         <Card>
@@ -96,15 +104,27 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                     return (
                                         <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
                                             <TableCell className="text-left min-w-[120px]">
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={() => handleOpenPagamento(p)} 
-                                                    disabled={isPaga || p.status === 'bloqueada' || p.status === 'cancelada'}
-                                                    title={isPaga ? 'Esta parcela já foi recebida' : (p.status === 'bloqueada' || p.status === 'cancelada' ? `Status: ${p.status}`: 'Registrar recebimento')}
-                                                >
-                                                    <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" /> Receber
-                                                </Button>
+                                                <div className="flex flex-col space-y-1">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => handleOpenPagamento(p)} 
+                                                        disabled={isPaga || p.status === 'bloqueada' || p.status === 'cancelada'}
+                                                        title={isPaga ? 'Esta parcela já foi recebida' : (p.status === 'bloqueada' || p.status === 'cancelada' ? `Status: ${p.status}`: 'Registrar recebimento')}
+                                                    >
+                                                        <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" /> Receber
+                                                    </Button>
+                                                    {isPaga && (
+                                                        <Button 
+                                                            variant="secondary" 
+                                                            size="sm" 
+                                                            onClick={() => handleOpenRecibo(p.id)}
+                                                            className="bg-blue-500 hover:bg-blue-600 text-white"
+                                                        >
+                                                            <FileText className="w-4 h-4 mr-2" /> Recibo
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <Button
@@ -214,6 +234,12 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                     />
                 )}
             </CardContent>
+            
+            <ReciboRecebimentoDialog
+                parcelaId={parcelaParaRecibo}
+                open={reciboDialogOpen}
+                onOpenChange={setReciboDialogOpen}
+            />
         </Card>
     );
 };
