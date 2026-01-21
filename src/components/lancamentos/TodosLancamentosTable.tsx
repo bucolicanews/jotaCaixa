@@ -221,7 +221,7 @@ const TodosLancamentosTable: React.FC = () => {
                                     const canDelete = true;
                                     
                                     return (
-                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem.endsWith('_estornada') && 'opacity-50')}>
+                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem?.endsWith('_estornada') && 'opacity-50')}>
                                             <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
                                             <TableCell>
                                                 <Badge variant={getBadgeVariant(l.tipo)}>
