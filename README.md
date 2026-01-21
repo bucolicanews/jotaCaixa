@@ -1,4 +1,4 @@
-# Jota App - Sistema de Gestão Financeira, Contábil e RH
+# Jota App - Sistema de Gestão Financeira, Contábil e RHh
 
 ![Version](https://img.shields.io/badge/version-2.5-blue)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)
