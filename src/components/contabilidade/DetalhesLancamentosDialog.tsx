@@ -48,7 +48,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     
     let query = supabase
       .from('lancamentos')
-      .select('id, data_movimentacao, descricao, valor, tipo');
+      .select('id, data_movimentacao, descricao, valor, tipo, origem')
       
     // Se for Caixa/Banco, filtra por conta_bancaria_id
     if (isCaixaBanco) {
@@ -70,8 +70,20 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      setLancamentos(data as Lancamento[]);
+  // FILTRAR LANÇAMENTOS ESTORNADOS
+  const lancamentosValidos = (data as Lancamento[]).filter(l => {
+    const origem = l.origem || '';
+    const isEstornado = origem.toLowerCase().includes('estorn');
+    
+    if (isEstornado) {
+      console.log(`[EXTRATO] Ignorando lançamento estornado: ${l.id} - ${l.descricao} (${l.valor})`);
     }
+    
+    return !isEstornado;
+  });
+  
+  setLancamentos(lancamentosValidos);
+}
     setLoading(false);
   }, [conta]);
 
