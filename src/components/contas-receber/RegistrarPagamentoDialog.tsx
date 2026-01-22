@@ -47,6 +47,7 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial válida.').nullable(),
+  conta_acrescimo_id: z.string().uuid('Selecione a conta de acréscimo.').nullable().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -383,6 +384,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loading, setLoading] = useState(false); 
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
@@ -458,6 +461,29 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     setLoadingContasPatrimoniais(false);
   }, [proprietarioDaSessao, configMap.Ativo]);
   
+  const fetchContasReceita = useCallback(async () => {
+    if (!proprietarioDaSessao) return;
+    setLoadingContasReceita(true);
+    
+    const receitaCode = configMap.Receita || '4';
+    
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', proprietarioDaSessao)
+        .eq('Analitica', 'Sim')
+        .like('Conta', `${receitaCode}.%`)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de receita: ' + error.message);
+        setContasReceita([]);
+    } else {
+        setContasReceita(data as PlanoContas[]);
+    }
+    setLoadingContasReceita(false);
+  }, [proprietarioDaSessao, configMap.Receita]);
+  
   const fetchConfigAndDefaults = useCallback(async () => {
     if (!parcela || !proprietarioDaSessao) return;
     
@@ -502,6 +528,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
+          fetchContasReceita();
           
           if (parcela) {
               fetchConfigAndDefaults();
@@ -511,12 +538,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       if (!open) {
           setIsInitialized(false);
       }
-  }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, parcela]);
+  }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchConfigAndDefaults, parcela]);
 
   const valorRecebido = form.watch('valor_recebido');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
   const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
   const saldoRestante = saldoDevedor - valorRecebido;
+  const isRecebimentoMaior = valorRecebido > saldoDevedor;
+  const valorAcrescimo = isRecebimentoMaior ? valorRecebido - saldoDevedor : 0;
 
   const saveDirectPayment = async (values: FormValues) => {
     if (!parcela || !proprietarioDaSessao || !values.conta_id || !values.conta_patrimonial_id) {
@@ -1009,6 +1038,56 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                       />
                     </div>
                   )}
+                </div>
+              )}
+
+              {isRecebimentoMaior && (
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="font-semibold text-green-600">
+                    Acréscimo (Receita adicional):{" "}
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(valorAcrescimo)}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    O valor recebido é maior que o saldo devedor. Selecione a conta de receita para registrar o acréscimo.
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name="conta_acrescimo_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Conta de Receita (Acréscimo) *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "0"}
+                          disabled={loadingContasReceita}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  loadingContasReceita
+                                    ? "Carregando Contas..."
+                                    : "Selecione a conta de receita"
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {contasReceita.map((conta) => (
+                              <SelectItem key={conta.id} value={conta.id}>
+                                {conta.Conta} - {conta.Descricao}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               )}
 
