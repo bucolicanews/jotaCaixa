@@ -178,24 +178,27 @@ export async function buscarContasContabeis(
   const tabelaPlanoContas = 'plano_contas';
   const ownerKey = 'proprietario_id';
 
-  const prefixo = tipo === 'receita' ? '4' : '5';
+  let query = supabase
+    .from(tabelaPlanoContas)
+    .select('id, Conta, Descricao, Analitica')
+    .eq(ownerKey, ownerId)
+    .eq('Analitica', 'Sim');
 
   console.log('🔍 buscarContasContabeis');
   console.log('  - isAdmin:', isAdmin);
   console.log('  - ownerId:', ownerId);
   console.log('  - tipo:', tipo);
-  console.log('  - prefixo:', prefixo);
   console.log('  - tabelaPlanoContas:', tabelaPlanoContas);
   console.log('  - ownerKey:', ownerKey);
 
-  const { data, error } = await supabase
-    .from(tabelaPlanoContas)
-    .select('id, Conta, Descricao, Analitica, is_conta_resultado')
-    .eq(ownerKey, ownerId)
-    .eq('Analitica', 'S')
-    // .eq('is_conta_resultado', true)  // COMENTADO TEMPORARIAMENTE PARA TESTE
-    .like('Conta', `${prefixo}%`)
-    .order('Conta', { ascending: true });
+  if (tipo === 'receita') {
+    query = query.like('Conta', '4.%');
+  } else {
+    // Para despesa, buscar tanto 5.x.x quanto 6.x.x
+    query = query.or('Conta.like.5.%,Conta.like.6.%');
+  }
+
+  const { data, error } = await query.order('Conta', { ascending: true });
 
   console.log('  - Query executada');
   console.log('  - erro:', error);

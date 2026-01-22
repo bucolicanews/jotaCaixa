@@ -68,12 +68,14 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
 
   useEffect(() => {
     if (open) {
+      setParcelaSelecionada(null);
+      setDetalhesAbertos({});
       buscarParcelas();
     }
   }, [open, buscarParcelas]);
 
   const handleSelecionar = (parcelaId: string) => {
-    setParcelaSelecionada(parcelaSelecionada === parcelaId ? null : parcelaId);
+    setParcelaSelecionada(parcelaId);
   };
 
   const handleConfirmarMapeamento = async () => {
@@ -93,7 +95,8 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
     }
   };
 
-  const toggleDetalhes = async (parcelaId: string, contaId: string) => {
+  const toggleDetalhes = async (parcelaId: string, contaId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
     const novoEstado = !detalhesAbertos[parcelaId];
     setDetalhesAbertos(prev => ({ ...prev, [parcelaId]: novoEstado }));
 
@@ -117,7 +120,7 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[90vw] max-w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Busca Manual de Parcelas</DialogTitle>
           <DialogDescription>
@@ -249,9 +252,16 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
         </div>
 
         <div className="space-y-2">
-          <h4 className="font-semibold text-sm">
-            Resultados ({resultados.length})
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm">
+              Resultados ({resultados.length}) - Clique para selecionar
+            </h4>
+            {parcelaSelecionada && (
+              <div className="text-sm text-green-600 font-medium">
+                ✓ Parcela selecionada
+              </div>
+            )}
+          </div>
 
           {buscando ? (
             <div className="flex justify-center items-center py-8">
@@ -289,7 +299,8 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
                     return (
                       <React.Fragment key={parcela.id}>
                         <TableRow 
-                          className={parcelaSelecionada === parcela.id ? 'bg-primary/10' : ''}
+                          className={`cursor-pointer ${parcelaSelecionada === parcela.id ? 'bg-blue-100 border-l-4 border-blue-500' : 'hover:bg-gray-50'}`}
+                          onClick={() => handleSelecionar(parcela.id)}
                         >
                           <TableCell>
                             <input
@@ -320,7 +331,7 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => toggleDetalhes(parcela.id, contaId)}
+                              onClick={(e) => toggleDetalhes(parcela.id, contaId, e)}
                             >
                               {isAberto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </Button>
@@ -357,16 +368,25 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
                                     </div>
                                   </div>
                                   <div>
-                                    <p className="text-xs text-muted-foreground mb-2">Histórico de Parcelas:</p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <div className="mb-2">
+                                      <p className="text-sm font-medium">Histórico de Parcelas:</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Clique em qualquer parcela abaixo para selecioná-la
+                                      </p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                                       {detalhes.parcelas.map((p) => (
                                         <div 
                                           key={p.id} 
-                                          className={`text-xs p-2 rounded border ${
-                                            p.id === parcela.id ? 'bg-primary/10 border-primary' : 'bg-background'
+                                          onClick={() => handleSelecionar(p.id)}
+                                          className={`text-xs p-2 rounded border cursor-pointer transition-all ${
+                                            parcelaSelecionada === p.id 
+                                              ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' 
+                                              : 'bg-background hover:bg-gray-50 hover:border-gray-300'
                                           }`}
                                         >
                                           <span className="font-medium">Parcela {p.numero_parcela}:</span>{' '}
+                                          {parcelaSelecionada === p.id && <span className="text-green-600 font-bold">✓ </span>}
                                           {formatCurrency(p.valor_parcela)} - {formatarData(p.data_vencimento)} -{' '}
                                           <Badge variant="outline" className="text-xs">{p.status}</Badge>
                                           {p.valor_pago > 0 && (
@@ -394,32 +414,83 @@ const ModalBuscaManualParcelas: React.FC<ModalBuscaManualParcelasProps> = ({
           )}
         </div>
 
-        <DialogFooter className="flex justify-between items-center">
-          <p className="text-sm text-muted-foreground">
-            {parcelaSelecionada 
-              ? '1 parcela selecionada' 
-              : 'Selecione uma parcela para confirmar'}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={confirmando}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleConfirmarMapeamento} 
-              disabled={!parcelaSelecionada || confirmando}
-            >
-              {confirmando ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Confirmando...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Confirmar Mapeamento
-                </>
-              )}
-            </Button>
+        <DialogFooter className="flex flex-col gap-4">
+          {parcelaSelecionada && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-3 w-full">
+              <p className="text-sm font-medium text-green-900">Parcela Selecionada:</p>
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                {(() => {
+                  let selecionada = resultados.find(p => p.id === parcelaSelecionada);
+                  
+                  if (!selecionada) {
+                    for (const detalhes of Object.values(detalhesContas)) {
+                      const parcelaDetalhes = detalhes.parcelas.find(p => p.id === parcelaSelecionada);
+                      if (parcelaDetalhes) {
+                        selecionada = {
+                          id: parcelaDetalhes.id,
+                          numero_parcela: parcelaDetalhes.numero_parcela,
+                          valor_parcela: parcelaDetalhes.valor_parcela,
+                          data_vencimento: parcelaDetalhes.data_vencimento,
+                          status: parcelaDetalhes.status,
+                          data_pagamento: null,
+                          descricao_conta: detalhes.descricao,
+                        } as ParcelaResultado;
+                        break;
+                      }
+                    }
+                  }
+                  
+                  return selecionada ? (
+                    <>
+                      <div>
+                        <p className="text-xs text-green-700">Nº Parcela</p>
+                        <p className="font-medium">{selecionada.numero_parcela}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-green-700">Valor</p>
+                        <p className="font-medium">{formatCurrency(selecionada.valor_parcela)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-green-700">Vencimento</p>
+                        <p className="font-medium">{formatarData(selecionada.data_vencimento)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-green-700">Status</p>
+                        <Badge className="text-xs">{selecionada.status}</Badge>
+                      </div>
+                    </>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              {parcelaSelecionada 
+                ? 'Parcela pronta para ser vinculada' 
+                : 'Clique em uma parcela da tabela acima para selecionar'}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose} disabled={confirmando}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleConfirmarMapeamento} 
+                disabled={!parcelaSelecionada || confirmando}
+              >
+                {confirmando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Confirmando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Confirmar Mapeamento
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogFooter>
       </DialogContent>
