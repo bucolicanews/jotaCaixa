@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import FormConciliacaoConfig from '@/components/formularios/FormConciliacaoConfig';
 import HistoricoConciliacaoDialog from '@/components/conciliacao/HistoricoConciliacaoDialog';
 import ModalMapeamentoParcela from '@/components/conciliacao/ModalMapeamentoParcela';
+import ModalBuscaManualParcelas from '@/components/conciliacao/ModalBuscaManualParcelas';
+import ModalCategorizacaoDireta from '@/components/conciliacao/ModalCategorizacaoDireta';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +30,7 @@ import {
   ParcelaCandidato,
   TransacaoComId 
 } from '@/hooks/conciliacao/useMapeamentoParcelas';
+import { conciliarTransacaoDireta, DadosCategorizacao } from '@/hooks/conciliacao/useConciliacaoDireta';
 
 const Conciliacao = () => {
   const { role } = useSessao();
@@ -78,6 +81,8 @@ const Conciliacao = () => {
   const [transacaoAtual, setTransacaoAtual] = useState<TransacaoComId | null>(null);
   const [candidatosAtuais, setCandidatosAtuais] = useState<ParcelaCandidato[]>([]);
   const [modalMapeamentoOpen, setModalMapeamentoOpen] = useState(false);
+  const [modalBuscaManualOpen, setModalBuscaManualOpen] = useState(false);
+  const [modalCategorizacaoDiretaOpen, setModalCategorizacaoDiretaOpen] = useState(false);
   const [carregandoCandidatos, setCarregandoCandidatos] = useState(false);
   const [indiceAtual, setIndiceAtual] = useState(1);
   const [historicoMapeamento, setHistoricoMapeamento] = useState<TransacaoComId[]>([]);
@@ -124,19 +129,30 @@ const Conciliacao = () => {
   }, [proprietarioDaConfiguracao, fetchPendentes]);
 
   const iniciarMapeamento = useCallback(async () => {
-    if (transacoesPendentes.length === 0) return;
+    console.log('🚀 iniciarMapeamento chamado');
+    console.log('📊 Transações pendentes:', transacoesPendentes.length);
+    console.log('👤 Proprietário:', proprietarioDaConfiguracao);
+    
+    if (transacoesPendentes.length === 0) {
+      console.warn('⚠️ Nenhuma transação pendente');
+      return;
+    }
 
     const primeira = transacoesPendentes[0];
+    console.log('🎯 Primeira transação:', primeira);
+    
     setTransacaoAtual(primeira);
     setIndiceAtual(1);
     setCarregandoCandidatos(true);
     setModalMapeamentoOpen(true);
 
     try {
+      console.log('🔍 Buscando candidatos...');
       const candidatos = await buscarParcelasCandidatas(primeira, proprietarioDaConfiguracao!, isAdmin);
+      console.log('✅ Candidatos encontrados:', candidatos.length);
       setCandidatosAtuais(candidatos);
     } catch (error) {
-      console.error('Erro ao buscar candidatos:', error);
+      console.error('❌ Erro ao buscar candidatos:', error);
       setCandidatosAtuais([]);
     } finally {
       setCarregandoCandidatos(false);
@@ -236,6 +252,142 @@ const Conciliacao = () => {
       setCarregandoCandidatos(false);
     }
   }, [historicoMapeamento, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+
+  const handleAbrirBuscaManual = useCallback(() => {
+    setModalMapeamentoOpen(false);
+    setModalBuscaManualOpen(true);
+  }, []);
+
+  const handleFecharBuscaManual = useCallback(() => {
+    setModalBuscaManualOpen(false);
+    setModalMapeamentoOpen(true);
+  }, []);
+
+  const handleBuscarTodasParcelas = useCallback(() => {
+    // Fecha o modal de mapeamento e abre o de busca manual sem filtros
+    setModalMapeamentoOpen(false);
+    setModalBuscaManualOpen(true);
+  }, []);
+
+  const handleAbrirCategorizacaoDireta = useCallback(async () => {
+    console.log('🔧 handleAbrirCategorizacaoDireta chamado');
+    console.log('📦 transacaoAtual:', transacaoAtual);
+    console.log('👤 proprietarioDaConfiguracao:', proprietarioDaConfiguracao);
+    
+    if (!transacaoAtual || !proprietarioDaConfiguracao) return;
+    
+    setModalMapeamentoOpen(false);
+    setCarregandoCandidatos(true);
+    setModalCategorizacaoDiretaOpen(true);
+
+    try {
+      console.log('🔍 Buscando candidatos...');
+      const candidatos = await buscarParcelasCandidatas(
+        transacaoAtual,
+        proprietarioDaConfiguracao,
+        isAdmin
+      );
+      console.log('✅ Candidatos encontrados:', candidatos.length, candidatos);
+      setCandidatosAtuais(candidatos);
+    } catch (error) {
+      console.error('❌ Erro ao buscar parcelas:', error);
+      setCandidatosAtuais([]);
+    } finally {
+      setCarregandoCandidatos(false);
+    }
+  }, [transacaoAtual, proprietarioDaConfiguracao, isAdmin]);
+
+  const handleFecharCategorizacaoDireta = useCallback(() => {
+    setModalCategorizacaoDiretaOpen(false);
+    setModalMapeamentoOpen(true);
+  }, []);
+
+  const handleConfirmarCategorizacaoDireta = useCallback(async (dados: DadosCategorizacao) => {
+    if (!transacaoAtual || !proprietarioDaConfiguracao) return;
+
+    const result = await conciliarTransacaoDireta(
+      transacaoAtual.id,
+      dados,
+      isAdmin,
+      proprietarioDaConfiguracao
+    );
+
+    if (!result.success) {
+      showError(result.error || 'Erro ao conciliar transação');
+      return;
+    }
+
+    showSuccess('Transação conciliada diretamente com sucesso!');
+    
+    const novasPendentes = transacoesPendentes.filter(t => t.id !== transacaoAtual.id);
+    setTransacoesPendentes(novasPendentes);
+
+    if (novasPendentes.length > 0) {
+      const proxima = novasPendentes[0];
+      setTransacaoAtual(proxima);
+      setIndiceAtual(prev => prev + 1);
+      setCarregandoCandidatos(true);
+      
+      try {
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, isAdmin);
+        setCandidatosAtuais(candidatos);
+      } catch (error) {
+        setCandidatosAtuais([]);
+      } finally {
+        setCarregandoCandidatos(false);
+      }
+      
+      setModalCategorizacaoDiretaOpen(false);
+      setModalMapeamentoOpen(true);
+    } else {
+      setModalCategorizacaoDiretaOpen(false);
+      setModalMapeamentoOpen(false);
+      showSuccess('Todas as transações foram processadas!');
+    }
+  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+
+  const handleConfirmarVinculoParcela = useCallback(async (parcelaId: string) => {
+    if (!transacaoAtual || !proprietarioDaConfiguracao) return;
+
+    const tipo = transacaoAtual.tipo === 'Entrada' ? 'CR' : 'CP';
+    const result = await confirmarMapeamento(
+      transacaoAtual.id,
+      parcelaId,
+      tipo,
+      isAdmin,
+      proprietarioDaConfiguracao
+    );
+
+    if (result.success) {
+      showSuccess('Transação vinculada com parcela!');
+      
+      const novasPendentes = transacoesPendentes.filter(t => t.id !== transacaoAtual.id);
+      setTransacoesPendentes(novasPendentes);
+      
+      if (novasPendentes.length > 0) {
+        const proxima = novasPendentes[0];
+        setTransacaoAtual(proxima);
+        setIndiceAtual(prev => prev + 1);
+        setCarregandoCandidatos(true);
+        
+        try {
+          const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao, isAdmin);
+          setCandidatosAtuais(candidatos);
+        } catch (error) {
+          setCandidatosAtuais([]);
+        } finally {
+          setCarregandoCandidatos(false);
+        }
+        
+        setModalCategorizacaoDiretaOpen(true);
+      } else {
+        setModalCategorizacaoDiretaOpen(false);
+        showSuccess('Todas as transações foram processadas!');
+      }
+    } else {
+      showError(result.error || 'Erro ao vincular parcela');
+    }
+  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
 
   const handleOpenConfigDialog = (config: any) => {
     setConfigParaEditar(config);
@@ -387,7 +539,36 @@ const Conciliacao = () => {
         totalPendentes={transacoesPendentes.length + indiceAtual - 1}
         indiceAtual={indiceAtual}
         carregando={carregandoCandidatos}
+        onBuscarManual={handleAbrirBuscaManual}
+        onConciliarDireta={handleAbrirCategorizacaoDireta}
+        onBuscarTodasParcelas={handleBuscarTodasParcelas}
       />
+
+      {transacaoAtual && (
+        <>
+          <ModalBuscaManualParcelas
+            open={modalBuscaManualOpen}
+            onClose={handleFecharBuscaManual}
+            transacao={transacaoAtual}
+            tipo={transacaoAtual.tipo === 'Entrada' ? 'CR' : 'CP'}
+            onConfirmar={handleConfirmarMapeamento}
+            isAdmin={isAdmin}
+            ownerId={proprietarioDaConfiguracao || ''}
+          />
+
+          <ModalCategorizacaoDireta
+            open={modalCategorizacaoDiretaOpen}
+            onClose={handleFecharCategorizacaoDireta}
+            transacao={transacaoAtual}
+            candidatos={candidatosAtuais}
+            loadingCandidatos={carregandoCandidatos}
+            onConfirmarVinculo={handleConfirmarVinculoParcela}
+            onConfirmarCategorizacao={handleConfirmarCategorizacaoDireta}
+            ownerId={proprietarioDaConfiguracao || ''}
+            isAdmin={isAdmin}
+          />
+        </>
+      )}
     </LayoutPrincipal>
   );
 };

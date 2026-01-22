@@ -26,6 +26,8 @@ import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 import { GerarLinkPagBankDialog } from '@/components/contas-receber/GerarLinkPagBankDialog';
 import { VisualizarLinkPagBankDialog } from '@/components/contas-receber/VisualizarLinkPagBankDialog';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
+import ModalSelecionarTransacaoExtrato from '@/components/conciliacao/ModalSelecionarTransacaoExtrato';
+import { buscarTransacoesExtratoDisponiveis, vincularParcelaComExtrato, TransacaoExtratoCandidata } from '@/hooks/conciliacao/useMapeamentoInverso';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -77,6 +79,10 @@ const ContasReceber = () => {
   const [pagbankDialogOpen, setPagbankDialogOpen] = useState(false);
   const [visualizarPagbankDialogOpen, setVisualizarPagbankDialogOpen] = useState(false);
   const [selectedParcela, setSelectedParcela] = useState<any>(null);
+  const [modalMapeamentoExtratoOpen, setModalMapeamentoExtratoOpen] = useState(false);
+  const [parcelaParaMapear, setParcelaParaMapear] = useState<ExtendedParcelaDetalhada | null>(null);
+  const [transacoesExtratoDisponiveis, setTransacoesExtratoDisponiveis] = useState<TransacaoExtratoCandidata[]>([]);
+  const [loadingTransacoesExtrato, setLoadingTransacoesExtrato] = useState(false);
 
   const isAdmin = role === 'Admin';
   
@@ -398,6 +404,52 @@ const ContasReceber = () => {
     setPagamentoDialogOpen(true);
   };
 
+  const handleMapearComExtrato = useCallback(async (parcela: ExtendedParcelaDetalhada) => {
+    setParcelaParaMapear(parcela);
+    setLoadingTransacoesExtrato(true);
+    setModalMapeamentoExtratoOpen(true);
+
+    try {
+      const clienteNome = parcela.contas_receber?.clientes?.nome || 'Desconhecido';
+      const transacoes = await buscarTransacoesExtratoDisponiveis(
+        {
+          valor: parcela.valor_parcela,
+          data_vencimento: parcela.data_vencimento,
+          cliente_nome: clienteNome,
+          tipo: 'CR'
+        },
+        ownerId
+      );
+      setTransacoesExtratoDisponiveis(transacoes);
+    } catch (error) {
+      console.error('Erro ao buscar transações do extrato:', error);
+      setTransacoesExtratoDisponiveis([]);
+    } finally {
+      setLoadingTransacoesExtrato(false);
+    }
+  }, [ownerId]);
+
+  const handleConfirmarMapeamentoExtrato = useCallback(async (transacaoId: string) => {
+    if (!parcelaParaMapear) return;
+
+    const result = await vincularParcelaComExtrato(
+      parcelaParaMapear.id,
+      transacaoId,
+      'CR',
+      role === 'Admin',
+      ownerId
+    );
+
+    if (result.success) {
+      showSuccess('Parcela vinculada com extrato bancário com sucesso!');
+      setModalMapeamentoExtratoOpen(false);
+      setParcelaParaMapear(null);
+      buscarDados();
+    } else {
+      showError(result.error || 'Erro ao vincular parcela com extrato');
+    }
+  }, [parcelaParaMapear, ownerId, role, buscarDados]);
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => formatarData(dateString);
   
@@ -638,6 +690,7 @@ const ContasReceber = () => {
               setSelectedParcela(parcela);
               setVisualizarPagbankDialogOpen(true);
             }}
+            onMapearComExtrato={handleMapearComExtrato}
           />
         </TabsContent>
         
@@ -697,6 +750,20 @@ const ContasReceber = () => {
           clienteEmail={selectedParcela.contas_receber?.clientes?.email}
         />
       )}
+
+      <ModalSelecionarTransacaoExtrato
+        open={modalMapeamentoExtratoOpen}
+        onClose={() => {
+          setModalMapeamentoExtratoOpen(false);
+          setParcelaParaMapear(null);
+        }}
+        transacoes={transacoesExtratoDisponiveis}
+        parcelaValor={parcelaParaMapear?.valor_parcela || 0}
+        parcelaVencimento={parcelaParaMapear?.data_vencimento || ''}
+        parcelaNome={parcelaParaMapear?.contas_receber?.clientes?.nome || 'Desconhecido'}
+        loading={loadingTransacoesExtrato}
+        onConfirmar={handleConfirmarMapeamentoExtrato}
+      />
     </LayoutPrincipal>
   );
 };

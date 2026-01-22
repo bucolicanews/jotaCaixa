@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
@@ -46,6 +46,7 @@ interface TabelaParcelasProps {
     getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
     onGerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onVisualizarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
+    onMapearComExtrato?: (parcela: ExtendedParcelaDetalhada) => void;
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -56,6 +57,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     getBadgeVariant,
     onGerarLinkPagBank,
     onVisualizarLinkPagBank,
+    onMapearComExtrato,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
@@ -122,6 +124,17 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                             className="bg-blue-500 hover:bg-blue-600 text-white"
                                                         >
                                                             <FileText className="w-4 h-4 mr-2" /> Recibo
+                                                        </Button>
+                                                    )}
+                                                    {!isPaga && onMapearComExtrato && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            onClick={() => onMapearComExtrato(p)}
+                                                            className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                                            title="Vincular parcela com transação do extrato bancário"
+                                                        >
+                                                            <Link2 className="w-4 h-4 mr-2" /> Mapear Extrato
                                                         </Button>
                                                     )}
                                                 </div>

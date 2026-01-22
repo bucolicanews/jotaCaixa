@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { parseISO, format, subDays, addDays, differenceInDays } from 'date-fns';
 import { normalizeString } from '@/utils/formatters';
+import { calcularSimilaridadeAvancada, normalizarNome } from '@/utils/string-similarity';
 
 export interface ParcelaCandidato {
   id: string;
@@ -21,6 +22,8 @@ export interface ParcelaCandidato {
   fornecedor?: string;
   origem?: string;
   status?: string;
+  similaridade_nome?: number;
+  nome_comparado?: string;
 }
 
 export interface TransacaoComId extends TransacaoExtrato {
@@ -154,6 +157,7 @@ export async function buscarParcelasCandidatas(
   }
 
   const valorTransacao = Math.abs(transacao.valor);
+  const nomeExtratoNormalizado = normalizarNome(transacao.identificacao || '');
 
   return parcelas.map(p => {
     const diferencaValor = Math.abs(p.valor_parcela - valorTransacao);
@@ -168,11 +172,28 @@ export async function buscarParcelasCandidatas(
     
     const diferencaDias = Math.abs(differenceInDays(dataPgto, dataTransacao));
 
+    const contaId = tipo === 'CR' ? p.conta_receber_id : p.conta_pagar_id;
+    const contaInfo = contaId ? contaDescMap[contaId] : null;
+    const clienteNome = contaInfo?.cliente_id ? clienteMap[contaInfo.cliente_id] : null;
+    const nomeParceiroNormalizado = normalizarNome(tipo === 'CR' ? (clienteNome || '') : (contaInfo?.fornecedor || ''));
+    
+    const similaridadeNome = nomeExtratoNormalizado && nomeParceiroNormalizado 
+      ? calcularSimilaridadeAvancada(nomeExtratoNormalizado, nomeParceiroNormalizado)
+      : 0;
+
     let compatibilidade: 'alta' | 'media' | 'baixa' = 'baixa';
     let motivo = '';
 
-    // NOVO: Lógica especial para transações PagBank
-    if (isPagBank) {
+    // NOVO: Aceitar pagamento parcial
+    const isPagamentoParcial = valorTransacao <= p.valor_parcela && valorTransacao > 0;
+
+    if (isPagamentoParcial && diferencaDias <= 7 && similaridadeNome >= 70) {
+      compatibilidade = 'media';
+      motivo = `Possível pagamento parcial: R$ ${valorTransacao.toFixed(2)} de R$ ${p.valor_parcela.toFixed(2)}, ${diferencaDias} dias de diferença, nome similar (${similaridadeNome.toFixed(0)}%)`;
+    } else if (isPagamentoParcial && diferencaDias <= 3) {
+      compatibilidade = 'media';
+      motivo = `Possível pagamento parcial: R$ ${valorTransacao.toFixed(2)} de R$ ${p.valor_parcela.toFixed(2)}, data próxima (±${diferencaDias} dias)`;
+    } else if (isPagBank) {
       const origemPagBank = p.origem === 'link_pagamento_pagbank' || 
                            (contaId && contaDescMap[contaId]?.origem === 'link_pagamento_pagbank');
       
@@ -192,13 +213,21 @@ export async function buscarParcelasCandidatas(
         motivo = 'Compatibilidade baixa';
       }
     } else {
-      // Lógica original para transações não-PagBank
-      if (diferencaValor < 0.01 && diferencaDias === 0) {
+      if (diferencaValor < 0.01 && diferencaDias <= 1 && similaridadeNome >= 80) {
+        compatibilidade = 'alta';
+        motivo = `Valor exato, data próxima (±1 dia) e nome similar (${similaridadeNome.toFixed(0)}%)`;
+      } else if (diferencaValor < 0.01 && diferencaDias === 0) {
         compatibilidade = 'alta';
         motivo = 'Valor e data exatos';
       } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
         compatibilidade = 'media';
         motivo = 'Valor exato, data próxima (±1 dia)';
+      } else if (diferencaValor < 0.01 && diferencaDias <= 3 && similaridadeNome >= 70) {
+        compatibilidade = 'media';
+        motivo = `Valor exato, data próxima (±3 dias) e nome similar (${similaridadeNome.toFixed(0)}%)`;
+      } else if (diferencaValor < 1 && diferencaDias <= 3 && similaridadeNome >= 80) {
+        compatibilidade = 'media';
+        motivo = `Valor aproximado, data próxima e nome similar (${similaridadeNome.toFixed(0)}%)`;
       } else if (diferencaValor < 1 && diferencaDias <= 3) {
         compatibilidade = 'media';
         motivo = 'Valor e data aproximados';
@@ -206,10 +235,6 @@ export async function buscarParcelasCandidatas(
         motivo = 'Compatibilidade baixa';
       }
     }
-
-    const contaId = tipo === 'CR' ? p.conta_receber_id : p.conta_pagar_id;
-    const contaInfo = contaId ? contaDescMap[contaId] : null;
-    const clienteNome = contaInfo?.cliente_id ? clienteMap[contaInfo.cliente_id] : null;
 
     return {
       id: p.id,
@@ -229,10 +254,14 @@ export async function buscarParcelasCandidatas(
       fornecedor: contaInfo?.fornecedor || undefined,
       origem: contaInfo?.origem,
       status: p.status,
+      similaridade_nome: similaridadeNome > 0 ? similaridadeNome : undefined,
+      nome_comparado: nomeParceiroNormalizado || undefined,
     } as ParcelaCandidato;
   }).sort((a, b) => {
     const ordem = { alta: 3, media: 2, baixa: 1 };
-    return ordem[b.compatibilidade] - ordem[a.compatibilidade];
+    const diffCompat = ordem[b.compatibilidade] - ordem[a.compatibilidade];
+    if (diffCompat !== 0) return diffCompat;
+    return (b.similaridade_nome || 0) - (a.similaridade_nome || 0);
   });
 }
 

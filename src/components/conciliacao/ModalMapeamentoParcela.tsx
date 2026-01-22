@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatarData } from '@/utils/formatters';
-import { Eye, Check, SkipForward, FileText, Loader2 } from 'lucide-react';
+import { Eye, Check, SkipForward, FileText, Loader2, Sparkles, Search, Zap, List } from 'lucide-react';
 import { ParcelaCandidato, TransacaoComId } from '@/hooks/conciliacao/useMapeamentoParcelas';
 import { showError } from '@/utils/toast';
 
@@ -19,6 +19,9 @@ interface ModalMapeamentoParcelaProps {
   totalPendentes: number;
   indiceAtual: number;
   carregando?: boolean;
+  onBuscarManual?: () => void;
+  onConciliarDireta?: () => void;
+  onBuscarTodasParcelas?: () => void;
 }
 
 const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
@@ -32,6 +35,9 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
   totalPendentes,
   indiceAtual,
   carregando = false,
+  onBuscarManual,
+  onConciliarDireta,
+  onBuscarTodasParcelas,
 }) => {
   const [selecionando, setSelecionando] = useState<string | null>(null);
   const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null);
@@ -102,12 +108,20 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
                 </Badge>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Descrição</p>
-                <p className="font-medium text-sm truncate" title={transacao.descricao}>
-                  {transacao.descricao || '-'}
+                <p className="text-sm text-muted-foreground">Identificação</p>
+                <p className="font-medium text-sm truncate" title={transacao.identificacao}>
+                  {transacao.identificacao || '-'}
                 </p>
               </div>
             </div>
+            {transacao.descricao && (
+              <div className="pt-2 border-t">
+                <p className="text-sm text-muted-foreground">Descrição</p>
+                <p className="font-medium text-sm" title={transacao.descricao}>
+                  {transacao.descricao}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -121,11 +135,33 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
                 <span className="ml-2">Buscando parcelas...</span>
               </div>
             ) : candidatos.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Nenhuma parcela candidata encontrada.</p>
-                <p className="text-sm mt-1">
-                  Verifique se há parcelas pagas no período de ±3 dias com valor similar.
-                </p>
+              <div className="text-center py-8 text-muted-foreground space-y-4">
+                <div>
+                  <p>Nenhuma parcela candidata encontrada.</p>
+                  <p className="text-sm mt-1">
+                    Verifique se há parcelas em aberto no período de ±3 dias com valor similar.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 items-center">
+                  {onBuscarManual && (
+                    <Button 
+                      variant="outline" 
+                      onClick={onBuscarManual}
+                    >
+                      <Search className="w-4 h-4 mr-2" />
+                      Buscar Manualmente
+                    </Button>
+                  )}
+                  {onConciliarDireta && (
+                    <Button 
+                      variant="default"
+                      onClick={onConciliarDireta}
+                    >
+                      <Zap className="w-4 h-4 mr-2" />
+                      Conciliar Direto
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="border rounded-md overflow-x-auto">
@@ -140,7 +176,7 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
                       <TableHead className="w-[100px]">Data Pgto</TableHead>
                       <TableHead className="w-[80px]">Status</TableHead>
                       <TableHead className="w-[80px]">Origem</TableHead>
-                      <TableHead className="w-[100px]">Compatibilidade</TableHead>
+                      <TableHead className="w-[150px]">Compatibilidade</TableHead>
                       <TableHead className="w-[80px]">Comprovante</TableHead>
                       <TableHead className="w-[80px] text-right">Ação</TableHead>
                     </TableRow>
@@ -170,13 +206,23 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={getBadgeVariant(c.compatibilidade)} 
-                            title={c.motivo_compatibilidade}
-                            className="cursor-help text-xs"
-                          >
-                            {c.compatibilidade.toUpperCase()}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge 
+                              variant={getBadgeVariant(c.compatibilidade)} 
+                              title={c.motivo_compatibilidade}
+                              className="cursor-help text-xs w-fit"
+                            >
+                              {c.compatibilidade === 'alta' && (
+                                <Sparkles className="w-3 h-3 mr-1" />
+                              )}
+                              {c.compatibilidade.toUpperCase()}
+                            </Badge>
+                            {c.similaridade_nome && c.similaridade_nome > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Nome: {c.similaridade_nome.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {c.anexo_url ? (
@@ -215,6 +261,44 @@ const ModalMapeamentoParcela: React.FC<ModalMapeamentoParcelaProps> = ({
               </div>
             )}
           </div>
+
+          {candidatos.length > 0 && (onBuscarManual || onConciliarDireta || onBuscarTodasParcelas) && (
+            <div className="flex flex-col gap-2 items-center">
+              {onBuscarManual && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={onBuscarManual}
+                  className="text-muted-foreground"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Nenhuma dessas parcelas? Buscar manualmente
+                </Button>
+              )}
+              {onBuscarTodasParcelas && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={onBuscarTodasParcelas}
+                  className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                >
+                  <List className="w-4 h-4 mr-2" />
+                  Ver Todas as Parcelas
+                </Button>
+              )}
+              {onConciliarDireta && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={onConciliarDireta}
+                  className="text-muted-foreground"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  Não possui parcela? Conciliar direto
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-between items-center pt-4 border-t">
             <p className="text-sm text-muted-foreground">
