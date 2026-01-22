@@ -64,8 +64,10 @@ export async function buscarParcelasPorFiltros(
   let query = supabase
     .from(tabelaParcelas)
     .select('*')
-    .eq(ownerKey, ownerId)
-    .is('mapeado_extrato_id', null);
+    .eq(ownerKey, ownerId);
+
+  // Removido: .is('mapeado_extrato_id', null)
+  // Motivo: Permitir seleção de parcelas já mapeadas para reconciliação
 
   if (filtros.status) {
     query = query.eq('status', filtros.status);
@@ -100,6 +102,7 @@ export async function buscarParcelasPorFiltros(
   
   let contaDescMap: Record<string, { descricao: string; cliente_id: string | null; fornecedor: string | null }> = {};
   let clienteMap: Record<string, string> = {};
+  let clienteNomeCompleto: Record<string, { nome: string; razao_social: string | null }> = {};
 
   if (tipo === 'CR') {
     const { data: contasSinteticas } = await supabase
@@ -121,13 +124,18 @@ export async function buscarParcelasPorFiltros(
     if (clienteIds.length > 0) {
       const { data: clientes } = await supabase
         .from(tabelaClientes)
-        .select('id, nome')
+        .select('id, nome, razao_social')
         .in('id', clienteIds);
 
       clienteMap = (clientes || []).reduce((acc, c) => {
-        acc[c.id] = c.nome;
+        acc[c.id] = c.razao_social || c.nome;
         return acc;
       }, {} as Record<string, string>);
+      
+      clienteNomeCompleto = (clientes || []).reduce((acc, c) => {
+        acc[c.id] = { nome: c.nome, razao_social: c.razao_social };
+        return acc;
+      }, {} as Record<string, { nome: string; razao_social: string | null }>);
     }
   } else {
     const { data: contasSinteticas } = await supabase
@@ -152,7 +160,16 @@ export async function buscarParcelasPorFiltros(
     const nomeParceiro = tipo === 'CR' ? clienteNome : contaInfo?.fornecedor;
 
     let similaridade = 0;
-    if (filtros.nomeBusca && nomeParceiro) {
+    if (filtros.nomeBusca && tipo === 'CR' && contaInfo?.cliente_id) {
+      const infoCliente = clienteNomeCompleto[contaInfo.cliente_id];
+      if (infoCliente) {
+        const simNome = calcularSimilaridadeAvancada(filtros.nomeBusca, infoCliente.nome);
+        const simRazao = infoCliente.razao_social 
+          ? calcularSimilaridadeAvancada(filtros.nomeBusca, infoCliente.razao_social) 
+          : 0;
+        similaridade = Math.max(simNome, simRazao);
+      }
+    } else if (filtros.nomeBusca && nomeParceiro) {
       similaridade = calcularSimilaridadeAvancada(filtros.nomeBusca, nomeParceiro);
     }
 

@@ -80,13 +80,32 @@ export async function buscarParcelasCandidatas(
   const dataInicio = format(subDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
   const dataFim = format(addDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
 
+  console.log('🔍 Busca de parcelas candidatas:');
+  console.log('  - Transação:', transacao.descricao);
+  console.log('  - Valor:', transacao.valor);
+  console.log('  - Data:', transacao.data, '→', format(dataTransacao, 'yyyy-MM-dd'));
+  console.log('  - Janela de busca:', dataInicio, 'até', dataFim);
+  console.log('  - Tipo:', tipo);
+
   const { data: parcelas, error: parcelasError } = await supabase
     .from(tabelaParcelas)
     .select('*')
     .eq(ownerKey, ownerId)
     .is('mapeado_extrato_id', null)
+    .in('status', ['aberta', 'parcial', 'paga'])
     .gte('data_vencimento', dataInicio)
     .lte('data_vencimento', dataFim);
+
+  console.log('  - Parcelas encontradas:', parcelas?.length || 0);
+  if (parcelas && parcelas.length > 0) {
+    console.log('  - Amostra:', parcelas.slice(0, 3).map(p => ({
+      id: p.id.substring(0, 8),
+      valor: p.valor_parcela,
+      vencimento: p.data_vencimento,
+      status: p.status,
+      mapeado: p.mapeado_extrato_id
+    })));
+  }
 
   if (parcelasError || !parcelas) {
     console.error('Erro ao buscar parcelas candidatas:', parcelasError);
