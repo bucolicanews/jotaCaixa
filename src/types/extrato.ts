@@ -42,3 +42,25 @@ export interface ParcelaSugestao {
   tipo: 'CP' | 'CR';
   score: number;
 }
+
+export interface ParcelaMatching {
+  id: string;
+  numero_parcela: number;
+  numeroParcela: number; // alias
+  valor_parcela: number;
+  valor: number; // alias
+  data_vencimento: string;
+  dataVencimento: string; // alias
+  clienteNome: string;
+  fornecedor_cliente?: string;
+  descricao: string;
+  tipo: 'CP' | 'CR';
+  status: string;
+  matchScore?: number;
+  tipoMatch?: 'VALOR_EXATO_DATA_EXATA' | 'VALOR_EXATO' | 'DATA_EXATA' | 'APROXIMADO';
+}
+
+export interface TransacaoExtratoCompleta extends ExtratoBase {
+  id: string;
+  saldo_contas?: { nome: string };
+}

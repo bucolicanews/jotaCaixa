@@ -1,0 +1,567 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Search } from 'lucide-react';
+import { useSessao } from '@/hooks/use-sessao';
+import { supabase } from '@/integrations/supabase/client';
+import type { TransacaoExtratoCompleta, ParcelaMatching } from '@/types/conciliacao';
+import { ParcelasTableSelecao } from './ParcelasTableSelecao';
+import { LancamentoAvulsoForm } from './LancamentoAvulsoForm';
+
+interface ModalMapeamentoParcelasProps {
+  open: boolean;
+  transacao: TransacaoExtratoCompleta;
+  onClose: () => void;
+  onConfirmar: (
+    mapeamentos: Array<{
+      parcelaId: string;
+      tipo: 'CR' | 'CP';
+      valorAplicar: number;
+    }>,
+    valorRestante?: {
+      valor: number;
+      contaContabilId: string;
+      descricao: string;
+    }
+  ) => Promise<void>;
+}
+
+export function ModalMapeamentoParcelas({
+  open,
+  transacao,
+  onClose,
+  onConfirmar,
+}: ModalMapeamentoParcelasProps) {
+  const { usuario, role, ownerId } = useSessao();
+
+  const [loading, setLoading] = useState(true);
+  const [parcelasCR, setParcelasCR] = useState<ParcelaMatching[]>([]);
+  const [parcelasCP, setParcelasCP] = useState<ParcelaMatching[]>([]);
+  const [filtro, setFiltro] = useState('');
+  const [parcelasSelecionadas, setParcelasSelecionadas] = useState<Map<string, number>>(
+    new Map()
+  );
+  const [contaContabilRestante, setContaContabilRestante] = useState('');
+  const [descricaoRestante, setDescricaoRestante] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Buscar Parcelas de Contas a Receber
+  const buscarParcelasCR = useCallback(async () => {
+    if (!ownerId) return [];
+
+    const isAdmin = role === 'Admin';
+    
+    if (!isAdmin) {
+      // TODO: Implementar busca para Cliente
+      return [];
+    }
+
+    console.log('[CR] Buscando parcelas para admin_id:', ownerId);
+
+    // Buscar parcelas com join nas contas e clientes
+    const { data: parcelas, error: errorParcelas } = await supabase
+      .from('admin_parcelas_receber')
+      .select('id, numero_parcela, valor_parcela, data_vencimento, status, conta_receber_id')
+      .eq('admin_id', ownerId)
+      .eq('status', 'aberta')
+      .order('data_vencimento', { ascending: true });
+
+    if (errorParcelas) {
+      console.error('Erro ao buscar parcelas CR:', errorParcelas);
+      return [];
+    }
+
+    console.log('[CR] Parcelas encontradas:', parcelas?.length, parcelas);
+
+    if (!parcelas || parcelas.length === 0) return [];
+
+    // Buscar contas a receber relacionadas
+    const contasIds = parcelas.map(p => p.conta_receber_id).filter(Boolean);
+    
+    console.log('[CR] Buscando contas IDs:', contasIds);
+
+    const { data: contas, error: errorContas } = await supabase
+      .from('admin_contas_receber')
+      .select('id, descricao, cliente_id')
+      .in('id', contasIds);
+
+    if (errorContas) {
+      console.error('Erro ao buscar contas CR:', errorContas);
+    }
+
+    console.log('[CR] Contas encontradas:', contas?.length, contas);
+
+    // Buscar clientes relacionados
+    const clientesIds = contas?.map(c => c.cliente_id).filter(Boolean) || [];
+    
+    console.log('[CR] Buscando clientes IDs:', clientesIds);
+
+    const { data: clientes, error: errorClientes } = await supabase
+      .from('tbl_clientes')
+      .select('id, nome, razao_social')
+      .in('id', clientesIds);
+
+    if (errorClientes) {
+      console.error('Erro ao buscar clientes:', errorClientes);
+    }
+
+    console.log('[CR] Clientes encontrados:', clientes?.length, clientes);
+
+    // Mapear dados
+    const resultado = parcelas.map((p: any) => {
+      const conta = contas?.find(c => c.id === p.conta_receber_id);
+      const cliente = clientes?.find(c => c.id === conta?.cliente_id);
+      const nomeCliente = cliente?.razao_social || cliente?.nome || 'N/A';
+
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        dataVencimento: p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        clienteNome: nomeCliente,
+        tipo: 'CR' as const,
+        matchScore: 0,
+      };
+    });
+
+    console.log('[CR] Resultado final:', resultado);
+
+    return resultado;
+  }, [ownerId, role]);
+
+  // Buscar Parcelas de Contas a Pagar
+  const buscarParcelasCP = useCallback(async () => {
+    if (!ownerId) return [];
+
+    const isAdmin = role === 'Admin';
+    
+    if (!isAdmin) {
+      // TODO: Implementar busca para Cliente
+      return [];
+    }
+
+    console.log('[CP] Buscando parcelas para admin_id:', ownerId);
+
+    // Buscar parcelas com join nas contas
+    const { data: parcelas, error: errorParcelas } = await supabase
+      .from('admin_parcelas_pagar')
+      .select('id, numero_parcela, valor_parcela, data_vencimento, status, conta_pagar_id')
+      .eq('admin_id', ownerId)
+      .eq('status', 'aberta')
+      .order('data_vencimento', { ascending: true });
+
+    if (errorParcelas) {
+      console.error('Erro ao buscar parcelas CP:', errorParcelas);
+      return [];
+    }
+
+    console.log('[CP] Parcelas encontradas:', parcelas?.length, parcelas);
+
+    if (!parcelas || parcelas.length === 0) return [];
+
+    // Buscar contas a pagar relacionadas
+    const contasIds = parcelas.map(p => p.conta_pagar_id).filter(Boolean);
+    
+    console.log('[CP] Buscando contas IDs:', contasIds);
+
+    const { data: contas, error: errorContas } = await supabase
+      .from('admin_contas_pagar')
+      .select('id, descricao, fornecedor')
+      .in('id', contasIds);
+
+    if (errorContas) {
+      console.error('Erro ao buscar contas CP:', errorContas);
+    }
+
+    console.log('[CP] Contas encontradas:', contas?.length, contas);
+
+    // Mapear dados
+    const resultado = parcelas.map((p: any) => {
+      const conta = contas?.find(c => c.id === p.conta_pagar_id);
+
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        dataVencimento: p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        fornecedorNome: conta?.fornecedor || 'N/A',
+        tipo: 'CP' as const,
+        matchScore: 0,
+      };
+    });
+
+    console.log('[CP] Resultado final:', resultado);
+
+    return resultado;
+  }, [ownerId, role]);
+
+  // Carregar parcelas ao abrir o modal
+  useEffect(() => {
+    if (open && ownerId) {
+      setLoading(true);
+      setErro(null);
+      setParcelasSelecionadas(new Map());
+      setContaContabilRestante('');
+      setDescricaoRestante('');
+      setFiltro('');
+
+      Promise.all([buscarParcelasCR(), buscarParcelasCP()])
+        .then(([cr, cp]) => {
+          setParcelasCR(cr);
+          setParcelasCP(cp);
+        })
+        .catch((error) => {
+          console.error('Erro ao carregar parcelas:', error);
+          setErro('Erro ao carregar parcelas. Tente novamente.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [open, ownerId, buscarParcelasCR, buscarParcelasCP]);
+
+  // Filtrar parcelas
+  const parcelasCRFiltradas = useMemo(() => {
+    if (!filtro) return parcelasCR;
+    
+    const filtroLower = filtro.toLowerCase();
+    return parcelasCR.filter(p => 
+      p.clienteNome?.toLowerCase().includes(filtroLower) ||
+      p.descricao?.toLowerCase().includes(filtroLower) ||
+      p.numeroParcela?.toString().includes(filtroLower) ||
+      p.valor_parcela?.toString().includes(filtroLower) ||
+      p.dataVencimento?.includes(filtro)
+    );
+  }, [parcelasCR, filtro]);
+
+  const parcelasCPFiltradas = useMemo(() => {
+    if (!filtro) return parcelasCP;
+    
+    const filtroLower = filtro.toLowerCase();
+    return parcelasCP.filter(p => 
+      p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
+      p.descricao?.toLowerCase().includes(filtroLower) ||
+      p.numeroParcela?.toString().includes(filtroLower) ||
+      p.valor_parcela?.toString().includes(filtroLower) ||
+      p.dataVencimento?.includes(filtro)
+    );
+  }, [parcelasCP, filtro]);
+
+  // Cálculo de valores
+  const valorSelecionado = useMemo(() => {
+    return Array.from(parcelasSelecionadas.values()).reduce((acc, val) => acc + val, 0);
+  }, [parcelasSelecionadas]);
+
+  const valorRestante = useMemo(() => {
+    return Math.abs(transacao.valor) - valorSelecionado;
+  }, [transacao.valor, valorSelecionado]);
+
+  // Validações
+  const podeConfirmar = useMemo(() => {
+    // Tem parcelas selecionadas
+    if (parcelasSelecionadas.size === 0) return false;
+
+    // Se sobrou valor, precisa ter conta contábil
+    if (valorRestante > 0 && !contaContabilRestante) return false;
+
+    // Não pode exceder valor da transação
+    if (valorSelecionado > Math.abs(transacao.valor)) return false;
+
+    return true;
+  }, [
+    parcelasSelecionadas,
+    valorRestante,
+    contaContabilRestante,
+    valorSelecionado,
+    transacao.valor,
+  ]);
+
+  // Handlers
+  const handleToggleSelecao = useCallback(
+    (parcelaId: string, checked: boolean) => {
+      setParcelasSelecionadas((prev) => {
+        const novo = new Map(prev);
+        if (!checked) {
+          novo.delete(parcelaId);
+        } else {
+          // Buscar parcela para pegar valor
+          const parcela = [...parcelasCR, ...parcelasCP].find(p => p.id === parcelaId);
+          if (parcela) {
+            novo.set(parcelaId, parcela.valor_parcela);
+          }
+        }
+        return novo;
+      });
+    },
+    [parcelasCR, parcelasCP]
+  );
+
+  const handleValorChange = useCallback((parcelaId: string, novoValor: number) => {
+    setParcelasSelecionadas((prev) => {
+      const novo = new Map(prev);
+      if (novoValor <= 0) {
+        novo.delete(parcelaId);
+      } else {
+        novo.set(parcelaId, novoValor);
+      }
+      return novo;
+    });
+  }, []);
+
+  const handleConfirmar = async () => {
+    setSalvando(true);
+    setErro(null);
+
+    const mapeamentos = Array.from(parcelasSelecionadas.entries()).map(
+      ([parcelaId, valorAplicar]) => {
+        // Determinar tipo baseado na transação
+        const tipo = transacao.tipo === 'Entrada' ? ('CR' as const) : ('CP' as const);
+        return {
+          parcelaId,
+          tipo,
+          valorAplicar,
+        };
+      }
+    );
+
+    const valorRestanteObj =
+      valorRestante > 0
+        ? {
+            valor: valorRestante,
+            contaContabilId: contaContabilRestante,
+            descricao: descricaoRestante || 'Diferença de conciliação',
+          }
+        : undefined;
+
+    try {
+      await onConfirmar(mapeamentos, valorRestanteObj);
+      onClose();
+    } catch (error) {
+      console.error('Erro ao confirmar mapeamento:', error);
+      setErro('Erro ao salvar mapeamento. Tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // Determinar qual aba mostrar baseado no tipo de transação
+  const tipoTransacao = transacao.tipo === 'Entrada' ? 'CR' : 'CP';
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Mapear Transação do Extrato</DialogTitle>
+          <div className="flex items-center gap-4 mt-2 text-sm">
+            <div>
+              <span className="font-semibold">Data:</span>{' '}
+              {new Date(transacao.data).toLocaleDateString('pt-BR')}
+            </div>
+            <div>
+              <span className="font-semibold">Valor:</span> R${' '}
+              {Math.abs(transacao.valor).toFixed(2)}
+            </div>
+            <div>
+              <span className="font-semibold">Tipo:</span>{' '}
+              <Badge variant={transacao.tipo === 'Entrada' ? 'default' : 'destructive'}>
+                {transacao.tipo}
+              </Badge>
+            </div>
+          </div>
+          {transacao.descricao && (
+            <div className="text-sm text-muted-foreground">
+              <span className="font-semibold">Descrição:</span> {transacao.descricao}
+            </div>
+          )}
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Carregando parcelas...</span>
+          </div>
+        ) : (
+          <>
+            {erro && (
+              <Alert variant="destructive">
+                <AlertDescription>{erro}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Layout de 2 Colunas */}
+            <div className="grid grid-cols-3 gap-4 flex-1 overflow-hidden">
+              {/* COLUNA ESQUERDA: Lista de Parcelas (2/3 da largura) */}
+              <div className="col-span-2 flex flex-col overflow-hidden">
+                {/* Campo de Busca */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar por cliente, fornecedor, descrição, valor..."
+                    value={filtro}
+                    onChange={(e) => setFiltro(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Tabela com Scroll */}
+                <div className="flex-1 overflow-y-auto border rounded-lg">
+                  <Tabs defaultValue={tipoTransacao} className="h-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="CR" disabled={transacao.tipo !== 'Entrada'}>
+                        Contas a Receber ({parcelasCRFiltradas.length}/{parcelasCR.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="CP" disabled={transacao.tipo !== 'Saida'}>
+                        Contas a Pagar ({parcelasCPFiltradas.length}/{parcelasCP.length})
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="CR" className="mt-0 h-full overflow-y-auto">
+                      {parcelasCRFiltradas.length === 0 ? (
+                        <Alert className="m-4">
+                          <AlertDescription>
+                            {filtro 
+                              ? 'Nenhuma parcela encontrada com o filtro aplicado.'
+                              : 'Nenhuma parcela a receber aberta encontrada.'}
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <ParcelasTableSelecao
+                          parcelas={parcelasCRFiltradas}
+                          tipo="CR"
+                          parcelasSelecionadas={parcelasSelecionadas}
+                          onToggleSelecao={handleToggleSelecao}
+                          onValorChange={handleValorChange}
+                          valorTransacao={Math.abs(transacao.valor)}
+                        />
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="CP" className="mt-0 h-full overflow-y-auto">
+                      {parcelasCPFiltradas.length === 0 ? (
+                        <Alert className="m-4">
+                          <AlertDescription>
+                            {filtro 
+                              ? 'Nenhuma parcela encontrada com o filtro aplicado.'
+                              : 'Nenhuma parcela a pagar aberta encontrada.'}
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <ParcelasTableSelecao
+                          parcelas={parcelasCPFiltradas}
+                          tipo="CP"
+                          parcelasSelecionadas={parcelasSelecionadas}
+                          onToggleSelecao={handleToggleSelecao}
+                          onValorChange={handleValorChange}
+                          valorTransacao={Math.abs(transacao.valor)}
+                        />
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+
+              {/* COLUNA DIREITA: Resumo e Lançamento Avulso (1/3 da largura) */}
+              <div className="col-span-1 flex flex-col gap-4 overflow-y-auto">
+                {/* Resumo de Valores - SEMPRE VISÍVEL */}
+                <div className="p-4 bg-muted rounded-lg space-y-3 sticky top-0">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">Resumo da Conciliação</h3>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-semibold">Total Selecionado:</span>
+                      <span className="font-mono font-bold text-blue-600">
+                        R$ {valorSelecionado.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="font-semibold">Valor da Transação:</span>
+                      <span className="font-mono">R$ {Math.abs(transacao.valor).toFixed(2)}</span>
+                    </div>
+                    <div className="border-t pt-2">
+                      <div
+                        className={`flex justify-between text-sm font-semibold ${
+                          valorRestante > 0 ? 'text-orange-600' : 'text-green-600'
+                        }`}
+                      >
+                        <span>Restante:</span>
+                        <span className="font-mono text-lg">R$ {valorRestante.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {parcelasSelecionadas.size === 0 && (
+                    <Alert>
+                      <AlertDescription className="text-xs">
+                        Selecione parcelas na lista ao lado para iniciar a conciliação.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {valorSelecionado > Math.abs(transacao.valor) && (
+                    <Alert variant="destructive">
+                      <AlertDescription className="text-xs">
+                        O valor selecionado excede o valor da transação!
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                {/* Formulário de Lançamento Avulso */}
+                {valorRestante > 0 && parcelasSelecionadas.size > 0 && (
+                  <div className="border rounded-lg p-4 bg-yellow-50">
+                    <h3 className="text-sm font-bold text-yellow-800 mb-3">
+                      ⚠️ Valor Restante Detectado
+                    </h3>
+                    <p className="text-xs text-yellow-700 mb-4">
+                      Sobrou R$ {valorRestante.toFixed(2)}. Crie um lançamento avulso para conciliar o valor restante.
+                    </p>
+                    <LancamentoAvulsoForm
+                      valorRestante={valorRestante}
+                      contaContabilId={contaContabilRestante}
+                      descricao={descricaoRestante}
+                      onContaContabilChange={setContaContabilRestante}
+                      onDescricaoChange={setDescricaoRestante}
+                    />
+                  </div>
+                )}
+
+                {/* Botões de Ação - SEMPRE VISÍVEIS */}
+                <div className="flex flex-col gap-2 mt-auto sticky bottom-0 bg-white pt-4 border-t">
+                  <Button onClick={handleConfirmar} disabled={!podeConfirmar || salvando} className="w-full">
+                    {salvando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      'Confirmar Mapeamento'
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={onClose} disabled={salvando} className="w-full">
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

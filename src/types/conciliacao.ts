@@ -45,3 +45,70 @@ export interface ConciliacaoHistorico {
     criado_em: string;
     saldo_contas: { nome: string } | null;
 }
+
+// Tipos para Matching de Parcelas
+export interface ParcelaMatching {
+    parcelaId: string;
+    clienteNome: string;
+    valor: number;
+    dataVencimento: string;
+    status: string;
+    matchScore: number;
+    tipoMatch: 'VALOR_EXATO_DATA_EXATA' | 'VALOR_EXATO' | 'DATA_EXATA' | 'APROXIMADO';
+    tipo: 'CP' | 'CR';
+    numeroParcela: number;
+    descricao: string;
+}
+
+export interface ResultadoMatching {
+    contasReceber: ParcelaMatching[];
+    contasPagar: ParcelaMatching[];
+    sugestoes: {
+        matchExato: boolean;
+        multiplasParcelasDetectadas: boolean;
+    };
+}
+
+// Tipos para Validação de Mapeamento
+export interface MapeamentoRequest {
+    transacaoId: string;
+    tipo: 'ENTRADA' | 'SAIDA';
+    valorTransacao: number;
+    parcelasSelecionadas: {
+        parcelaId: string;
+        tipo: 'CP' | 'CR';
+        valorAplicar: number;
+    }[];
+}
+
+export interface ResultadoValidacao {
+    valido: boolean;
+    erros: string[];
+    avisos: string[];
+    valorRestante: number;
+    sugerirLancamentoAvulso: boolean;
+}
+
+// Tipos para Execução de Mapeamento
+export interface ExecutarMapeamentoRequest {
+    transacaoId: string;
+    mapeamentos: {
+        parcelaId: string;
+        tipo: 'CP' | 'CR';
+        valorAplicado: number;
+    }[];
+    valorRestante?: {
+        valor: number;
+        contaContabilId: string;
+        descricao: string;
+    };
+    usuarioId: string;
+}
+
+export interface ResultadoExecucao {
+    sucesso: boolean;
+    transacaoConciliada: boolean;
+    parcelasBaixadas: string[];
+    lancamentoAvulsoId?: string;
+    mensagem: string;
+}
