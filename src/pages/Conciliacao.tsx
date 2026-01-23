@@ -486,6 +486,7 @@ const Conciliacao = () => {
                             transacoesSelecionadas={transacoesSelecionadas}
                             contaContabilLote={contaContabilLote}
                             isSaving={isSaving}
+                            contaSelecionadaId={contaSelecionadaId}
                             onToggleSelection={handleToggleSelection}
                             onSelectAll={handleSelectAll}
                             onContaContabilChange={handleContaContabilChange}

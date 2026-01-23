@@ -17,6 +17,7 @@ export interface ConfiguracaoConciliacao {
 }
 
 export interface TransacaoExtrato {
+    id?: string; // ID da transação salva no banco (UUID)
     data: string;
     descricao: string;
     valor: number;

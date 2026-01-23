@@ -53,6 +53,14 @@ serve(async (req) => {
 
     if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
 
+    // 2.5. Calcular data de expiração do link
+    const diasExpiracao = config.dias_expiracao_link || 7;
+    const dataExpiracao = new Date();
+    dataExpiracao.setDate(dataExpiracao.getDate() + diasExpiracao);
+    const expirationDate = dataExpiracao.toISOString();
+
+    console.log(`[create-pagbank-checkout] Link expira em: ${diasExpiracao} dias (${expirationDate})`);
+
     // 3. Processar Token e URL
     const rawToken = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
     const token = (rawToken || '').trim();
@@ -71,7 +79,8 @@ serve(async (req) => {
     console.log(`[create-pagbank-checkout] Webhook URL: ${webhookUrl}`);
 
     const checkoutRequest = {
-      reference_id: `PARCELA_${parcela_id}`,
+      reference_id: `PARCELA_${parcela_id}_${Date.now()}`,
+      expiration_date: expirationDate,
       customer: {
         name: nomeCliente,
         email: cliente.email || 'cobranca@jotaempresas.com',
@@ -117,6 +126,7 @@ serve(async (req) => {
       .update({
         pagbank_checkout_id: checkoutResponse.id,
         pagbank_checkout_link: payLink,
+        pagbank_link_expira_em: expirationDate,
         pagbank_status: 'WAITING',
         pagbank_updated_at: new Date().toISOString(),
       })

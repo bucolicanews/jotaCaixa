@@ -194,6 +194,8 @@ export function useConciliacaoLogic({
                 return;
             }
             
+            console.log('[DEBUG] Hash do arquivo:', contentHash);
+            
             // NOVO CHECK: Verificar se o hash do arquivo já foi importado
             const { count: hashCount, error: hashError } = await supabase
                 .from('conciliacoes')
@@ -205,6 +207,8 @@ export function useConciliacaoLogic({
                 setLoading(false);
                 throw hashError;
             }
+            
+            console.log('[DEBUG] hashCount:', hashCount);
             
             if ((hashCount || 0) > 0) {
                 showError('Este arquivo já foi importado anteriormente (Bloqueio por Hash).');
@@ -222,8 +226,12 @@ export function useConciliacaoLogic({
                 header: true,
                 skipEmptyLines: true,
                 dynamicTyping: true,
+                delimiter: "",  // Auto-detect delimiter (vírgula, ponto-e-vírgula, etc)
                 complete: (results: ParseResult<any>) => {
                     try {
+                        console.log('[CSV Debug] Dados parseados:', results.data);
+                        console.log('[CSV Debug] Configuração:', config);
+                        
                         const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
                             // valor vindo do CSV *sempre* tratado como texto primeiro e convertido
                             const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
@@ -274,6 +282,9 @@ export function useConciliacaoLogic({
                                 motivoDuplicidade: motivoDuplicidade,
                             } as TransacaoExtrato;
                         }).filter(t => t.data && t.descricao);
+                        
+                        console.log('[CSV Debug] Transações após filter:', rawTransacoes);
+                        console.log('[CSV Debug] Total de transações:', rawTransacoes.length);
                         
                         // 4. Aplica regras de mapeamento APENAS nas transações válidas
                         const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);

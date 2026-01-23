@@ -179,6 +179,25 @@ export default function ConfiguracoesPagBank() {
                             />
                         </div>
 
+                        <div className="space-y-2">
+                            <Label htmlFor="diasExpiracao">
+                                Dias para Expiração do Link de Pagamento
+                                <span className="text-xs text-muted-foreground ml-2">(Padrão: 7 dias)</span>
+                            </Label>
+                            <Input
+                                id="diasExpiracao"
+                                type="number"
+                                min="1"
+                                max="90"
+                                value={config.dias_expiracao_link || 7}
+                                onChange={(e) => setConfig({ ...config, dias_expiracao_link: parseInt(e.target.value) || 7 })}
+                                placeholder="7"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Tempo que o link de pagamento permanecerá válido após ser gerado
+                            </p>
+                        </div>
+
                         <div className="grid gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="token_producao">Token de Produção (PagBank iBanking)</Label>
@@ -234,7 +253,7 @@ export default function ConfiguracoesPagBank() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Conta PagBank (Ativo)</Label>
-                                <Select value={config.conta_sintetica_id || ''} onValueChange={(v) => setConfig({...config, conta_sintetica_id: v})}>
+                                <Select value={config.conta_id || ''} onValueChange={(v) => setConfig({...config, conta_id: v})}>
                                     <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                                     <SelectContent>
                                         {planoContas.filter(c => c.Conta.startsWith('1.')).map(c => (
@@ -258,7 +277,7 @@ export default function ConfiguracoesPagBank() {
 
                         <div className="space-y-2">
                             <Label>Conta de Despesa (Taxas Bancárias)</Label>
-                            <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
+                            <Select value={config.conta_despesa_taxa || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa: v})}>
                                 <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                                 <SelectContent>
                                     {planoContas.filter(c => c.Conta.startsWith('5.')).map(c => (

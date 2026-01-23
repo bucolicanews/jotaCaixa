@@ -21,6 +21,7 @@ interface Step4MappingTableProps {
   transacoesSelecionadas: number[];
   contaContabilLote: string | null;
   isSaving: boolean;
+  contaSelecionadaId?: string | null; // ID da conta bancária selecionada
   
   onToggleSelection: (index: number, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
@@ -33,12 +34,36 @@ interface Step4MappingTableProps {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+// Função para converter data BR (dd/mm/yyyy) para formato PostgreSQL (yyyy-mm-dd)
+const converterDataParaISO = (dataBR: string): string => {
+  // Se já estiver no formato ISO (yyyy-mm-dd), retornar como está
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dataBR)) {
+    return dataBR;
+  }
+  
+  // Converter de dd/mm/yyyy para yyyy-mm-dd
+  const partes = dataBR.split('/');
+  if (partes.length === 3) {
+    const [dia, mes, ano] = partes;
+    return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  }
+  
+  // Fallback: tentar criar Date e formatar
+  const data = new Date(dataBR);
+  if (!isNaN(data.getTime())) {
+    return data.toISOString().split('T')[0];
+  }
+  
+  return dataBR; // Retornar original se não conseguir converter
+};
+
 const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   transacoes,
   contasContabeis,
   transacoesSelecionadas,
   contaContabilLote,
   isSaving,
+  contaSelecionadaId,
   onToggleSelection,
   onSelectAll,
   onContaContabilChange,
@@ -51,7 +76,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const [modalMapeamentoOpen, setModalMapeamentoOpen] = useState(false);
   const [transacaoSelecionada, setTransacaoSelecionada] = useState<{ transacao: TransacaoExtrato & { id: string }, index: number } | null>(null);
   
-  const { usuario, role } = useSessao();
+  const { usuario, role, ownerId } = useSessao();
   
   const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
   const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
@@ -60,22 +85,89 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
   
   // Handler para abrir modal de mapeamento de parcelas
-  const handleAbrirMapeamentoParcelas = (transacao: TransacaoExtrato, index: number) => {
-    // Criar objeto completo com id (usar index como fallback se não houver id)
-    const transacaoCompleta = {
-      ...transacao,
-      id: `temp-${index}` // Temporário, será substituído após salvar no banco
-    };
-    
-    setTransacaoSelecionada({ transacao: transacaoCompleta, index });
-    setModalMapeamentoOpen(true);
+  const handleAbrirMapeamentoParcelas = async (transacao: TransacaoExtrato, index: number) => {
+    try {
+      // Se a transação já tem ID, usar diretamente
+      if (transacao.id) {
+        setTransacaoSelecionada({ transacao: transacao as TransacaoExtrato & { id: string }, index });
+        setModalMapeamentoOpen(true);
+        return;
+      }
+      
+      // Validar se temos conta selecionada
+      if (!contaSelecionadaId) {
+        showError('Erro: Nenhuma conta bancária selecionada.');
+        return;
+      }
+      
+      // Validar se temos ownerId (empresa_id para RLS)
+      if (!ownerId) {
+        showError('Erro: Usuário não identificado. Faça login novamente.');
+        return;
+      }
+      
+      // Caso contrário, salvar a transação no banco primeiro
+      console.log('[INSERT EXTRATO] Preparando dados...', { ownerId, contaSelecionadaId });
+      showSuccess('Salvando transação no banco...');
+      
+      const dadosInsert = {
+        empresa_id: ownerId,  // Campo obrigatório para RLS
+        id_saldo_contas: contaSelecionadaId,
+        data: converterDataParaISO(transacao.data),
+        descricao: transacao.descricao,
+        valor: transacao.valor,
+        tipo: transacao.tipo,
+        identificacao: transacao.identificacao,
+        status_conciliacao: 'PENDENTE',
+        conciliado: false,
+        valor_conciliado: 0,
+      };
+      
+      console.log('[INSERT EXTRATO] Dados:', dadosInsert);
+      
+      const { data: extratoSalvo, error } = await supabase
+        .from('extratos')
+        .insert(dadosInsert)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('[INSERT EXTRATO] Erro completo:', error);
+        
+        if (error.code === '42501') {
+          showError('Erro de permissão ao salvar transação. Verifique suas credenciais.');
+        } else {
+          showError('Erro ao salvar transação: ' + error.message);
+        }
+        return;
+      }
+      
+      console.log('[INSERT EXTRATO] Sucesso! ID gerado:', extratoSalvo.id);
+      
+      // Atualizar transação com o ID retornado
+      const transacaoComId = {
+        ...transacao,
+        id: extratoSalvo.id
+      };
+      
+      setTransacaoSelecionada({ transacao: transacaoComId as TransacaoExtrato & { id: string }, index });
+      setModalMapeamentoOpen(true);
+      
+      showSuccess('Transação salva! Abrindo modal de mapeamento...');
+      
+    } catch (erro: any) {
+      console.error('Erro ao preparar mapeamento:', erro);
+      showError('Erro ao preparar mapeamento: ' + (erro.message || 'Erro desconhecido'));
+    }
   };
   
-  // Handler de confirmação do mapeamento
+  // Handler de confirmação do mapeamento com BAIXA AUTOMÁTICA
   const handleConfirmarMapeamento = async (mapeamentos: any[], valorRestante?: any) => {
     if (!transacaoSelecionada) return;
     
     try {
+      console.log('[CONFIRMAÇÃO] Iniciando processo de baixa automática...');
+      
       // 1. Salvar vínculos em extrato_parcela_vinculo
       const vinculosPromises = mapeamentos.map(async (m) => {
         const { data, error } = await supabase
@@ -85,36 +177,156 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             parcela_id: m.parcelaId,
             tipo_parcela: m.tipo,
             valor_aplicado: m.valorAplicar,
-            usuario_vinculacao_id: usuario?.id
+            usuario_vinculacao_id: usuario?.id,
+            data_vinculacao: new Date().toISOString(),
           });
         
-        if (error) throw error;
+        if (error) {
+          console.error('[VINCULO] Erro ao inserir:', error);
+          throw error;
+        }
         return data;
       });
       
       await Promise.all(vinculosPromises);
+      console.log('[VÍNCULOS] Salvos com sucesso');
       
-      // 2. Atualizar parcelas com vinculada_extrato = true
-      const parcelasPromises = mapeamentos.map(async (m) => {
+      // 2. Para cada parcela: atualizar valor_pago, status e criar pagamento/recebimento
+      for (const m of mapeamentos) {
         const tabela = m.tipo === 'CR' 
           ? (role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber')
           : (role === 'Admin' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar');
         
-        const { error } = await supabase
+        // 2.1 Buscar valor_pago atual
+        const { data: parcelaAtual, error: errorBusca } = await supabase
           .from(tabela)
-          .update({ 
-            vinculada_extrato: true,
-            valor_vinculado: m.valorAplicar
-          })
+          .select('valor_parcela, valor_pago')
+          .eq('id', m.parcelaId)
+          .single();
+        
+        if (errorBusca) {
+          console.error('[PARCELA] Erro ao buscar:', errorBusca);
+          throw errorBusca;
+        }
+        
+        const valorPagoAtual = parcelaAtual.valor_pago || 0;
+        const novoValorPago = valorPagoAtual + m.valorAplicar;
+        const valorParcela = parcelaAtual.valor_parcela;
+        
+        // 2.2 Definir novo status
+        let novoStatus = '';
+        let dataBaixa = null;
+        
+        if (novoValorPago >= valorParcela) {
+          novoStatus = m.tipo === 'CR' ? 'recebida' : 'paga';
+          dataBaixa = converterDataParaISO(transacaoSelecionada.transacao.data);
+        } else {
+          novoStatus = 'parcialmente_paga';
+        }
+        
+        console.log(`[PARCELA ${m.parcelaId}] Atualizando: valor_pago=${novoValorPago}, status=${novoStatus}`);
+        
+        // 2.3 Atualizar parcela
+        const updateData: any = {
+          vinculada_extrato: true,
+          valor_vinculado: m.valorAplicar,
+          valor_pago: novoValorPago,
+          status: novoStatus,
+        };
+        
+        if (dataBaixa) {
+          updateData.data_pagamento = dataBaixa;
+        }
+        
+        const { error: errorUpdate } = await supabase
+          .from(tabela)
+          .update(updateData)
           .eq('id', m.parcelaId);
         
-        if (error) throw error;
-      });
+        if (errorUpdate) {
+          console.error('[PARCELA] Erro ao atualizar:', errorUpdate);
+          throw errorUpdate;
+        }
+        
+        // 2.4 Criar registro de pagamento/recebimento
+        const tabelaPagamento = m.tipo === 'CR'
+          ? (role === 'Admin' ? 'admin_recebimentos' : 'recebimentos')
+          : (role === 'Admin' ? 'admin_pagamentos' : 'pagamentos');
+        
+        const dataMovimentacao = converterDataParaISO(transacaoSelecionada.transacao.data);
+        
+        const dadosPagamento: any = {
+          parcela_id: m.parcelaId,
+          conta_id: contaSelecionadaId,
+        };
+        
+        // Adicionar admin_id se for Admin
+        if (role === 'Admin' && ownerId) {
+          dadosPagamento.admin_id = ownerId;
+        }
+        
+        // Campos específicos por tipo
+        if (m.tipo === 'CR') {
+          dadosPagamento.valor_recebido = m.valorAplicar;
+          dadosPagamento.data_recebimento = dataMovimentacao;
+          dadosPagamento.tipo_recebimento = 'TRANSFERENCIA_BANCARIA';
+          dadosPagamento.forma_pagamento = 'PIX';
+        } else {
+          dadosPagamento.valor_pago = m.valorAplicar;
+          dadosPagamento.data_pagamento = dataMovimentacao;
+          dadosPagamento.tipo_pagamento = 'TRANSFERENCIA_BANCARIA';
+          dadosPagamento.forma_pagamento = 'PIX';
+        }
+        
+        console.log(`[PAGAMENTO] Criando em ${tabelaPagamento}:`, dadosPagamento);
+        
+        const { error: errorPagamento } = await supabase
+          .from(tabelaPagamento)
+          .insert(dadosPagamento);
+        
+        if (errorPagamento) {
+          console.error('[PAGAMENTO] Erro ao criar:', errorPagamento);
+          throw errorPagamento;
+        }
+      }
       
-      await Promise.all(parcelasPromises);
+      console.log('[PARCELAS] Todas atualizadas e pagamentos criados');
       
-      // 3. Se houver valor restante, criar lançamento avulso
+      // 3. Atualizar saldo da conta bancária
+      const { data: contaAtual, error: errorConta } = await supabase
+        .from('saldo_contas')
+        .select('saldo_inicial')
+        .eq('id', contaSelecionadaId)
+        .single();
+      
+      if (errorConta) {
+        console.error('[CONTA] Erro ao buscar saldo:', errorConta);
+        throw errorConta;
+      }
+      
+      const valorTotalMapeado = mapeamentos.reduce((acc, m) => acc + m.valorAplicar, 0);
+      const valorMovimentacao = transacaoSelecionada.transacao.tipo === 'Entrada'
+        ? valorTotalMapeado
+        : -valorTotalMapeado;
+      
+      const novoSaldo = (contaAtual.saldo_inicial || 0) + valorMovimentacao;
+      
+      console.log(`[CONTA] Atualizando saldo: ${contaAtual.saldo_inicial} → ${novoSaldo}`);
+      
+      const { error: errorSaldo } = await supabase
+        .from('saldo_contas')
+        .update({ saldo_inicial: novoSaldo })
+        .eq('id', contaSelecionadaId);
+      
+      if (errorSaldo) {
+        console.error('[CONTA] Erro ao atualizar saldo:', errorSaldo);
+        throw errorSaldo;
+      }
+      
+      // 4. Se houver valor restante, criar lançamento avulso
       if (valorRestante && valorRestante.valor > 0) {
+        console.log('[AVULSO] Criando lançamento:', valorRestante);
+        
         const { error } = await supabase
           .from('conciliacao_lancamentos_avulsos')
           .insert({
@@ -123,13 +335,14 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             valor: valorRestante.valor,
             descricao: valorRestante.descricao || 'Diferença de conciliação',
             tipo: transacaoSelecionada.transacao.tipo === 'Entrada' ? 'ENTRADA' : 'SAIDA',
-            usuario_id: usuario?.id
+            usuario_id: usuario?.id,
+            data_lancamento: new Date().toISOString(),
           });
         
         if (error) throw error;
       }
       
-      // 4. Atualizar status da transação do extrato
+      // 5. Atualizar status da transação do extrato
       const valorTotal = mapeamentos.reduce((acc, m) => acc + m.valorAplicar, 0) + (valorRestante?.valor || 0);
       const statusConciliacao = valorTotal >= Math.abs(transacaoSelecionada.transacao.valor) 
         ? 'CONCILIADA' 
@@ -145,20 +358,22 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
       
       if (extratoError) throw extratoError;
       
-      // 5. Mostrar sucesso e fechar modal
-      showSuccess(`Conciliação realizada com sucesso! ${mapeamentos.length} parcela(s) vinculada(s).`);
+      console.log('[EXTRATO] Status atualizado:', statusConciliacao);
+      
+      // 6. Mostrar sucesso e fechar modal
+      showSuccess(`✅ Baixa realizada com sucesso! ${mapeamentos.length} parcela(s) quitada(s).`);
       
       setModalMapeamentoOpen(false);
       setTransacaoSelecionada(null);
       
-      // 6. Opcional: atualizar UI removendo linha conciliada
+      // 7. Opcional: atualizar UI removendo linha conciliada
       if (onMapeamentoParcelas) {
         onMapeamentoParcelas(transacaoSelecionada.transacao, transacaoSelecionada.index);
       }
       
     } catch (erro: any) {
-      console.error('Erro ao salvar mapeamento:', erro);
-      showError('Erro ao salvar conciliação: ' + (erro.message || 'Erro desconhecido'));
+      console.error('[ERRO CRÍTICO] Falha na baixa:', erro);
+      showError('❌ Erro ao realizar baixa: ' + (erro.message || 'Erro desconhecido'));
     }
   };
   

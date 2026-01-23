@@ -72,9 +72,9 @@ export function ModalMapeamentoParcelas({
     // Buscar parcelas com join nas contas e clientes
     const { data: parcelas, error: errorParcelas } = await supabase
       .from('admin_parcelas_receber')
-      .select('id, numero_parcela, valor_parcela, data_vencimento, status, conta_receber_id')
+      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, conta_receber_id')
       .eq('admin_id', ownerId)
-      .eq('status', 'aberta')
+      .in('status', ['aberta', 'reprogramada'])
       .order('data_vencimento', { ascending: true });
 
     if (errorParcelas) {
@@ -128,6 +128,8 @@ export function ModalMapeamentoParcelas({
         id: p.id,
         numeroParcela: p.numero_parcela,
         valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: (p.valor_parcela - (p.valor_pago || 0)),
         dataVencimento: p.data_vencimento,
         status: p.status,
         descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
@@ -158,9 +160,9 @@ export function ModalMapeamentoParcelas({
     // Buscar parcelas com join nas contas
     const { data: parcelas, error: errorParcelas } = await supabase
       .from('admin_parcelas_pagar')
-      .select('id, numero_parcela, valor_parcela, data_vencimento, status, conta_pagar_id')
+      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, conta_pagar_id')
       .eq('admin_id', ownerId)
-      .eq('status', 'aberta')
+      .in('status', ['aberta', 'reprogramada'])
       .order('data_vencimento', { ascending: true });
 
     if (errorParcelas) {
@@ -196,6 +198,8 @@ export function ModalMapeamentoParcelas({
         id: p.id,
         numeroParcela: p.numero_parcela,
         valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: (p.valor_parcela - (p.valor_pago || 0)),
         dataVencimento: p.data_vencimento,
         status: p.status,
         descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
@@ -370,7 +374,11 @@ export function ModalMapeamentoParcelas({
           <div className="flex items-center gap-4 mt-2 text-sm">
             <div>
               <span className="font-semibold">Data:</span>{' '}
-              {new Date(transacao.data).toLocaleDateString('pt-BR')}
+              {transacao.data && typeof transacao.data === 'string' 
+                ? (transacao.data.includes('/') 
+                    ? transacao.data 
+                    : new Date(transacao.data).toLocaleDateString('pt-BR'))
+                : 'Data inválida'}
             </div>
             <div>
               <span className="font-semibold">Valor:</span> R${' '}

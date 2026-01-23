@@ -34,34 +34,35 @@ export async function conciliarTransacaoDireta(
     const dataTransacao = extrato.data;
     const contaBancariaId = extrato.id_saldo_contas;
 
-    const tabelaLancamentos = isAdmin ? 'admin_lancamentos' : 'lancamentos';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabelaLancamentos = 'lancamentos';
+    const ownerKey = 'proprietario_id';
 
     if (!isEntrada && contaBancariaId) {
       const { data: saldoConta } = await supabase
         .from('saldo_contas')
-        .select('saldo_atual, nome')
+        .select('saldo_inicial, nome')
         .eq('id', contaBancariaId)
         .single();
 
-      if (saldoConta && saldoConta.saldo_atual < valorAbsoluto) {
+      if (saldoConta && saldoConta.saldo_inicial < valorAbsoluto) {
         return {
           success: false,
-          error: `Saldo insuficiente na conta "${saldoConta.nome}". Saldo atual: R$ ${saldoConta.saldo_atual.toFixed(2)}, Valor necessário: R$ ${valorAbsoluto.toFixed(2)}`
+          error: `Saldo insuficiente na conta "${saldoConta.nome}". Saldo atual: R$ ${saldoConta.saldo_inicial.toFixed(2)}, Valor necessário: R$ ${valorAbsoluto.toFixed(2)}`
         };
       }
     }
 
     const lancamentoPrincipal: any = {
-      [ownerKey]: ownerId,
-      data_lancamento: dataTransacao,
+      proprietario_id: ownerId,
+      data_movimentacao: dataTransacao,
       valor: valorAbsoluto,
       tipo: isEntrada ? 'C' : 'D',
-      id_conta_contabil: dados.id_conta_contabil,
-      id_historico: dados.id_historico,
-      observacao: dados.observacao || `Conciliação direta - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
+      conta_contabil_id: dados.id_conta_contabil,
+      historico_id: dados.id_historico,
+      descricao: dados.observacao || `Conciliação direta - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
       origem: 'conciliacao_direta',
-      id_saldo_contas: contaBancariaId,
+      conta_bancaria_id: contaBancariaId,
+      conciliado: true,
     };
 
     const { data: lancamentoCriado, error: lancamentoError } = await supabase
@@ -76,15 +77,16 @@ export async function conciliarTransacaoDireta(
 
     if (contaBancariaId) {
       const lancamentoContrapartida: any = {
-        [ownerKey]: ownerId,
-        data_lancamento: dataTransacao,
+        proprietario_id: ownerId,
+        data_movimentacao: dataTransacao,
         valor: valorAbsoluto,
         tipo: isEntrada ? 'D' : 'C',
-        id_conta_contabil: dados.id_conta_contabil,
-        id_historico: dados.id_historico,
-        observacao: `Contrapartida bancária - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
+        conta_contabil_id: dados.id_conta_contabil,
+        historico_id: dados.id_historico,
+        descricao: `Contrapartida bancária - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
         origem: 'conciliacao_direta_contrapartida',
-        id_saldo_contas: contaBancariaId,
+        conta_bancaria_id: contaBancariaId,
+        conciliado: true,
       };
 
       const { error: contrapartidaError } = await supabase
@@ -102,16 +104,26 @@ export async function conciliarTransacaoDireta(
       const { error: saldoError } = await novoSaldo;
       
       if (saldoError) {
-        const operacao = isEntrada ? '+' : '-';
-        const { error: updateError } = await supabase
+        // Fallback: buscar saldo atual e atualizar manualmente
+        const { data: contaAtual } = await supabase
           .from('saldo_contas')
-          .update({ 
-            saldo_atual: supabase.raw(`saldo_atual ${operacao} ${valorAbsoluto}`)
-          })
-          .eq('id', contaBancariaId);
+          .select('saldo_inicial')
+          .eq('id', contaBancariaId)
+          .single();
 
-        if (updateError) {
-          console.warn('Erro ao atualizar saldo:', updateError);
+        if (contaAtual) {
+          const novoSaldoCalculado = isEntrada 
+            ? (contaAtual.saldo_inicial || 0) + valorAbsoluto
+            : (contaAtual.saldo_inicial || 0) - valorAbsoluto;
+
+          const { error: updateError } = await supabase
+            .from('saldo_contas')
+            .update({ saldo_inicial: novoSaldoCalculado })
+            .eq('id', contaBancariaId);
+
+          if (updateError) {
+            console.warn('Erro ao atualizar saldo:', updateError);
+          }
         }
       }
     }
@@ -119,7 +131,7 @@ export async function conciliarTransacaoDireta(
     const { error: extratoUpdateError } = await supabase
       .from('extratos')
       .update({ 
-        status_mapeamento: 'conciliado_direto',
+        status_mapeamento: 'mapeado_manual',
         conta_contabil_id: dados.id_conta_contabil
       })
       .eq('id', transacaoId);

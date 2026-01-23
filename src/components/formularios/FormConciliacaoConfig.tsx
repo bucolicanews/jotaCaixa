@@ -110,7 +110,10 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
         <FormField control={form.control} name="coluna_identificacao" render={({ field }) => (
             <FormItem>
                 <FormLabel>Coluna de Identificação (Opcional)</FormLabel>
-                <FormControl><Input placeholder="Identificação" {...field} /></FormControl>
+                <FormControl><Input placeholder="CODIGO DA TRANSACAO" {...field} /></FormControl>
+                <p className="text-xs text-muted-foreground mt-1">
+                    Nome da coluna que contém o código único da transação (ex: CODIGO DA TRANSACAO, ID, Identificador)
+                </p>
                 <FormMessage />
             </FormItem>
         )} />

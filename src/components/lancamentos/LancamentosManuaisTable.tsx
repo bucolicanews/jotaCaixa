@@ -48,7 +48,7 @@ const LancamentosManuaisTable: React.FC = () => {
             
         if (filtroTextoDebounced) {
             const termo = `%${filtroTextoDebounced}%`;
-            query = query.or(`descricao.ilike.${termo},plano_contas.Descricao.ilike.${termo},historicos.descricao.ilike.${termo}`);
+            query = query.ilike('descricao', termo);
         }
 
         const { data, error } = await query;

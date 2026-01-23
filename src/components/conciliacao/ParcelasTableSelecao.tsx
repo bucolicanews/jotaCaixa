@@ -19,7 +19,10 @@ interface ParcelaMatching {
   numeroParcela: number;
   dataVencimento: string;
   valor_parcela: number;
+  valorPago?: number;
+  valorRestante?: number;
   matchScore?: number;
+  status?: string;
 }
 
 interface Props {
@@ -50,11 +53,14 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
   const handleCheckboxChange = (parcelaId: string, checked: boolean) => {
     onToggleSelecao(parcelaId, checked);
 
-    // Se selecionou, preencher com valor total da parcela
+    // Se selecionou, preencher com valor da transação (ou valor restante, o que for menor)
     if (checked) {
       const parcela = parcelas.find((p) => p.id === parcelaId);
       if (parcela) {
-        onValorChange(parcelaId, parcela.valor_parcela);
+        // Sugerir valor da transação, mas não exceder valor restante da parcela
+        const valorMaximo = parcela.valorRestante || parcela.valor_parcela;
+        const valorSugerido = Math.min(valorTransacao, valorMaximo);
+        onValorChange(parcelaId, valorSugerido);
       }
     }
   };
@@ -62,8 +68,9 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
   const handleValorInputChange = (parcelaId: string, novoValor: number) => {
     const parcela = parcelas.find((p) => p.id === parcelaId);
 
-    // Validar: não exceder valor original
-    const valorFinal = Math.min(novoValor, parcela?.valor_parcela || 0);
+    // Validar: não exceder valor restante da parcela
+    const valorMaximo = parcela?.valorRestante || parcela?.valor_parcela || 0;
+    const valorFinal = Math.min(novoValor, valorMaximo);
 
     onValorChange(parcelaId, valorFinal);
   };
@@ -85,16 +92,18 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
           <TableHead>{tipo === 'CR' ? 'Cliente' : 'Fornecedor'}</TableHead>
           <TableHead>Nº</TableHead>
           <TableHead>Vencimento</TableHead>
+          <TableHead>Status</TableHead>
           <TableHead>Valor Original</TableHead>
+          <TableHead>Valor Pago</TableHead>
+          <TableHead>Valor Restante</TableHead>
           <TableHead>Valor a Aplicar</TableHead>
-          <TableHead>Score</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {parcelas.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-              Nenhuma parcela encontrada com valor exato.
+            <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+              Nenhuma parcela encontrada.
             </TableCell>
           </TableRow>
         ) : (
@@ -120,7 +129,19 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
                 </TableCell>
                 <TableCell>{parcela.numeroParcela}</TableCell>
                 <TableCell>{formatDate(parcela.dataVencimento)}</TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={parcela.status === 'reprogramada' ? 'secondary' : 'default'}
+                    className={parcela.status === 'reprogramada' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}
+                  >
+                    {parcela.status}
+                  </Badge>
+                </TableCell>
                 <TableCell>{formatCurrency(parcela.valor_parcela)}</TableCell>
+                <TableCell>{formatCurrency(parcela.valorPago || 0)}</TableCell>
+                <TableCell className="font-semibold text-orange-600">
+                  {formatCurrency(parcela.valorRestante || parcela.valor_parcela)}
+                </TableCell>
                 <TableCell>
                   {isSelecionada ? (
                     <Input
@@ -129,26 +150,13 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
                       onChange={(e) =>
                         handleValorInputChange(parcela.id, Number(e.target.value))
                       }
-                      max={parcela.valor_parcela}
+                      max={parcela.valorRestante || parcela.valor_parcela}
                       step="0.01"
                       className="w-32"
                     />
                   ) : (
                     <span className="text-gray-400">-</span>
                   )}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      (parcela.matchScore || 0) >= 80
-                        ? 'default'
-                        : (parcela.matchScore || 0) >= 50
-                        ? 'secondary'
-                        : 'outline'
-                    }
-                  >
-                    {parcela.matchScore || 0}%
-                  </Badge>
                 </TableCell>
               </TableRow>
             );

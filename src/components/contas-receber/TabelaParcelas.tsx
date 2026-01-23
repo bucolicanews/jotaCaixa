@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText, Link2 } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
@@ -26,6 +26,7 @@ interface ExtendedParcelaDetalhada {
     pagbank_payment_link?: string | null;
     pagbank_checkout_id?: string | null;
     pagbank_checkout_link?: string | null;
+    pagbank_link_expira_em?: string | null;
     pagbank_status?: string | null;
     pagbank_qr_code?: string | null;
     pagbank_qr_code_text?: string | null;
@@ -46,6 +47,7 @@ interface TabelaParcelasProps {
     getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
     onGerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onVisualizarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
+    onRegerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onMapearComExtrato?: (parcela: ExtendedParcelaDetalhada) => void;
 }
 
@@ -57,11 +59,18 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     getBadgeVariant,
     onGerarLinkPagBank,
     onVisualizarLinkPagBank,
+    onRegerarLinkPagBank,
     onMapearComExtrato,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
     const [parcelaParaRecibo, setParcelaParaRecibo] = useState<string | null>(null);
+
+    // Função para verificar se o link expirou
+    const isLinkExpirado = (parcela: ExtendedParcelaDetalhada): boolean => {
+        if (!parcela.pagbank_link_expira_em) return false;
+        return new Date(parcela.pagbank_link_expira_em) < new Date();
+    };
 
     const handleOpenRecibo = (parcelaId: string) => {
         setParcelaParaRecibo(parcelaId);
@@ -208,17 +217,51 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             </TableCell>
                                             <TableCell>
                                                 {(p.pagbank_charge_id || p.pagbank_checkout_id) ? (
-                                                    <div className="space-y-1 text-center">
-                                                        <PagBankPaymentStatus status={p.pagbank_status as any} />
-                                                        <Button
-                                                            size="xs"
-                                                            variant="outline"
-                                                            onClick={() => onVisualizarLinkPagBank?.(p)}
-                                                        >
-                                                            <Eye className="h-3 w-3 mr-1" />
-                                                            Ver Link
-                                                        </Button>
-                                                    </div>
+                                                    isLinkExpirado(p) ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <Badge variant="destructive" className="w-fit text-xs">
+                                                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                                                Link Expirado
+                                                            </Badge>
+                                                            <Button
+                                                                size="xs"
+                                                                variant="outline"
+                                                                onClick={() => onRegerarLinkPagBank?.(p)}
+                                                                className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                                            >
+                                                                <RefreshCw className="h-3 w-3 mr-1" />
+                                                                Regerar Link
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-1 text-center">
+                                                            <div className="flex flex-col gap-1">
+                                                                <Badge variant="default" className="w-fit text-xs bg-green-600">
+                                                                    <Check className="h-3 w-3 mr-1" />
+                                                                    Link Ativo
+                                                                </Badge>
+                                                                {p.pagbank_link_expira_em && (
+                                                                    <span className="text-[10px] text-muted-foreground">
+                                                                        Expira: {new Date(p.pagbank_link_expira_em).toLocaleDateString('pt-BR', {
+                                                                            day: '2-digit',
+                                                                            month: '2-digit',
+                                                                            hour: '2-digit',
+                                                                            minute: '2-digit'
+                                                                        })}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <PagBankPaymentStatus status={p.pagbank_status as any} />
+                                                            <Button
+                                                                size="xs"
+                                                                variant="outline"
+                                                                onClick={() => onVisualizarLinkPagBank?.(p)}
+                                                            >
+                                                                <Eye className="h-3 w-3 mr-1" />
+                                                                Ver Link
+                                                            </Button>
+                                                        </div>
+                                                    )
                                                 ) : p.status === 'aberta' ? (
                                                     <Button
                                                         size="xs"

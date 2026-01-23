@@ -690,6 +690,35 @@ const ContasReceber = () => {
               setSelectedParcela(parcela);
               setVisualizarPagbankDialogOpen(true);
             }}
+            onRegerarLinkPagBank={async (parcela) => {
+              if (!confirm('Deseja regerar o link de pagamento? O link anterior será invalidado.')) {
+                return;
+              }
+              try {
+                // Limpar link antigo
+                const { error } = await supabase
+                  .from('admin_parcelas_receber')
+                  .update({
+                    pagbank_checkout_id: null,
+                    pagbank_checkout_link: null,
+                    pagbank_link_expira_em: null,
+                    pagbank_status: null,
+                  })
+                  .eq('id', parcela.id);
+
+                if (error) throw error;
+
+                toast.success('Link anterior removido. Gerando novo link...');
+                
+                // Abrir modal para gerar novo link
+                setSelectedParcela(parcela);
+                setPagbankDialogOpen(true);
+                
+              } catch (error: any) {
+                console.error('Erro ao regerar link:', error);
+                toast.error('Erro ao limpar link antigo: ' + error.message);
+              }
+            }}
             onMapearComExtrato={handleMapearComExtrato}
           />
         </TabsContent>
