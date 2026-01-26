@@ -25,6 +25,7 @@ interface VisualizarLinkPagBankDialogProps {
   clienteNome?: string;
   clienteTelefone?: string;
   clienteEmail?: string;
+  linkExpiraEm?: string | null;
 }
 
 export function VisualizarLinkPagBankDialog({
@@ -41,6 +42,7 @@ export function VisualizarLinkPagBankDialog({
   clienteNome,
   clienteTelefone,
   clienteEmail,
+  linkExpiraEm,
 }) {
   const { ownerId } = useSessao();
   const [copiedLink, setCopiedLink] = useState(false);
@@ -48,6 +50,8 @@ export function VisualizarLinkPagBankDialog({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manualOrderId, setManualOrderId] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [whatsappTemplate, setWhatsappTemplate] = useState('Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}');
   const [confirmForceDialog, setConfirmForceDialog] = useState<{
     open: boolean;
@@ -246,6 +250,38 @@ export function VisualizarLinkPagBankDialog({
     }
   };
 
+  const handleRegenerateLink = async () => {
+    if (!parcelaId || !ownerId) return;
+    
+    try {
+      setRegenerating(true);
+      
+      const { data, error } = await supabase.functions.invoke('create-pagbank-checkout', {
+        body: { 
+          parcela_id: parcelaId,
+          admin_id: ownerId
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast.success('Link gerado com sucesso!');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        throw new Error(data?.error || 'Erro ao gerar link');
+      }
+    } catch (error: any) {
+      console.error('Erro ao regenerar link:', error);
+      toast.error(error.message || 'Falha ao gerar novo link');
+    } finally {
+      setRegenerating(false);
+      setShowRegenerateConfirm(false);
+    }
+  };
+
   const handleCopyLink = async (text: string, type: 'link' | 'pix') => {
     try {
       await navigator.clipboard.writeText(text);
@@ -265,6 +301,17 @@ export function VisualizarLinkPagBankDialog({
             <DialogTitle>Link de Pagamento PagBank</DialogTitle>
             <DialogDescription>
               Valor: R$ {valorParcela.toFixed(2)} - {descricao}
+              {linkExpiraEm && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Link válido até: {new Date(linkExpiraEm).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -273,9 +320,16 @@ export function VisualizarLinkPagBankDialog({
             <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
               <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Status:</span>
-                  <Badge variant={status === 'PAID' ? 'success' : 'warning'}>
-                      {status || 'Ativo'}
-                  </Badge>
+                  {linkExpiraEm && new Date(linkExpiraEm) < new Date() ? (
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Expirado
+                    </Badge>
+                  ) : (
+                    <Badge variant={status === 'PAID' ? 'success' : 'warning'}>
+                        {status || 'Ativo'}
+                    </Badge>
+                  )}
               </div>
               <Button 
                   variant="ghost" 
@@ -287,6 +341,34 @@ export function VisualizarLinkPagBankDialog({
                   {syncing && !manualOrderId ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <RefreshCw className="h-3 w-3 mr-2" />}
                   Sync Automático
               </Button>
+            </div>
+
+            {/* Botão Regenerar Link */}
+            <div className="p-3 border border-blue-200 rounded-lg bg-blue-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-bold text-blue-800">Regenerar Link</Label>
+                  <p className="text-[10px] text-blue-700 mt-0.5">
+                    {linkExpiraEm && new Date(linkExpiraEm) < new Date() 
+                      ? 'Link expirado! Gere um novo.' 
+                      : 'Crie um novo link com prazo renovado'}
+                  </p>
+                </div>
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={() => setShowRegenerateConfirm(true)}
+                  disabled={regenerating || status === 'PAID'}
+                  className="h-8 text-xs"
+                >
+                  {regenerating ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                  )}
+                  Gerar Novo Link
+                </Button>
+              </div>
             </div>
 
             {/* NOVO: Busca Manual via ID */}
@@ -472,6 +554,37 @@ export function VisualizarLinkPagBankDialog({
             <AlertDialogAction onClick={handleConfirmForce} disabled={syncing}>
               {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sim, Forçar Baixa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de Confirmação para Regenerar Link */}
+      <AlertDialog open={showRegenerateConfirm} onOpenChange={setShowRegenerateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerar Novo Link de Pagamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {linkToUse ? (
+                <div className="space-y-2">
+                  <p>Já existe um link ativo para esta parcela.</p>
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      Ao gerar um novo link, o anterior continuará funcionando, mas o novo terá 
+                      prazo de validade renovado.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              ) : (
+                <p>Será criado um novo link de pagamento com prazo de validade atualizado.</p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegenerateLink}>
+              Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

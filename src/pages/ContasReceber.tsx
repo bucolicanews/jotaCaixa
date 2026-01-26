@@ -144,6 +144,7 @@ const ContasReceber = () => {
           pagbank_payment_link,
           pagbank_checkout_id,
           pagbank_checkout_link,
+          pagbank_link_expira_em,
           pagbank_status,
           pagbank_qr_code,
           pagbank_qr_code_text,
@@ -777,6 +778,7 @@ const ContasReceber = () => {
           clienteNome={selectedParcela.contas_receber?.clientes?.nome}
           clienteTelefone={selectedParcela.contas_receber?.clientes?.telefone}
           clienteEmail={selectedParcela.contas_receber?.clientes?.email}
+          linkExpiraEm={selectedParcela.pagbank_link_expira_em}
         />
       )}
 

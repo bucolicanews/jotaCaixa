@@ -54,7 +54,13 @@ serve(async (req) => {
     if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
 
     // 2.5. Calcular data de expiração do link
-    const diasExpiracao = config.dias_expiracao_link || 7;
+    const diasExpiracao = config.dias_expiracao_link || 30;
+    
+    // Validar dias de expiração
+    if (diasExpiracao < 1 || diasExpiracao > 365) {
+      throw new Error('dias_expiracao_link deve estar entre 1 e 365 dias');
+    }
+    
     const dataExpiracao = new Date();
     dataExpiracao.setDate(dataExpiracao.getDate() + diasExpiracao);
     const expirationDate = dataExpiracao.toISOString();
@@ -77,9 +83,10 @@ serve(async (req) => {
 
     const webhookUrl = config.webhook_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
     console.log(`[create-pagbank-checkout] Webhook URL: ${webhookUrl}`);
+    console.log(`[create-pagbank-checkout] Reference ID fixo: PARCELA_${parcela_id}`);
 
     const checkoutRequest = {
-      reference_id: `PARCELA_${parcela_id}_${Date.now()}`,
+      reference_id: `PARCELA_${parcela_id}`,
       expiration_date: expirationDate,
       customer: {
         name: nomeCliente,
@@ -119,6 +126,13 @@ serve(async (req) => {
 
     const checkoutResponse = JSON.parse(responseText);
     const payLink = checkoutResponse.links?.find((l: any) => l.rel === 'PAY')?.href || '';
+
+    console.log(`[create-pagbank-checkout] ✅ Checkout criado com sucesso!`);
+    console.log(`[create-pagbank-checkout] - ID: ${checkoutResponse.id}`);
+    console.log(`[create-pagbank-checkout] - Reference: PARCELA_${parcela_id}`);
+    console.log(`[create-pagbank-checkout] - Link: ${payLink}`);
+    console.log(`[create-pagbank-checkout] - Expira em: ${expirationDate}`);
+    console.log(`[create-pagbank-checkout] - Dias configurados: ${diasExpiracao}`);
 
     // Salvar no banco
     await supabaseAdmin

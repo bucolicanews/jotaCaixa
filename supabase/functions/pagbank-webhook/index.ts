@@ -57,7 +57,15 @@ serve(async (req) => {
       });
     }
 
-    const parcelaId = referenceId.replace('PARCELA_', '');
+    // Extrair ID removendo prefixo e possível timestamp (compatibilidade com formato antigo)
+    let parcelaId = referenceId.replace('PARCELA_', '');
+    if (parcelaId.includes('_')) {
+      // Formato antigo: PARCELA_{id}_{timestamp}
+      const originalId = parcelaId;
+      parcelaId = parcelaId.split('_')[0];
+      console.log(`[pagbank-webhook:${requestId}] ⚠️ Formato antigo detectado. ID original: ${originalId}, ID extraído: ${parcelaId}`);
+    }
+    
     console.log(`[pagbank-webhook:${requestId}] Processando parcela: ${parcelaId}`);
 
     const { data: parcela, error: pError } = await supabaseAdmin
