@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
@@ -49,6 +49,7 @@ interface TabelaParcelasProps {
     onVisualizarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onRegerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onMapearComExtrato?: (parcela: ExtendedParcelaDetalhada) => void;
+    onGerarBoleto?: (parcela: ExtendedParcelaDetalhada) => void;
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -61,6 +62,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     onVisualizarLinkPagBank,
     onRegerarLinkPagBank,
     onMapearComExtrato,
+    onGerarBoleto,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
@@ -144,6 +146,17 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                             title="Vincular parcela com transação do extrato bancário"
                                                         >
                                                             <Link2 className="w-4 h-4 mr-2" /> Mapear Extrato
+                                                        </Button>
+                                                    )}
+                                                    {!isPaga && onGerarBoleto && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            onClick={() => onGerarBoleto(p)}
+                                                            className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                                                            title="Gerar boleto bancário para esta parcela"
+                                                        >
+                                                            <Receipt className="w-4 h-4 mr-2" /> Gerar Boleto
                                                         </Button>
                                                     )}
                                                 </div>

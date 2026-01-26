@@ -26,6 +26,7 @@ import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 import { GerarLinkPagBankDialog } from '@/components/contas-receber/GerarLinkPagBankDialog';
 import { VisualizarLinkPagBankDialog } from '@/components/contas-receber/VisualizarLinkPagBankDialog';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
+import { VisualizarBoletoDialog } from '@/components/contas-receber/VisualizarBoletoDialog';
 import ModalSelecionarTransacaoExtrato from '@/components/conciliacao/ModalSelecionarTransacaoExtrato';
 import { buscarTransacoesExtratoDisponiveis, vincularParcelaComExtrato, TransacaoExtratoCandidata } from '@/hooks/conciliacao/useMapeamentoInverso';
 
@@ -83,6 +84,9 @@ const ContasReceber = () => {
   const [parcelaParaMapear, setParcelaParaMapear] = useState<ExtendedParcelaDetalhada | null>(null);
   const [transacoesExtratoDisponiveis, setTransacoesExtratoDisponiveis] = useState<TransacaoExtratoCandidata[]>([]);
   const [loadingTransacoesExtrato, setLoadingTransacoesExtrato] = useState(false);
+  const [boletoDialogOpen, setBoletoDialogOpen] = useState(false);
+  const [boletoData, setBoletoData] = useState<any>(null);
+  const [gerandoBoleto, setGerandoBoleto] = useState(false);
 
   const isAdmin = role === 'Admin';
   
@@ -451,6 +455,46 @@ const ContasReceber = () => {
     }
   }, [parcelaParaMapear, ownerId, role, buscarDados]);
 
+  const handleGerarBoleto = useCallback(async (parcela: ExtendedParcelaDetalhada) => {
+    setGerandoBoleto(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-pagbank-boleto', {
+        body: { 
+          parcela_id: parcela.id,
+          admin_id: proprietarioId
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        setBoletoData({
+          barcode: data.barcode,
+          pdfLink: data.pdf_link,
+          valorOriginal: data.valor_original,
+          valorMulta: data.valor_multa,
+          valorJuros: data.valor_juros,
+          valorTotal: data.valor_total,
+          diasAtraso: data.dias_atraso,
+          clienteNome: parcela.contas_receber?.clientes?.nome,
+          clienteTelefone: parcela.contas_receber?.clientes?.telefone,
+          clienteEmail: parcela.contas_receber?.clientes?.email,
+        });
+        setBoletoDialogOpen(true);
+        showSuccess('Boleto gerado com sucesso!');
+        buscarDados();
+      } else {
+        showError(data.message || 'Erro ao gerar boleto');
+      }
+    } catch (error: any) {
+      console.error('Erro ao gerar boleto:', error);
+      showError('Erro ao gerar boleto: ' + error.message);
+    } finally {
+      setGerandoBoleto(false);
+    }
+  }, [buscarDados]);
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => formatarData(dateString);
   
@@ -721,6 +765,7 @@ const ContasReceber = () => {
               }
             }}
             onMapearComExtrato={handleMapearComExtrato}
+            onGerarBoleto={handleGerarBoleto}
           />
         </TabsContent>
         
@@ -795,6 +840,23 @@ const ContasReceber = () => {
         loading={loadingTransacoesExtrato}
         onConfirmar={handleConfirmarMapeamentoExtrato}
       />
+      
+      {boletoData && (
+        <VisualizarBoletoDialog
+          open={boletoDialogOpen}
+          onOpenChange={setBoletoDialogOpen}
+          barcode={boletoData.barcode}
+          pdfLink={boletoData.pdfLink}
+          valorOriginal={boletoData.valorOriginal}
+          valorMulta={boletoData.valorMulta}
+          valorJuros={boletoData.valorJuros}
+          valorTotal={boletoData.valorTotal}
+          diasAtraso={boletoData.diasAtraso}
+          clienteNome={boletoData.clienteNome}
+          clienteTelefone={boletoData.clienteTelefone}
+          clienteEmail={boletoData.clienteEmail}
+        />
+      )}
     </LayoutPrincipal>
   );
 };

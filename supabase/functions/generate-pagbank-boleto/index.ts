@@ -144,9 +144,52 @@ serve(async (req) => {
     }
 
     // 5. Preparar dados do cliente
-    let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
+    const taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
     let nomeCliente = cliente.nome.trim();
     if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
+    
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailValido = cliente.email && emailRegex.test(cliente.email) 
+      ? cliente.email 
+      : 'cobranca@jotaempresas.com';
+    
+    // Calcular data de vencimento do boleto (não pode ser no passado)
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const vencimentoParcela = new Date(parcela.data_vencimento);
+    vencimentoParcela.setHours(0, 0, 0, 0);
+    
+    // Se a parcela já venceu, define vencimento do boleto para D+3
+    let dataVencimentoBoleto: Date;
+    if (vencimentoParcela < hoje) {
+      dataVencimentoBoleto = new Date(hoje);
+      dataVencimentoBoleto.setDate(dataVencimentoBoleto.getDate() + 3);
+      console.log(`[generate-pagbank-boleto] Parcela vencida. Boleto vencerá em: ${dataVencimentoBoleto.toISOString().split('T')[0]}`);
+    } else {
+      dataVencimentoBoleto = vencimentoParcela;
+    }
+    const dueDate = dataVencimentoBoleto.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Validar e normalizar UF
+    const estadosValidos = [
+      'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+      'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+      'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+    ];
+    let uf = (cliente.estado || 'SP').toUpperCase().trim();
+    if (!estadosValidos.includes(uf)) {
+      console.warn(`[generate-pagbank-boleto] UF inválida: "${cliente.estado}" -> usando SP como fallback`);
+      uf = 'SP';
+    }
+    console.log(`[generate-pagbank-boleto] UF normalizada: "${uf}"`);
+    console.log(`[generate-pagbank-boleto] Dados do cliente:`, {
+      nome: cliente.nome,
+      estado_original: cliente.estado,
+      endereco: cliente.endereco,
+      cidade: cliente.cidade,
+      cep: cliente.cep
+    });
 
     // 6. Preparar instruções do boleto
     const instrucoes = formatarInstrucoesBoleto({
@@ -155,6 +198,15 @@ serve(async (req) => {
     });
 
     const webhookUrl = config.webhook_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
+
+    console.log('[generate-pagbank-boleto] Dados do endereço:', {
+      street: cliente.endereco || 'Rua Principal',
+      number: cliente.numero || 'S/N',
+      locality: cliente.bairro || 'Centro',
+      city: cliente.cidade || 'São Paulo',
+      region_code: uf,
+      postal_code: (cliente.cep || '').replace(/\D/g, '') || '00000000'
+    });
 
     // 7. Montar payload da cobrança (Charge API)
     const chargeRequest = {
@@ -167,7 +219,7 @@ serve(async (req) => {
       payment_method: {
         type: 'BOLETO',
         boleto: {
-          due_date: parcela.data_vencimento,
+          due_date: dueDate,
           instruction_lines: {
             line_1: instrucoes[0],
             line_2: instrucoes[1]
@@ -175,14 +227,15 @@ serve(async (req) => {
           holder: {
             name: nomeCliente,
             tax_id: taxId,
-            email: cliente.email || 'cobranca@jotaempresas.com',
+            email: emailValido,
             address: {
               street: cliente.endereco || 'Rua Principal',
               number: cliente.numero || 'S/N',
               complement: cliente.complemento || '',
               locality: cliente.bairro || 'Centro',
               city: cliente.cidade || 'São Paulo',
-              region_code: cliente.estado || 'SP',
+              region: uf,
+              region_code: uf,
               country: 'BRA',
               postal_code: (cliente.cep || '').replace(/\D/g, '') || '00000000'
             }

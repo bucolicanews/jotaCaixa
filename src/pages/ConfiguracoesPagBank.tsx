@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare } from 'lucide-react';
+import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare, Percent } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
@@ -36,6 +36,9 @@ export default function ConfiguracoesPagBank() {
     ambiente: 'sandbox',
     webhook_url: `${BASE_URL}/api/pagbank-webhook`,
     whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
+    aplica_juros_multa: true,
+    percentual_multa: 2.0,
+    percentual_juros_mes: 1.0,
   });
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
@@ -241,7 +244,85 @@ export default function ConfiguracoesPagBank() {
                         />
                     </CardContent>
                 </Card>
-
+                
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Percent className="w-5 h-5 text-primary" /> Juros e Multa Automáticos
+                        </CardTitle>
+                        <CardDescription>
+                            Configure o cálculo automático de juros e multa para parcelas vencidas.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                            <div className="space-y-0.5">
+                                <Label className="text-base">Aplicar Juros e Multa</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Calcula automaticamente ao gerar link/boleto de parcela vencida.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={config.aplica_juros_multa || false}
+                                onCheckedChange={(checked) => setConfig({ ...config, aplica_juros_multa: checked })}
+                            />
+                        </div>
+                        
+                        {config.aplica_juros_multa && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="percentualMulta">
+                                        Multa (%) - Aplicada no 1º dia de atraso
+                                    </Label>
+                                    <Input
+                                        id="percentualMulta"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="10"
+                                        value={config.percentual_multa || 2.0}
+                                        onChange={(e) => setConfig({ ...config, percentual_multa: parseFloat(e.target.value) || 2.0 })}
+                                        placeholder="2.00"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Padrão: 2% conforme legislação brasileira
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="percentualJuros">
+                                        Juros ao Mês (%) - Pro-rata por dia
+                                    </Label>
+                                    <Input
+                                        id="percentualJuros"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="2"
+                                        value={config.percentual_juros_mes || 1.0}
+                                        onChange={(e) => setConfig({ ...config, percentual_juros_mes: parseFloat(e.target.value) || 1.0 })}
+                                        placeholder="1.00"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Padrão: 1% ao mês (0,033% ao dia)
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200">
+                            <Info className="h-4 w-4 text-amber-600" />
+                            <AlertDescription className="text-xs text-amber-700 dark:text-amber-500">
+                                <strong>Como funciona:</strong> Quando uma parcela vencida tem link ou boleto gerado, o sistema calcula automaticamente:
+                                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                    <li>Multa aplicada no 1º dia de atraso</li>
+                                    <li>Juros proporcionais aos dias de atraso</li>
+                                    <li>Valores salvos separadamente para auditoria</li>
+                                </ul>
+                            </AlertDescription>
+                        </Alert>
+                    </CardContent>
+                </Card>
+                
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">

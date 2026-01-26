@@ -14,6 +14,9 @@ export interface PagBankConfig {
   email_remetente: string | null;
   resend_api_key: string | null;
   whatsapp_template: string | null;
+  aplica_juros_multa: boolean | null;
+  percentual_multa: number | null;
+  percentual_juros_mes: number | null;
   created_at: string;
   updated_at: string;
 }
