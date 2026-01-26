@@ -40,6 +40,18 @@ function calcularJurosMulta(params: {
   };
 }
 
+function formatarInstrucoesBoleto(config: {
+  percentualMulta: number;
+  percentualJurosMes: number;
+}): string[] {
+  const jurosDiario = (config.percentualJurosMes / 30).toFixed(3);
+  
+  return [
+    `Após vencimento: Multa de ${config.percentualMulta}%`,
+    `Juros de ${jurosDiario}% ao dia (${config.percentualJurosMes}% ao mês)`
+  ];
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -62,6 +74,8 @@ serve(async (req) => {
       throw new Error('Parâmetros ausentes: parcela_id e admin_id são obrigatórios.');
     }
 
+    console.log(`[generate-pagbank-boleto] 🧾 Gerando boleto para parcela: ${parcela_id}`);
+
     // 1. Buscar parcela e dados do cliente
     const { data: parcela, error: parcelaError } = await supabaseAdmin
       .from('admin_parcelas_receber')
@@ -71,7 +85,7 @@ serve(async (req) => {
           *,
           tbl_clientes (
             nome, email, cpf, cnpj, documento, telefone,
-            cep, endereco, numero, bairro, cidade, estado
+            cep, endereco, numero, bairro, cidade, estado, complemento
           )
         )
       `)
@@ -92,39 +106,14 @@ serve(async (req) => {
 
     if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
 
-    // 2.5. Calcular data de expiração do link
-    const diasExpiracao = config.dias_expiracao_link || 30;
-    
-    // Validar dias de expiração
-    if (diasExpiracao < 1 || diasExpiracao > 365) {
-      throw new Error('dias_expiracao_link deve estar entre 1 e 365 dias');
-    }
-    
-    const dataExpiracao = new Date();
-    dataExpiracao.setDate(dataExpiracao.getDate() + diasExpiracao);
-    const expirationDate = dataExpiracao.toISOString();
-
-    console.log(`[create-pagbank-checkout] Link expira em: ${diasExpiracao} dias (${expirationDate})`);
-
     // 3. Processar Token e URL
     const rawToken = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
     const token = (rawToken || '').trim();
     const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
 
     if (!token) throw new Error(`Token de ${config.ambiente} não configurado.`);
-    
-    console.log(`[create-pagbank-checkout] Ambiente: ${config.ambiente}. Token status: ${token.length > 10 ? 'Found' : 'Missing/Short'}`);
 
-    // 4. Preparar Payload
-    let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
-    let nomeCliente = cliente.nome.trim();
-    if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
-
-    const webhookUrl = config.webhook_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
-    console.log(`[create-pagbank-checkout] Webhook URL: ${webhookUrl}`);
-    console.log(`[create-pagbank-checkout] Reference ID fixo: PARCELA_${parcela_id}`);
-
-    // 4.5. Calcular juros e multa se aplicável
+    // 4. Calcular juros e multa se necessário
     let valorFinal = parcela.valor_parcela;
     let diasAtraso = 0;
     let valorMulta = 0;
@@ -149,112 +138,137 @@ serve(async (req) => {
         valorJuros = calculo.valorJuros;
         valorFinal = calculo.valorTotal;
         
-        console.log(`[create-pagbank-checkout] ⚠️ PARCELA VENCIDA!`);
-        console.log(`[create-pagbank-checkout] - Dias de atraso: ${diasAtraso}`);
-        console.log(`[create-pagbank-checkout] - Valor original: R$ ${parcela.valor_parcela.toFixed(2)}`);
-        console.log(`[create-pagbank-checkout] - Multa (${config.percentual_multa}%): R$ ${valorMulta.toFixed(2)}`);
-        console.log(`[create-pagbank-checkout] - Juros: R$ ${valorJuros.toFixed(2)}`);
-        console.log(`[create-pagbank-checkout] - Valor final: R$ ${valorFinal.toFixed(2)}`);
-        
-        // Atualizar parcela com valores calculados
-        await supabaseAdmin
-          .from('admin_parcelas_receber')
-          .update({
-            valor_original: parcela.valor_parcela,
-            valor_multa: valorMulta,
-            valor_juros: valorJuros,
-            dias_atraso: diasAtraso,
-            data_calculo_juros: new Date().toISOString()
-          })
-          .eq('id', parcela_id);
+        console.log(`[generate-pagbank-boleto] ⚠️ Parcela vencida há ${diasAtraso} dias`);
+        console.log(`[generate-pagbank-boleto] Valor com acréscimos: R$ ${valorFinal.toFixed(2)}`);
       }
     }
 
-    const checkoutRequest = {
+    // 5. Preparar dados do cliente
+    let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
+    let nomeCliente = cliente.nome.trim();
+    if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
+
+    // 6. Preparar instruções do boleto
+    const instrucoes = formatarInstrucoesBoleto({
+      percentualMulta: config.percentual_multa || 2.0,
+      percentualJurosMes: config.percentual_juros_mes || 1.0
+    });
+
+    const webhookUrl = config.webhook_url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
+
+    // 7. Montar payload da cobrança (Charge API)
+    const chargeRequest = {
       reference_id: `PARCELA_${parcela_id}`,
-      expiration_date: expirationDate,
-      customer: {
-        name: nomeCliente,
-        email: cliente.email || 'cobranca@jotaempresas.com',
-        tax_id: taxId,
+      description: `Parcela ${parcela.numero_parcela} - ${parcela.admin_contas_receber.descricao}`,
+      amount: {
+        value: Math.round(valorFinal * 100),
+        currency: 'BRL'
       },
-      customer_modifiable: true,
-      items: [{
-        name: `Parcela ${parcela.numero_parcela} - ${parcela.admin_contas_receber.descricao}${diasAtraso > 0 ? ` (${diasAtraso} dias atraso)` : ''}`,
-        quantity: 1,
-        unit_amount: Math.round(valorFinal * 100),
-      }],
-      payment_methods: [
-        { type: 'PIX' },
-        { type: 'BOLETO' },
-        { type: 'CREDIT_CARD', brands: ['VISA', 'MASTERCARD', 'ELO', 'AMEX', 'HIPERCARD'] },
-      ],
-      notification_urls: [webhookUrl],
+      payment_method: {
+        type: 'BOLETO',
+        boleto: {
+          due_date: parcela.data_vencimento,
+          instruction_lines: {
+            line_1: instrucoes[0],
+            line_2: instrucoes[1]
+          },
+          holder: {
+            name: nomeCliente,
+            tax_id: taxId,
+            email: cliente.email || 'cobranca@jotaempresas.com',
+            address: {
+              street: cliente.endereco || 'Rua Principal',
+              number: cliente.numero || 'S/N',
+              complement: cliente.complemento || '',
+              locality: cliente.bairro || 'Centro',
+              city: cliente.cidade || 'São Paulo',
+              region_code: cliente.estado || 'SP',
+              country: 'BRA',
+              postal_code: (cliente.cep || '').replace(/\D/g, '') || '00000000'
+            }
+          }
+        }
+      },
+      notification_urls: [webhookUrl]
     };
 
-    // 5. Executar Chamada
-    const response = await fetch(`${baseUrl}/checkouts`, {
+    console.log(`[generate-pagbank-boleto] Chamando API: ${baseUrl}/charges`);
+
+    // 8. Executar chamada API
+    const response = await fetch(`${baseUrl}/charges`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify(checkoutRequest),
+      body: JSON.stringify(chargeRequest),
     });
 
     const responseText = await response.text();
 
     if (!response.ok) {
-      console.error(`[create-pagbank-checkout] Error ${response.status}:`, responseText);
+      console.error(`[generate-pagbank-boleto] Error ${response.status}:`, responseText);
       throw new Error(`PagBank (${response.status}): ${responseText}`);
     }
 
-    const checkoutResponse = JSON.parse(responseText);
-    const payLink = checkoutResponse.links?.find((l: any) => l.rel === 'PAY')?.href || '';
+    const chargeResponse = JSON.parse(responseText);
+    
+    const boletoData = chargeResponse.payment_method?.boleto;
+    const barcode = boletoData?.barcode || '';
+    const formattedBarcode = boletoData?.formatted_barcode || '';
+    const pdfLink = chargeResponse.links?.find((l: any) => l.rel === 'PAY')?.href || '';
 
-    console.log(`[create-pagbank-checkout] ✅ Checkout criado com sucesso!`);
-    console.log(`[create-pagbank-checkout] - ID: ${checkoutResponse.id}`);
-    console.log(`[create-pagbank-checkout] - Reference: PARCELA_${parcela_id}`);
-    console.log(`[create-pagbank-checkout] - Link: ${payLink}`);
-    console.log(`[create-pagbank-checkout] - Expira em: ${expirationDate}`);
-    console.log(`[create-pagbank-checkout] - Dias configurados: ${diasExpiracao}`);
+    console.log(`[generate-pagbank-boleto] ✅ Boleto gerado com sucesso!`);
+    console.log(`[generate-pagbank-boleto] - ID: ${chargeResponse.id}`);
+    console.log(`[generate-pagbank-boleto] - Código de barras: ${formattedBarcode}`);
+    console.log(`[generate-pagbank-boleto] - PDF: ${pdfLink}`);
 
-    // Salvar no banco
+    // 9. Salvar no banco
     await supabaseAdmin
       .from('admin_parcelas_receber')
       .update({
-        pagbank_checkout_id: checkoutResponse.id,
-        pagbank_checkout_link: payLink,
-        pagbank_link_expira_em: expirationDate,
+        pagbank_charge_id: chargeResponse.id,
+        pagbank_boleto_barcode: formattedBarcode,
+        pagbank_boleto_pdf: pdfLink,
         pagbank_status: 'WAITING',
         pagbank_updated_at: new Date().toISOString(),
+        valor_original: parcela.valor_parcela,
+        valor_multa: valorMulta,
+        valor_juros: valorJuros,
+        dias_atraso: diasAtraso,
+        data_calculo_juros: diasAtraso > 0 ? new Date().toISOString() : null
       })
       .eq('id', parcela_id);
 
-    // Log de criação
+    // 10. Log de criação
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
       proprietario_id: admin_id,
       transaction_type: 'payment',
-      pagbank_id: checkoutResponse.id,
+      pagbank_id: chargeResponse.id,
       reference_id: `PARCELA_${parcela_id}`,
       status: 'WAITING',
-      amount: parcela.valor_parcela,
-      request_payload: checkoutRequest,
-      response_payload: checkoutResponse,
+      amount: valorFinal,
+      request_payload: chargeRequest,
+      response_payload: chargeResponse,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        checkout_id: checkoutResponse.id,
-        checkout_link: payLink,
-        cliente: { nome: nomeCliente, email: cliente.email, telefone: cliente.telefone },
+        charge_id: chargeResponse.id,
+        barcode: formattedBarcode,
+        pdf_link: pdfLink,
+        valor_original: parcela.valor_parcela,
+        valor_multa: valorMulta,
+        valor_juros: valorJuros,
+        valor_total: valorFinal,
+        dias_atraso: diasAtraso
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error: any) {
-    console.error('[create-pagbank-checkout] Fatal Error:', error.message);
+    console.error('[generate-pagbank-boleto] Fatal Error:', error.message);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
