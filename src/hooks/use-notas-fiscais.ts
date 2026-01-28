@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 interface NotasFiscaisHook {
     parcelasParaNF: ParcelaNF[];
-    notasFiscais: NotaFiscal[];
+    notasFiscais: Record<string, NotaFiscal>; // ALTERADO PARA MAPA
     configNF: NFConfig | null;
     carregando: boolean;
     loadingConfig: boolean;
@@ -27,7 +27,7 @@ export function useNotasFiscais(
 ): NotasFiscaisHook {
     const { ownerId, ownerType } = useOwner();
     const [parcelasParaNF, setParcelasParaNF] = useState<ParcelaNF[]>([]);
-    const [notasFiscais, setNotasFiscais] = useState<NotaFiscal[]>([]);
+    const [notasFiscais, setNotasFiscais] = useState<Record<string, NotaFiscal>>({}); // INICIALIZADO COMO OBJETO
     const [configNF, setConfigNF] = useState<NFConfig | null>(null);
     const [carregando, setCarregando] = useState(true);
     const [loadingConfig, setLoadingConfig] = useState(true);
@@ -66,7 +66,7 @@ export function useNotasFiscais(
         const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
         const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
 
-        try { // <-- ABRINDO O BLOCO TRY
+        try {
             // 1. Buscar todas as parcelas PAGAS
             let parcelasQuery = supabase
                 .from(tabelaParcelas)
@@ -119,11 +119,12 @@ export function useNotasFiscais(
             const { data: notasData, error: nError } = await notasQuery;
             if (nError) throw nError;
 
+            // CRÍTICO: Mapear notas para um objeto (mapa)
             const notasMap = (notasData || []).reduce((acc, nf) => {
                 acc[nf.parcela_id] = nf;
                 return acc;
             }, {} as Record<string, NotaFiscal>);
-            setNotasFiscais(notasMap as any);
+            setNotasFiscais(notasMap); // SALVANDO COMO MAPA
 
             // 3. Mapear e filtrar as parcelas
             let finalParcelas: ParcelaNF[] = [];
@@ -154,6 +155,7 @@ export function useNotasFiscais(
                     id: p.id,
                     valor_parcela: p.valor_parcela,
                     data_pagamento: p.data_pagamento,
+                    data_vencimento: p.data_vencimento,
                     descricao_conta: descricao,
                     cliente_id: contaReceber?.cliente_id,
                     cliente_nome: clienteNome,
@@ -164,7 +166,7 @@ export function useNotasFiscais(
 
             setParcelasParaNF(finalParcelas);
 
-        } catch (error) { // <-- FECHANDO O BLOCO TRY E ABRINDO O CATCH
+        } catch (error) {
             console.error('Erro ao buscar dados de NF:', error);
             showError('Falha ao carregar dados de Notas Fiscais: ' + (error as Error).message);
             setParcelasParaNF([]);

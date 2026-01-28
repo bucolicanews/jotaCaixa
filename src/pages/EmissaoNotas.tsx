@@ -32,7 +32,9 @@ const EmissaoNotas: React.FC = () => {
         carregando, 
         refetch, 
         configNF, 
-        loadingConfig 
+        loadingConfig,
+        handleUploadNF,
+        handleSendNF,
     } = useNotasFiscais(filtroPeriodo, filtroStatus, filtroTextoDebounced);
 
     const canAccessPage = ['Admin', 'Cliente'].includes(role) || (perfil as any)?.permissoes?.contas_receber === true;
@@ -139,9 +141,11 @@ const EmissaoNotas: React.FC = () => {
                                 <NotaFiscalCard
                                     key={parcela.id}
                                     parcela={parcela}
-                                    notaFiscal={notasFiscais.find(nf => nf.parcela_id === parcela.id)}
+                                    notaFiscal={notasFiscais[parcela.id]} // CORREÇÃO AQUI: Acessando o mapa pela chave
                                     configNF={configNF}
                                     onUpdate={refetch}
+                                    handleUploadNF={handleUploadNF}
+                                    handleSendNF={handleSendNF}
                                 />
                             ))
                         )}
