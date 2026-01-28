@@ -12,7 +12,8 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'; // IMPORT ADICIONADO
+} from '@/components/ui/dropdown-menu';
+import NotaFiscalInlineEditor from './NotaFiscalInlineEditor'; // NOVO IMPORT
 
 interface NotaFiscalListViewProps {
     parcelasParaNF: ParcelaNF[];
@@ -29,38 +30,11 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
     notasFiscais,
     configNF,
     carregando,
+    handleUploadNF,
     handleSendNF,
     onUpdate,
 }) => {
     
-    const [sending, setSending] = React.useState<string | null>(null);
-
-    const getStatusBadge = (nota: NotaFiscal | undefined) => {
-        if (!nota) return <Badge variant="warning">Pendente Emissão</Badge>;
-        
-        switch (nota.status) {
-            case 'Nota Emitida':
-                if (nota.enviado_email || nota.enviado_whatsapp) {
-                    return <Badge variant="default">Enviada Parcial</Badge>;
-                }
-                return <Badge variant="default">Emitida</Badge>;
-            case 'Enviada Cliente':
-                return <Badge variant="secondary">Aguardando Confirmação</Badge>; // Status Intermediário
-            case 'Enviada com Sucesso':
-                return <Badge variant="success">Enviada com Sucesso</Badge>;
-            case 'Erro Envio':
-                return <Badge variant="destructive">Erro Envio</Badge>;
-            default:
-                return <Badge variant="warning">Pendente Emissão</Badge>;
-        }
-    };
-
-    const handleSend = async (nota: NotaFiscal, tipo: 'whatsapp' | 'email' | 'webhook') => {
-        setSending(nota.id + tipo);
-        await handleSendNF(nota, tipo);
-        setSending(null);
-    };
-
     if (carregando) {
         return (
             <div className="flex justify-center items-center h-32">
@@ -75,25 +49,25 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                 <TableHeader>
                     <TableRow>
                         <TableHead className="w-[150px]">Cliente</TableHead>
-                        <TableHead className="w-[100px]">Nº NF</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Pagamento</TableHead>
-                        <TableHead className="w-[120px]">Status</TableHead>
-                        <TableHead className="w-[150px] text-right">Ações</TableHead>
+                        <TableHead className="w-[100px]">Nº NF</TableHead>
+                        <TableHead className="w-[120px]">Emissão</TableHead>
+                        <TableHead className="w-[120px]">Anexo/Upload</TableHead>
+                        <TableHead className="w-[100px] text-center">Status</TableHead>
+                        <TableHead className="w-[150px] text-right">Envio</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {parcelasParaNF.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                            <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
                                 Nenhuma parcela paga encontrada.
                             </TableCell>
                         </TableRow>
                     ) : (
                         parcelasParaNF.map((parcela) => {
                             const nota = notasFiscais[parcela.id];
-                            const isNFEmitted = !!nota?.anexo_url;
-                            const isWebhookConfigured = !!configNF?.webhook_n8n_url;
 
                             return (
                                 <TableRow key={parcela.id}>
@@ -101,56 +75,18 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                                         {parcela.cliente_nome}
                                         {nota?.editada && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}
                                     </TableCell>
-                                    <TableCell className="font-mono text-xs">{nota?.numero_nota || '-'}</TableCell>
                                     <TableCell className="font-semibold">{formatCurrency(parcela.valor_parcela)}</TableCell>
                                     <TableCell className="text-sm">{formatarData(parcela.data_pagamento)}</TableCell>
-                                    <TableCell>{getStatusBadge(nota)}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end space-x-1">
-                                            {isNFEmitted && (
-                                                <>
-                                                    <Button variant="ghost" size="icon" onClick={() => window.open(nota!.anexo_url!, '_blank')} title="Visualizar Anexo">
-                                                        <Eye className="w-4 h-4" />
-                                                    </Button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" title="Enviar NF">
-                                                                <Send className="w-4 h-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem 
-                                                                onClick={() => handleSend(nota!, 'whatsapp')} 
-                                                                disabled={!parcela.cliente_telefone || sending === nota!.id + 'whatsapp'}
-                                                                className={cn(!nota!.enviado_whatsapp && "bg-green-500/10 text-green-700")}
-                                                            >
-                                                                <MessageSquare className="w-4 h-4 mr-2" /> WhatsApp
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem 
-                                                                onClick={() => handleSend(nota!, 'email')} 
-                                                                disabled={!parcela.cliente_email || sending === nota!.id + 'email'}
-                                                                className={cn(!nota!.enviado_email && "bg-orange-500/10 text-orange-700")}
-                                                            >
-                                                                <Mail className="w-4 h-4 mr-2" /> Email
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem 
-                                                                onClick={() => handleSend(nota!, 'webhook')} 
-                                                                disabled={!isWebhookConfigured || sending === nota!.id + 'webhook'}
-                                                                className={cn("bg-blue-500/10 text-blue-700")}
-                                                            >
-                                                                <Link className="w-4 h-4 mr-2" /> Webhook N8N
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </>
-                                            )}
-                                            {!isNFEmitted && (
-                                                <Button variant="secondary" size="sm" onClick={() => toast.info('Use a visualização em Card para anexar a NF.')}>
-                                                    Anexar NF
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
+                                    
+                                    {/* Componente de Edição Inline */}
+                                    <NotaFiscalInlineEditor
+                                        parcela={parcela}
+                                        notaFiscal={nota}
+                                        configNF={configNF}
+                                        onUpdate={onUpdate}
+                                        handleUploadNF={handleUploadNF}
+                                        handleSendNF={handleSendNF}
+                                    />
                                 </TableRow>
                             );
                         })

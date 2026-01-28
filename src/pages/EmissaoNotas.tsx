@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Receipt, Filter, Search, AlertTriangle, LayoutGrid, List } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
 import { useDebounce } from '@/hooks/use-debounce';
-import { formatCurrency, formatarData } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { useNotasFiscais } from '@/hooks/use-notas-fiscais'; // NOVO HOOK
-import NotaFiscalCard from '@/components/notas-fiscais/NotaFiscalCard'; // NOVO COMPONENTE
 import NotaFiscalListView from '@/components/notas-fiscais/NotaFiscalListView'; // NOVO COMPONENTE
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -27,7 +25,7 @@ const EmissaoNotas: React.FC = () => {
     const [filtroStatus, setFiltroStatus] = useState('pendente');
     const [filtroTexto, setFiltroTexto] = useState('');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
-    const [viewMode, setViewMode] = useState<'card' | 'list'>('card'); // NOVO ESTADO
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('list'); // ALTERADO: Padrão para 'list'
 
     const { 
         parcelasParaNF, 
