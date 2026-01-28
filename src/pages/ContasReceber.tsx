@@ -24,6 +24,7 @@ import SetupBlocker from '@/components/SetupBlocker';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
 import { GerarLinkPagBankDialog } from '@/components/contas-receber/GerarLinkPagBankDialog';
+import { GerarPixDialog } from '@/components/contas-receber/GerarPixDialog';
 import { VisualizarLinkPagBankDialog } from '@/components/contas-receber/VisualizarLinkPagBankDialog';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarBoletoDialog } from '@/components/contas-receber/VisualizarBoletoDialog';
@@ -78,8 +79,10 @@ const ContasReceber = () => {
   const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
   const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
   const [pagbankDialogOpen, setPagbankDialogOpen] = useState(false);
+  const [pixDialogOpen, setPixDialogOpen] = useState(false);
   const [visualizarPagbankDialogOpen, setVisualizarPagbankDialogOpen] = useState(false);
   const [selectedParcela, setSelectedParcela] = useState<any>(null);
+  const [selectedPaymentType, setSelectedPaymentType] = useState<'pix' | 'checkout' | null>(null);
   const [modalMapeamentoExtratoOpen, setModalMapeamentoExtratoOpen] = useState(false);
   const [parcelaParaMapear, setParcelaParaMapear] = useState<ExtendedParcelaDetalhada | null>(null);
   const [transacoesExtratoDisponiveis, setTransacoesExtratoDisponiveis] = useState<TransacaoExtratoCandidata[]>([]);
@@ -495,6 +498,17 @@ const ContasReceber = () => {
     }
   }, [buscarDados]);
 
+  const handleGerarLinkPagBank = (parcela: any, paymentType?: 'pix' | 'checkout') => {
+    setSelectedParcela(parcela);
+    
+    if (paymentType === 'pix') {
+      setPixDialogOpen(true);
+    } else {
+      setSelectedPaymentType(paymentType || null);
+      setPagbankDialogOpen(true);
+    }
+  };
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => formatarData(dateString);
   
@@ -727,10 +741,7 @@ const ContasReceber = () => {
             formatCurrency={formatCurrency}
             formatDate={formatDate}
             getBadgeVariant={getBadgeVariant}
-            onGerarLinkPagBank={(parcela) => {
-              setSelectedParcela(parcela);
-              setPagbankDialogOpen(true);
-            }}
+            onGerarLinkPagBank={handleGerarLinkPagBank}
             onVisualizarLinkPagBank={(parcela) => {
               setSelectedParcela(parcela);
               setVisualizarPagbankDialogOpen(true);
@@ -797,13 +808,32 @@ const ContasReceber = () => {
       {selectedParcela && (
         <GerarLinkPagBankDialog
           open={pagbankDialogOpen}
-          onOpenChange={setPagbankDialogOpen}
+          onOpenChange={(open) => {
+            setPagbankDialogOpen(open);
+            if (!open) setSelectedPaymentType(null); // Limpa ao fechar
+          }}
+          parcelaId={selectedParcela.id}
+          valorParcela={selectedParcela.valor_parcela}
+          descricao={selectedParcela.contas_receber?.descricao || ''}
+          initialPaymentType={selectedPaymentType}
+          onSuccess={() => {
+            setPagbankDialogOpen(false);
+            setSelectedPaymentType(null);
+            buscarDados();
+          }}
+        />
+      )}
+      
+      {selectedParcela && (
+        <GerarPixDialog
+          open={pixDialogOpen}
+          onOpenChange={setPixDialogOpen}
           parcelaId={selectedParcela.id}
           valorParcela={selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
           onSuccess={() => {
-            setPagbankDialogOpen(false);
-            buscarDados();
+            buscarDados(); // Atualiza a lista em background
+            // NÃO fecha o modal para o usuário poder ver o resultado
           }}
         />
       )}

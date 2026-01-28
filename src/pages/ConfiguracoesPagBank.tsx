@@ -36,6 +36,8 @@ export default function ConfiguracoesPagBank() {
     ambiente: 'sandbox',
     webhook_url: `${BASE_URL}/api/pagbank-webhook`,
     whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
+    whatsapp_template_pix: 'Olá {nome}!\n\n📱 Clique no link abaixo para pagar via PIX:\n\n{codigo_pix}\n\n💰 Valor: {valor}\n📅 Vencimento: {vencimento}\n⏰ Válido até: {expiracao}',
+    whatsapp_template_link: 'Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}',
     aplica_juros_multa: true,
     percentual_multa: 2.0,
     percentual_juros_mes: 1.0,
@@ -74,12 +76,16 @@ export default function ConfiguracoesPagBank() {
             ...configRes.data,
             webhook_url: configRes.data.webhook_url || `${BASE_URL}/api/pagbank-webhook`,
             whatsapp_template: configRes.data.whatsapp_template || 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
+            whatsapp_template_pix: configRes.data.whatsapp_template_pix || 'Olá {nome}!\n\n📱 Clique no link abaixo para pagar via PIX:\n\n{codigo_pix}\n\n💰 Valor: {valor}\n📅 Vencimento: {vencimento}\n⏰ Válido até: {expiracao}',
+            whatsapp_template_link: configRes.data.whatsapp_template_link || 'Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}',
         });
       } else {
         setConfig(prev => ({
             ...prev,
             webhook_url: `${BASE_URL}/api/pagbank-webhook`,
             whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
+            whatsapp_template_pix: 'Olá {nome}!\n\n📱 Clique no link abaixo para pagar via PIX:\n\n{codigo_pix}\n\n💰 Valor: {valor}\n📅 Vencimento: {vencimento}\n⏰ Válido até: {expiracao}',
+            whatsapp_template_link: 'Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}',
         }));
       }
 
@@ -229,10 +235,57 @@ export default function ConfiguracoesPagBank() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-primary" /> Template WhatsApp
+                            <MessageSquare className="w-5 h-5 text-primary" /> Templates WhatsApp
                         </CardTitle>
                         <CardDescription>
-                            Personalize a mensagem enviada ao cliente. Use as tags: <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{link}'}</code>.
+                            Personalize as mensagens enviadas aos clientes para PIX e Link de pagamento.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="whatsappTemplatePix">Template PIX</Label>
+                            <Textarea
+                                id="whatsappTemplatePix"
+                                rows={6}
+                                value={config.whatsapp_template_pix || ''}
+                                onChange={(e) => setConfig({ ...config, whatsapp_template_pix: e.target.value })}
+                                placeholder="Olá {nome}!&#10;&#10;Segue o PIX para pagamento:&#10;💰 Valor: {valor}&#10;&#10;📱 Código PIX (Copie e Cole no seu banco):&#10;{codigo_pix}"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                <strong>Tags disponíveis:</strong> <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{codigo_pix}'}</code> (link clicável no celular), <code>{'{vencimento}'}</code>, <code>{'{expiracao}'}</code>
+                            </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="whatsappTemplateLink">Template Link de Pagamento</Label>
+                            <Textarea
+                                id="whatsappTemplateLink"
+                                rows={5}
+                                value={config.whatsapp_template_link || ''}
+                                onChange={(e) => setConfig({ ...config, whatsapp_template_link: e.target.value })}
+                                placeholder="Olá {nome}!&#10;&#10;Segue o link para pagamento:&#10;💰 Valor: {valor}&#10;&#10;🔗 {link}"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                <strong>Tags disponíveis:</strong> <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{link}'}</code>, <code>{'{expiracao}'}</code>
+                            </p>
+                        </div>
+                        
+                        <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200">
+                            <Info className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-xs text-blue-700 dark:text-blue-500">
+                                O template antigo (<code>whatsapp_template</code>) ainda está disponível para compatibilidade, mas recomendamos usar os templates específicos para PIX e Link.
+                            </AlertDescription>
+                        </Alert>
+                    </CardContent>
+                </Card>
+                
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <MessageSquare className="w-5 h-5 text-primary" /> Template WhatsApp (Legado)
+                        </CardTitle>
+                        <CardDescription>
+                            Template genérico mantido para compatibilidade. Use os templates específicos acima.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

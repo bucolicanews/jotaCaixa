@@ -1,0 +1,243 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Copy, Check, QrCode as QrCodeIcon, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface ParcelaData {
+  valor_parcela: number;
+  data_vencimento: string;
+  pagbank_qr_code: string | null;
+  pagbank_qr_code_text: string | null;
+  pagbank_status: string | null;
+  pagbank_link_expira_em: string | null;
+  admin_contas_receber: {
+    descricao: string;
+  } | null;
+}
+
+export default function PagamentoPix() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [parcela, setParcela] = useState<ParcelaData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (id) buscarParcela();
+  }, [id]);
+  
+  const buscarParcela = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { data, error: fetchError } = await supabase
+        .from('admin_parcelas_receber')
+        .select(`
+          valor_parcela,
+          data_vencimento,
+          pagbank_qr_code,
+          pagbank_qr_code_text,
+          pagbank_status,
+          pagbank_link_expira_em,
+          admin_contas_receber!inner (descricao)
+        `)
+        .eq('id', id)
+        .single();
+      
+      if (fetchError || !data) {
+        setError('Cobrança não encontrada');
+        return;
+      }
+      
+      setParcela(data);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao buscar cobrança');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const copiarCodigo = async () => {
+    if (!parcela?.pagbank_qr_code_text) return;
+    
+    try {
+      await navigator.clipboard.writeText(parcela.pagbank_qr_code_text);
+      setCopied(true);
+      toast.success('Código PIX copiado!', {
+        description: 'Cole no app do seu banco para pagar'
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error('Erro ao copiar código');
+    }
+  };
+  
+  const isExpired = () => {
+    if (!parcela?.pagbank_link_expira_em) return false;
+    return new Date(parcela.pagbank_link_expira_em) < new Date();
+  };
+  
+  const isPaid = () => {
+    return parcela?.pagbank_status === 'PAID';
+  };
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-green-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-4">
+          <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto" />
+          <p className="text-gray-600">Carregando informações...</p>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (error || !parcela) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-red-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-600 mx-auto" />
+          <h1 className="text-2xl font-bold text-red-700">Erro</h1>
+          <p className="text-gray-600">{error || 'Cobrança não encontrada'}</p>
+          <Button onClick={() => navigate('/')} variant="outline">
+            Voltar ao início
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (isPaid()) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-green-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-4">
+          <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto" />
+          <h1 className="text-2xl font-bold text-green-700">Pagamento Confirmado!</h1>
+          <p className="text-gray-600">Esta cobrança já foi paga.</p>
+          <div className="text-sm text-gray-500 pt-4 border-t">
+            <p className="font-semibold">Valor pago:</p>
+            <p className="text-2xl font-bold text-green-600">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor_parcela)}
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (isExpired()) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-amber-600 mx-auto" />
+          <h1 className="text-2xl font-bold text-amber-700">PIX Expirado</h1>
+          <p className="text-gray-600">O prazo para pagamento deste PIX já expirou.</p>
+          <p className="text-sm text-gray-500">Entre em contato para gerar um novo código.</p>
+        </Card>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-green-50 to-white p-4 py-8">
+      <Card className="max-w-md mx-auto p-6 space-y-6 shadow-lg">
+        <div className="text-center space-y-2">
+          <QrCodeIcon className="w-12 h-12 text-green-600 mx-auto" />
+          <h1 className="text-2xl font-bold text-green-700">Pagamento PIX</h1>
+          {parcela.admin_contas_receber?.descricao && (
+            <p className="text-sm text-gray-600">{parcela.admin_contas_receber.descricao}</p>
+          )}
+        </div>
+        
+        {parcela.pagbank_qr_code && (
+          <div className="flex justify-center py-4">
+            <div className="bg-white p-4 rounded-lg border-4 border-green-500 shadow-md">
+              <img 
+                src={parcela.pagbank_qr_code} 
+                alt="QR Code PIX"
+                className="w-64 h-64 object-contain"
+              />
+            </div>
+          </div>
+        )}
+        
+        <div className="space-y-3 text-center bg-green-50 p-4 rounded-lg border border-green-200">
+          <p className="text-sm font-semibold text-gray-700">Valor a pagar:</p>
+          <p className="text-4xl font-bold text-green-600">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor_parcela)}
+          </p>
+          <p className="text-sm text-gray-600">
+            Vencimento: {new Date(parcela.data_vencimento).toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric'
+            })}
+          </p>
+          {parcela.pagbank_link_expira_em && (
+            <p className="text-xs text-amber-600 font-semibold">
+              PIX válido até: {new Date(parcela.pagbank_link_expira_em).toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+          )}
+        </div>
+        
+        {parcela.pagbank_qr_code_text && (
+          <>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Código PIX (Copia e Cola):</p>
+              <div className="bg-gray-100 p-3 rounded-lg border border-gray-300 max-h-24 overflow-y-auto">
+                <p className="break-all text-xs font-mono text-gray-700">
+                  {parcela.pagbank_qr_code_text}
+                </p>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={copiarCodigo}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+              size="lg"
+            >
+              {copied ? (
+                <>
+                  <Check className="mr-2 w-5 h-5" /> Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 w-5 h-5" /> Copiar Código PIX
+                </>
+              )}
+            </Button>
+          </>
+        )}
+        
+        <Alert className="bg-blue-50 border-blue-200">
+          <AlertDescription className="text-sm text-gray-700">
+            <p className="font-semibold mb-2">📱 Como pagar:</p>
+            <ol className="list-decimal list-inside space-y-1.5 text-sm">
+              <li>Clique em "Copiar Código PIX"</li>
+              <li>Abra o app do seu banco</li>
+              <li>Escolha PIX → Copia e Cola</li>
+              <li>Cole o código e confirme o pagamento</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
+        
+        <div className="text-xs text-center text-gray-500 pt-4 border-t">
+          <p>Pagamento 100% seguro via PagBank</p>
+        </div>
+      </Card>
+    </div>
+  );
+}

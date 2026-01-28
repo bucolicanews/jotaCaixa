@@ -64,6 +64,7 @@ import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExt
 import GerenciarConfiguracoesExtrato from "./pages/GerenciarConfiguracoesExtrato";
 import Mapeamento from "./pages/Mapeamento";
 import ConfiguracoesPagBank from "./pages/ConfiguracoesPagBank";
+import PagamentoPix from "./pages/PagamentoPix";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GlobalHandlers from "@/components/GlobalHandlers";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -102,6 +103,9 @@ const App = () => (
               <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
               <Route path="/contrato-link/:id" element={<ContratoLinkPage />} />
               <Route path="/protocolo/confirmar/:id" element={<ConfirmarRecebimento />} />
+              
+              {/* Rota Pública: Pagamento PIX */}
+              <Route path="/pix/:id" element={<PagamentoPix />} />
               
               {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             

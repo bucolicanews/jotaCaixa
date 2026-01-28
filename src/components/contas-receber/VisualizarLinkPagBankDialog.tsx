@@ -52,7 +52,8 @@ export function VisualizarLinkPagBankDialog({
   const [manualOrderId, setManualOrderId] = useState('');
   const [regenerating, setRegenerating] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
-  const [whatsappTemplate, setWhatsappTemplate] = useState('Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}');
+  const [whatsappTemplatePix, setWhatsappTemplatePix] = useState('Olá {nome}!\n\nSegue o PIX para pagamento:\n💰 Valor: {valor}\n\n📱 Código PIX (Copie e Cole no seu banco):\n{codigo_pix}');
+  const [whatsappTemplateLink, setWhatsappTemplateLink] = useState('Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}');
   const [confirmForceDialog, setConfirmForceDialog] = useState<{
     open: boolean;
     status?: string;
@@ -63,7 +64,7 @@ export function VisualizarLinkPagBankDialog({
     manualInput?: boolean;
   } | null>(null);
 
-  const linkToUse = checkoutLink || paymentLink;
+  const linkToUse = paymentLink || checkoutLink;
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -71,12 +72,15 @@ export function VisualizarLinkPagBankDialog({
       
       const { data } = await supabase
         .from('configuracoes_pagbank')
-        .select('whatsapp_template')
+        .select('whatsapp_template_pix, whatsapp_template_link')
         .eq('proprietario_id', ownerId)
         .maybeSingle();
         
-      if (data?.whatsapp_template) {
-        setWhatsappTemplate(data.whatsapp_template);
+      if (data?.whatsapp_template_pix) {
+        setWhatsappTemplatePix(data.whatsapp_template_pix);
+      }
+      if (data?.whatsapp_template_link) {
+        setWhatsappTemplateLink(data.whatsapp_template_link);
       }
     };
     
@@ -296,13 +300,13 @@ export function VisualizarLinkPagBankDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:w-full sm:max-w-[500px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Link de Pagamento PagBank</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Link de Pagamento PagBank</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               Valor: R$ {valorParcela.toFixed(2)} - {descricao}
               {linkExpiraEm && (
-                <div className="text-xs text-muted-foreground mt-1">
+                <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                   Link válido até: {new Date(linkExpiraEm).toLocaleDateString('pt-BR', {
                     day: '2-digit',
                     month: '2-digit',
@@ -315,11 +319,11 @@ export function VisualizarLinkPagBankDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Status e Sync Automático */}
-            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 p-3 border rounded-lg bg-muted/30">
               <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Status:</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">Status:</span>
                   {linkExpiraEm && new Date(linkExpiraEm) < new Date() ? (
                     <Badge variant="destructive" className="flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
@@ -345,10 +349,10 @@ export function VisualizarLinkPagBankDialog({
 
             {/* Botão Regenerar Link */}
             <div className="p-3 border border-blue-200 rounded-lg bg-blue-50/50">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div>
-                  <Label className="text-xs font-bold text-blue-800">Regenerar Link</Label>
-                  <p className="text-[10px] text-blue-700 mt-0.5">
+                  <Label className="text-xs sm:text-sm font-bold text-blue-800">Regenerar Link</Label>
+                  <p className="text-[10px] sm:text-xs text-blue-700 mt-0.5">
                     {linkExpiraEm && new Date(linkExpiraEm) < new Date() 
                       ? 'Link expirado! Gere um novo.' 
                       : 'Crie um novo link com prazo renovado'}
@@ -359,7 +363,7 @@ export function VisualizarLinkPagBankDialog({
                   size="sm"
                   onClick={() => setShowRegenerateConfirm(true)}
                   disabled={regenerating || status === 'PAID'}
-                  className="h-8 text-xs"
+                  className="h-8 text-xs w-full sm:w-auto"
                 >
                   {regenerating ? (
                     <Loader2 className="h-3 w-3 animate-spin mr-2" />
@@ -380,7 +384,7 @@ export function VisualizarLinkPagBankDialog({
                     <p className="text-[10px] text-amber-700 leading-tight mb-2">
                         Se o cliente pagou mas o status não mudou, cole o <b>ID da Transação</b> (Ex: ORDE_..., CHAR_..., CHEC_...) abaixo:
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         <Input 
                           placeholder="ID da Transação (Order ID)" 
                           value={manualOrderId}
@@ -392,7 +396,7 @@ export function VisualizarLinkPagBankDialog({
                           variant="warning"
                           onClick={() => handleSyncStatus(manualOrderId)}
                           disabled={syncing || !manualOrderId}
-                          className="h-8 text-xs"
+                          className="h-8 text-xs w-full sm:w-auto whitespace-nowrap"
                         >
                             {syncing && manualOrderId ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Forçar Baixa'}
                         </Button>
@@ -402,8 +406,8 @@ export function VisualizarLinkPagBankDialog({
 
             {qrCode && (
               <div className="flex flex-col items-center space-y-2 py-2">
-                <img src={qrCode} alt="QR Code PIX" className="w-40 h-40 border rounded-lg bg-white p-2" />
-                <Button variant="outline" size="sm" onClick={() => handleCopyLink(qrCodeText || '', 'pix')}>
+                <img src={qrCode} alt="QR Code PIX" className="w-32 h-32 sm:w-40 sm:h-40 border rounded-lg bg-white p-2" />
+                <Button variant="outline" size="sm" onClick={() => handleCopyLink(qrCodeText || '', 'pix')} className="text-xs">
                   {copiedPix ? <Check className="h-3 w-3 mr-2" /> : <QrCode className="h-3 w-3 mr-2" />}
                   Copiar Código PIX
                 </Button>
@@ -413,10 +417,11 @@ export function VisualizarLinkPagBankDialog({
             {linkToUse && (
               <div className="space-y-2">
                 <Label className="text-xs">Link de Checkout</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input readOnly value={linkToUse} className="h-9 text-xs bg-muted truncate" />
-                  <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => handleCopyLink(linkToUse, 'link')}>
+                  <Button size="icon" variant="outline" className="h-9 w-full sm:w-9" onClick={() => handleCopyLink(linkToUse, 'link')}>
                       {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="sm:hidden ml-2">Copiar Link</span>
                   </Button>
                 </div>
               </div>
@@ -424,16 +429,29 @@ export function VisualizarLinkPagBankDialog({
 
             {/* Rodapé de Envio */}
             <div className="border-t pt-4">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button variant="outline" onClick={() => {
                       const telefone = clienteTelefone?.replace(/\D/g, '');
-                      const msg = whatsappTemplate
-                        .replace('{nome}', clienteNome || 'Cliente')
-                        .replace('{valor}', valorParcela.toFixed(2))
-                        .replace('{descricao}', descricao)
-                        .replace('{link}', linkToUse || '');
-                      window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(msg)}`, '_blank');
-                  }} disabled={!clienteTelefone}>
+                      const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorParcela);
+                      
+                      // Se tem QR Code (PIX), usa a URL da página como prioridade
+                      const conteudoPrincipal = (qrCode && paymentLink) ? paymentLink : (linkToUse || qrCodeText || '');
+
+                      // Usa o template de PIX se tiver QR Code, senão usa template de link
+                      const templateParaUsar = qrCode ? whatsappTemplatePix : whatsappTemplateLink;
+                      
+                      const msg = templateParaUsar
+                          .replace(/{nome}/g, clienteNome || 'Cliente')
+                          .replace(/{valor}/g, valorFormatado)
+                          .replace(/{descricao}/g, descricao)
+                          .replace(/{codigo_pix}/g, conteudoPrincipal)
+                          .replace(/{link}/g, conteudoPrincipal)
+                          .replace(/{vencimento}/g, linkExpiraEm ? new Date(linkExpiraEm).toLocaleDateString('pt-BR') : '')
+                          .replace(/{expiracao}/g, linkExpiraEm ? new Date(linkExpiraEm).toLocaleString('pt-BR') : '')
+                          .replace(/\n/g, '%0A');
+                      
+                      window.open(`https://wa.me/55${telefone}?text=${msg}`, '_blank');
+                  }} disabled={!clienteTelefone} className="text-xs sm:text-sm">
                     <Send className="h-4 w-4 mr-2" /> WhatsApp
                   </Button>
                   <Button variant="outline" onClick={async () => {
@@ -443,15 +461,15 @@ export function VisualizarLinkPagBankDialog({
                           if (data.success) toast.success('E-mail enviado!');
                       } catch (e) { toast.error('Falha ao enviar e-mail'); }
                       finally { setSendingEmail(false); }
-                  }} disabled={sendingEmail || !clienteEmail}>
+                  }} disabled={sendingEmail || !clienteEmail} className="text-xs sm:text-sm">
                     {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />} Email
                   </Button>
                 </div>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>Fechar</Button>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

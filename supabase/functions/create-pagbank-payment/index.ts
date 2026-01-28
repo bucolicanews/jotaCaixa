@@ -80,9 +80,30 @@ serve(async (req) => {
     };
 
     if (payment_method === 'pix') {
-      const vcto = new Date();
-      vcto.setDate(vcto.getDate() + 3);
-      chargeRequest.qr_codes = [{ amount: { value: valorEmCentavos }, expiration_date: vcto.toISOString() }];
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      
+      const vencimentoParcela = new Date(parcela.data_vencimento);
+      vencimentoParcela.setHours(23, 59, 59, 999); // Final do dia
+      
+      let dataExpiracao: Date;
+      
+      // Se a parcela ainda não venceu, usa a data de vencimento
+      if (vencimentoParcela > hoje) {
+        dataExpiracao = vencimentoParcela;
+        console.log(`[create-pagbank-payment] Parcela não vencida. Expira em: ${dataExpiracao.toISOString()}`);
+      } else {
+        // Se já venceu, usa 7 dias a partir de hoje (ou configurável)
+        dataExpiracao = new Date(hoje);
+        dataExpiracao.setDate(dataExpiracao.getDate() + 7);
+        dataExpiracao.setHours(23, 59, 59, 999);
+        console.log(`[create-pagbank-payment] Parcela vencida. Expira em D+7: ${dataExpiracao.toISOString()}`);
+      }
+      
+      chargeRequest.qr_codes = [{ 
+        amount: { value: valorEmCentavos }, 
+        expiration_date: dataExpiracao.toISOString() 
+      }];
     }
 
     // 4. Executar PagBank Client
@@ -92,15 +113,26 @@ serve(async (req) => {
     const qrCode = chargeResponse.qr_codes?.[0]?.links?.find((link: any) => link.media === 'image/png')?.href || null;
     const qrCodeText = chargeResponse.qr_codes?.[0]?.text || null;
 
+    // Gerar URL da página de pagamento (apenas para PIX)
+    const pixPaymentPageUrl = payment_method === 'pix' 
+      ? `${Deno.env.get('NEXT_PUBLIC_APP_URL') || 'http://localhost:8080'}/pix/${parcela_id}`
+      : null;
+
     // 5. Salvar no banco
-    await supabaseAdmin.from('admin_parcelas_receber').update({
+    const updateData: any = {
       pagbank_charge_id: chargeResponse.id,
       pagbank_payment_method: payment_method,
       pagbank_status: chargeResponse.status,
-      pagbank_qr_code: qrCode,
-      pagbank_qr_code_text: qrCodeText,
       pagbank_updated_at: new Date().toISOString(),
-    }).eq('id', parcela_id);
+    };
+
+    if (payment_method === 'pix') {
+      updateData.pagbank_qr_code = qrCode;
+      updateData.pagbank_qr_code_text = qrCodeText;
+      updateData.pagbank_payment_link = pixPaymentPageUrl;
+    }
+
+    await supabaseAdmin.from('admin_parcelas_receber').update(updateData).eq('id', parcela_id);
 
     // 6. Log de auditoria
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
@@ -114,13 +146,20 @@ serve(async (req) => {
       response_payload: chargeResponse,
     });
 
-    return new Response(JSON.stringify({ 
+    // 7. Preparar resposta de acordo com o método
+    const responseData: any = { 
       success: true, 
-      charge_id: chargeResponse.id, 
-      qr_code: qrCode, 
-      qr_code_text: qrCodeText,
+      charge_id: chargeResponse.id,
       cliente: { nome: cliente.nome, email: cliente.email, telefone: cliente.telefone }
-    }), {
+    };
+
+    if (payment_method === 'pix') {
+      responseData.qr_code = qrCode;
+      responseData.qr_code_text = qrCodeText;
+      responseData.pix_payment_page_url = pixPaymentPageUrl;
+    }
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {

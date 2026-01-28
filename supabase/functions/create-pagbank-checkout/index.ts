@@ -92,19 +92,8 @@ serve(async (req) => {
 
     if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
 
-    // 2.5. Calcular data de expiração do link
-    const diasExpiracao = config.dias_expiracao_link || 30;
-    
-    // Validar dias de expiração
-    if (diasExpiracao < 1 || diasExpiracao > 365) {
-      throw new Error('dias_expiracao_link deve estar entre 1 e 365 dias');
-    }
-    
-    const dataExpiracao = new Date();
-    dataExpiracao.setDate(dataExpiracao.getDate() + diasExpiracao);
-    const expirationDate = dataExpiracao.toISOString();
-
-    console.log(`[create-pagbank-checkout] Link expira em: ${diasExpiracao} dias (${expirationDate})`);
+    // 2.5. Checkout expira em 24h (limitação do PagBank)
+    console.log('[create-pagbank-checkout] Link de checkout expira em 24h (padrão PagBank)');
 
     // 3. Processar Token e URL
     const rawToken = config.ambiente === 'producao' ? config.token_producao : config.token_sandbox;
@@ -172,7 +161,6 @@ serve(async (req) => {
 
     const checkoutRequest = {
       reference_id: `PARCELA_${parcela_id}`,
-      expiration_date: expirationDate,
       customer: {
         name: nomeCliente,
         email: cliente.email || 'cobranca@jotaempresas.com',
@@ -212,12 +200,15 @@ serve(async (req) => {
     const checkoutResponse = JSON.parse(responseText);
     const payLink = checkoutResponse.links?.find((l: any) => l.rel === 'PAY')?.href || '';
 
+    // Calcular data de expiração (24h a partir de agora)
+    const dataExpiracao24h = new Date();
+    dataExpiracao24h.setHours(dataExpiracao24h.getHours() + 24);
+
     console.log(`[create-pagbank-checkout] ✅ Checkout criado com sucesso!`);
     console.log(`[create-pagbank-checkout] - ID: ${checkoutResponse.id}`);
     console.log(`[create-pagbank-checkout] - Reference: PARCELA_${parcela_id}`);
     console.log(`[create-pagbank-checkout] - Link: ${payLink}`);
-    console.log(`[create-pagbank-checkout] - Expira em: ${expirationDate}`);
-    console.log(`[create-pagbank-checkout] - Dias configurados: ${diasExpiracao}`);
+    console.log(`[create-pagbank-checkout] - Expira em: ${dataExpiracao24h.toISOString()} (24h padrão PagBank)`);
 
     // Salvar no banco
     await supabaseAdmin
@@ -225,7 +216,7 @@ serve(async (req) => {
       .update({
         pagbank_checkout_id: checkoutResponse.id,
         pagbank_checkout_link: payLink,
-        pagbank_link_expira_em: expirationDate,
+        pagbank_link_expira_em: dataExpiracao24h.toISOString(),
         pagbank_status: 'WAITING',
         pagbank_updated_at: new Date().toISOString(),
       })

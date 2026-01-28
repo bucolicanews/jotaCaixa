@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
 
-interface GerarLinkPagBankDialogProps {
+interface GerarPixDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parcelaId: string;
@@ -23,99 +23,78 @@ interface ClienteInfo {
   telefone: string | null;
 }
 
-export function GerarLinkPagBankDialog({
+export function GerarPixDialog({
   open,
   onOpenChange,
   parcelaId,
   valorParcela,
   descricao,
   onSuccess,
-}: GerarLinkPagBankDialogProps) {
+}: GerarPixDialogProps) {
   const { ownerId } = useSessao();
-  const [installments, setInstallments] = useState('1');
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrCodeText, setQrCodeText] = useState<string | null>(null);
+  const [pixPaymentPageUrl, setPixPaymentPageUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
-  const [pixPaymentPageUrl, setPixPaymentPageUrl] = useState<string | null>(null);
 
-  const handleGerarLink = async () => {
-    const functionName = 'create-pagbank-checkout';
-    const body = {
-      parcela_id: parcelaId,
-      admin_id: ownerId,
-    };
-
+  const handleGerarPix = async () => {
     try {
       setLoading(true);
-      
-      // Limpar estados anteriores antes de gerar novo
-      setPaymentLink(null);
-      setPixPaymentPageUrl(null);
 
       if (!ownerId) {
         throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
       }
 
-      const { data, error } = await supabase.functions.invoke(functionName, {
+      const body = {
+        parcela_id: parcelaId,
+        payment_method: 'pix',
+        admin_id: ownerId,
+      };
+
+      const { data, error } = await supabase.functions.invoke('create-pagbank-payment', {
         body,
       });
 
-      console.log('[GerarLinkPagBank] Resposta Bruta:', { data, error });
+      console.log('[GerarPixDialog] Resposta completa:', { data, error });
+      console.log('[GerarPixDialog] data.qr_code:', data?.qr_code);
+      console.log('[GerarPixDialog] data.pix_payment_page_url:', data?.pix_payment_page_url);
 
-      // LOG PARA HOMOLOGAÇÃO PAGBANK
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (SUCESSO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Data:', JSON.stringify(data, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
-
-      if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao gerar link de pagamento');
+      if (error) {
+        console.log('[GerarPixDialog] Erro detectado:', error);
+        throw error;
       }
 
-      toast.success('Link de pagamento gerado com sucesso!');
+      if (!data?.success) {
+        console.log('[GerarPixDialog] Success = false');
+        throw new Error(data?.error || 'Erro ao gerar PIX');
+      }
+
+      console.log('[GerarPixDialog] Sucesso! Atualizando estados...');
       
-      setPaymentLink(data.checkout_link);
+      toast.success('PIX gerado com sucesso!');
+      
+      console.log('[GerarPixDialog] Setando QR Code:', data.qr_code);
+      setQrCode(data.qr_code);
+      
+      console.log('[GerarPixDialog] Setando QR Code Text:', data.qr_code_text);
+      setQrCodeText(data.qr_code_text);
+      
+      console.log('[GerarPixDialog] Setando PIX URL:', data.pix_payment_page_url);
+      setPixPaymentPageUrl(data.pix_payment_page_url);
+      
+      console.log('[GerarPixDialog] Setando Cliente Info:', data.cliente);
       setClienteInfo(data.cliente);
       
-      // Capturar URL do PIX se existir
-      if (data.pix_payment_page_url) {
-        setPixPaymentPageUrl(data.pix_payment_page_url);
-      }
+      console.log('[GerarPixDialog] Todos os estados atualizados!');
       
-      if (onSuccess) {
-        onSuccess();
-      }
+      // NÃO chama onSuccess aqui para evitar que o modal seja fechado
+      // A lista será atualizada quando o usuário fechar o modal manualmente
     } catch (error: any) {
-      console.error('Erro ao gerar link PagBank:', error);
-      let errorMessage = 'Erro ao gerar link de pagamento. Verifique os logs da função.';
-      let errorResponse = null;
-
-      if (error.context && typeof error.context.json === 'function') {
-        try {
-          const errorBody = await error.context.json();
-          errorResponse = errorBody;
-          if (errorBody.error) {
-            errorMessage = errorBody.error;
-          }
-        } catch (e) {
-          // Ignore if JSON parsing fails
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
-      // LOG PARA HOMOLOGAÇÃO PAGBANK (ERRO)
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (ERRO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Error:', JSON.stringify(errorResponse || error, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
-
+      console.error('Erro ao gerar PIX:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao gerar PIX';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -129,7 +108,7 @@ export function GerarLinkPagBankDialog({
       toast.success('Copiado!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      toast.error('Erro ao copiar link');
+      toast.error('Erro ao copiar');
     }
   };
 
@@ -142,16 +121,17 @@ export function GerarLinkPagBankDialog({
     const telefone = clienteInfo.telefone.replace(/\D/g, '');
     const telefoneFormatado = telefone.startsWith('55') ? telefone : `55${telefone}`;
     
-    let mensagem = '';
-    
-    if (pixPaymentPageUrl) {
-      mensagem = `Ola ${clienteInfo.nome}! 👋\n\n📱 *Pagamento PIX Facilitado*\n\n👉 Clique no link para ver o QR Code:\n${pixPaymentPageUrl}\n\n💰 Valor: *R$ ${valorParcela.toFixed(2)}*\n📝 ${descricao}\n\n✅ Rapido, facil e seguro!`;
-    } else if (paymentLink) {
-      mensagem = `Ola ${clienteInfo.nome}!\n\nSegue o link para pagamento:\n💰 Valor: R$ ${valorParcela.toFixed(2)}\n📝 ${descricao}\n\n🔗 ${paymentLink}`;
-    } else {
-      toast.error('Nenhum link de pagamento disponivel');
-      return;
-    }
+    const mensagem = `Ola ${clienteInfo.nome}! 👋
+
+📱 *Pagamento PIX Facilitado*
+
+👉 Clique no link para ver o QR Code e copiar o codigo:
+${pixPaymentPageUrl}
+
+💰 Valor: *R$ ${valorParcela.toFixed(2)}*
+📝 ${descricao}
+
+✅ Rapido, facil e seguro!`;
     
     const url = `https://wa.me/${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
     
@@ -191,36 +171,44 @@ export function GerarLinkPagBankDialog({
   };
 
   const handleClose = () => {
-    setPaymentLink(null);
-    setInstallments('1');
+    setQrCode(null);
+    setQrCodeText(null);
+    setPixPaymentPageUrl(null);
     setCopied(false);
     setClienteInfo(null);
-    setPixPaymentPageUrl(null);
     onOpenChange(false);
+    
+    // Atualiza a lista apenas quando fechar o modal
+    if (onSuccess) {
+      onSuccess();
+    }
   };
 
   const handleReset = () => {
-    setPaymentLink(null);
+    setQrCode(null);
+    setQrCodeText(null);
+    setPixPaymentPageUrl(null);
     setCopied(false);
     setClienteInfo(null);
-    setPixPaymentPageUrl(null);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Gerar Link de Checkout</DialogTitle>
+          <DialogTitle>Gerar Pagamento PIX</DialogTitle>
           <DialogDescription>
             Valor: R$ {valorParcela.toFixed(2)} - {descricao}
           </DialogDescription>
         </DialogHeader>
 
-        {!paymentLink ? (
+        {console.log('[GerarPixDialog] Renderizando. qrCode:', qrCode, 'pixPaymentPageUrl:', pixPaymentPageUrl)}
+        
+        {!qrCode ? (
           <div className="space-y-4 py-4">
-            <Alert className="bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-800">
-                O cliente poderá escolher entre PIX, Boleto ou Cartão de Crédito no checkout.
+            <Alert>
+              <AlertDescription>
+                Será gerado um QR Code PIX e uma página de pagamento para enviar ao cliente.
               </AlertDescription>
             </Alert>
           </div>
@@ -228,52 +216,58 @@ export function GerarLinkPagBankDialog({
           <div className="space-y-4 py-4">
             <Alert className="bg-green-50 border-green-200">
               <AlertDescription className="text-green-800">
-                Link de pagamento gerado com sucesso! Compartilhe com o cliente.
+                PIX gerado com sucesso! Compartilhe com o cliente.
               </AlertDescription>
             </Alert>
 
-            {pixPaymentPageUrl && (
-              <div className="space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <Label className="text-blue-900 font-semibold">🔗 Link de Pagamento PIX</Label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={pixPaymentPageUrl} 
-                    readOnly 
-                    className="flex-1 p-2 border rounded text-sm bg-white"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleCopyLink(pixPaymentPageUrl)}
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-600">Envie este link para o cliente acessar a página de pagamento</p>
+            <div className="space-y-3">
+              <div className="flex justify-center">
+                <img src={qrCode} alt="QR Code PIX" className="w-48 h-48 border rounded-lg" />
               </div>
-            )}
 
-            {paymentLink && (
-            <div className="space-y-2">
-              <Label>Link de Pagamento</Label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={paymentLink} 
-                  readOnly 
-                  className="flex-1 p-2 border rounded text-sm bg-muted"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleCopyLink(paymentLink)}
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
+              {pixPaymentPageUrl && (
+                <div className="space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Label className="text-blue-900 font-semibold">🔗 Link de Pagamento PIX</Label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={pixPaymentPageUrl} 
+                      readOnly 
+                      className="flex-1 p-2 border rounded text-sm bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCopyLink(pixPaymentPageUrl)}
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-600">Envie este link para o cliente</p>
+                </div>
+              )}
+
+              {qrCodeText && (
+                <div className="space-y-2">
+                  <Label>PIX Copia e Cola</Label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={qrCodeText} 
+                      readOnly 
+                      className="flex-1 p-2 border rounded text-sm bg-muted"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCopyLink(qrCodeText)}
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
-            )}
 
             <div className="border-t pt-4">
               <Label className="mb-3 block">Enviar para o Cliente</Label>
@@ -313,14 +307,14 @@ export function GerarLinkPagBankDialog({
         )}
 
         <DialogFooter>
-          {!paymentLink ? (
+          {!qrCode ? (
             <>
               <Button variant="outline" onClick={handleClose} disabled={loading}>
                 Cancelar
               </Button>
-              <Button onClick={handleGerarLink} disabled={loading}>
+              <Button onClick={handleGerarPix} disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Gerar Link
+                Gerar PIX
               </Button>
             </>
           ) : (
