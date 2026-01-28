@@ -136,7 +136,7 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                                                             <DropdownMenuItem 
                                                                 onClick={() => handleSend(nota!, 'webhook')} 
                                                                 disabled={!isWebhookConfigured || sending === nota!.id + 'webhook'}
-                                                                className={cn(!isWebhookConfigured && "bg-blue-500/10 text-blue-700")}
+                                                                className={cn("bg-blue-500/10 text-blue-700")}
                                                             >
                                                                 <Link className="w-4 h-4 mr-2" /> Webhook N8N
                                                             </DropdownMenuItem>
