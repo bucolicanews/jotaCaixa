@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw, Send } from 'lucide-react'; // <-- 'Send' ADICIONADO AQUI
+import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw, Send } from 'lucide-react';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
