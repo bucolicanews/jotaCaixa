@@ -6,6 +6,7 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { v4 as uuidv4 } from 'uuid';
+import { formatCurrency } from '@/utils/formatters'; // Importação adicionada
 
 interface NotasFiscaisHook {
     parcelasParaNF: ParcelaNF[];
