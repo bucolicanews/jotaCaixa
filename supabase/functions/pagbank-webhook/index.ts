@@ -147,6 +147,7 @@ serve(async (req) => {
       data_pagamento: dataPagamento,
       pagbank_status: 'PAID',
       pagbank_charge_id: charge.id,
+      pagbank_transaction_id: charge.id,
       pagbank_updated_at: new Date().toISOString(),
       webhook_processed_at: new Date().toISOString(),
     }).eq('id', parcelaId);

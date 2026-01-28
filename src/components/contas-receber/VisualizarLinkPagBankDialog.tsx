@@ -26,6 +26,7 @@ interface VisualizarLinkPagBankDialogProps {
   clienteTelefone?: string;
   clienteEmail?: string;
   linkExpiraEm?: string | null;
+  pagbankTransactionId?: string | null;
 }
 
 export function VisualizarLinkPagBankDialog({
@@ -43,6 +44,7 @@ export function VisualizarLinkPagBankDialog({
   clienteTelefone,
   clienteEmail,
   linkExpiraEm,
+  pagbankTransactionId,
 }) {
   const { ownerId } = useSessao();
   const [copiedLink, setCopiedLink] = useState(false);
@@ -381,26 +383,49 @@ export function VisualizarLinkPagBankDialog({
                     <Label className="text-xs font-bold text-amber-800 flex items-center gap-1">
                         <Search className="w-3 h-3" /> NÃO CONCILIOU AUTOMATICAMENTE?
                     </Label>
-                    <p className="text-[10px] text-amber-700 leading-tight mb-2">
-                        Se o cliente pagou mas o status não mudou, cole o <b>ID da Transação</b> (Ex: ORDE_..., CHAR_..., CHEC_...) abaixo:
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Input 
-                          placeholder="ID da Transação (Order ID)" 
-                          value={manualOrderId}
-                          onChange={(e) => setManualOrderId(e.target.value)}
-                          className="h-8 text-xs border-amber-300"
-                        />
-                        <Button 
-                          size="sm" 
-                          variant="warning"
-                          onClick={() => handleSyncStatus(manualOrderId)}
-                          disabled={syncing || !manualOrderId}
-                          className="h-8 text-xs w-full sm:w-auto whitespace-nowrap"
-                        >
-                            {syncing && manualOrderId ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Forçar Baixa'}
-                        </Button>
-                    </div>
+                    
+                    {pagbankTransactionId ? (
+                        <div className="p-2 bg-green-50 border border-green-200 rounded">
+                            <Label className="text-xs text-green-800 font-semibold">Código da Transação (Salvo):</Label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <code className="text-xs bg-white px-2 py-1 rounded border flex-1 font-mono">{pagbankTransactionId}</code>
+                                <Button 
+                                    size="icon" 
+                                    variant="outline" 
+                                    className="h-7 w-7" 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(pagbankTransactionId);
+                                        toast.success('Código copiado!');
+                                    }}
+                                >
+                                    <Copy className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-[10px] text-amber-700 leading-tight mb-2">
+                                Se o cliente pagou mas o status não mudou, cole o <b>Código da Transação</b> que aparece no painel do PagBank (ex: 858BDE28-AB82-4599-9536-A1FCAF31C841):
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <Input 
+                                  placeholder="Código da Transação (ex: 858BDE28-AB82...)" 
+                                  value={manualOrderId}
+                                  onChange={(e) => setManualOrderId(e.target.value)}
+                                  className="h-8 text-xs border-amber-300"
+                                />
+                                <Button 
+                                  size="sm" 
+                                  variant="warning"
+                                  onClick={() => handleSyncStatus(manualOrderId)}
+                                  disabled={syncing || !manualOrderId}
+                                  className="h-8 text-xs w-full sm:w-auto whitespace-nowrap"
+                                >
+                                    {syncing && manualOrderId ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Forçar Baixa'}
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 

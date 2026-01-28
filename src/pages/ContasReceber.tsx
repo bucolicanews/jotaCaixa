@@ -854,6 +854,7 @@ const ContasReceber = () => {
           clienteTelefone={selectedParcela.contas_receber?.clientes?.telefone}
           clienteEmail={selectedParcela.contas_receber?.clientes?.email}
           linkExpiraEm={selectedParcela.pagbank_link_expira_em}
+          pagbankTransactionId={selectedParcela.pagbank_transaction_id}
         />
       )}
 
