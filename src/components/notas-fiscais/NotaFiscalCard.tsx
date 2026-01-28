@@ -119,7 +119,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
                     {parcela.cliente_nome}
-                    {isNFEdited && <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Editada</Badge>}
+                    {isNFEdited && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}
                 </CardTitle>
                 {getStatusBadge(notaFiscal)}
             </CardHeader>
@@ -214,8 +214,8 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                             <Button 
                                 onClick={() => handleSend('whatsapp')} 
                                 disabled={sending !== null || !parcela.cliente_telefone}
-                                variant={notaFiscal?.enviado_whatsapp ? 'success' : 'outline'}
-                                className="w-full"
+                                variant={notaFiscal?.enviado_whatsapp ? 'success' : 'default'}
+                                className={cn("w-full", !notaFiscal?.enviado_whatsapp && "bg-green-600 hover:bg-green-700 text-white")}
                             >
                                 {sending === 'whatsapp' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
                                 {notaFiscal?.enviado_whatsapp ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
@@ -224,8 +224,8 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                             <Button 
                                 onClick={() => handleSend('email')} 
                                 disabled={sending !== null || !parcela.cliente_email}
-                                variant={notaFiscal?.enviado_email ? 'success' : 'outline'}
-                                className="w-full"
+                                variant={notaFiscal?.enviado_email ? 'success' : 'default'}
+                                className={cn("w-full", !notaFiscal?.enviado_email && "bg-orange-500 hover:bg-orange-600 text-white")}
                             >
                                 {sending === 'email' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                                 {notaFiscal?.enviado_email ? 'Reenviar Email' : 'Enviar Email'}
@@ -235,7 +235,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                                 onClick={() => handleSend('webhook')} 
                                 disabled={sending !== null || !isWebhookConfigured}
                                 variant={notaFiscal?.status === 'Enviada com Sucesso' ? 'default' : 'secondary'}
-                                className="w-full"
+                                className={cn("w-full", !isWebhookConfigured && "bg-blue-500 hover:bg-blue-600 text-white")}
                             >
                                 {sending === 'webhook' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link className="mr-2 h-4 w-4" />}
                                 Enviar Webhook N8N

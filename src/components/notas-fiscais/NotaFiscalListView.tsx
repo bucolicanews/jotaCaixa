@@ -122,18 +122,21 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                                                             <DropdownMenuItem 
                                                                 onClick={() => handleSend(nota!, 'whatsapp')} 
                                                                 disabled={!parcela.cliente_telefone || sending === nota!.id + 'whatsapp'}
+                                                                className={cn(!nota!.enviado_whatsapp && "bg-green-500/10 text-green-700")}
                                                             >
                                                                 <MessageSquare className="w-4 h-4 mr-2" /> WhatsApp
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem 
                                                                 onClick={() => handleSend(nota!, 'email')} 
                                                                 disabled={!parcela.cliente_email || sending === nota!.id + 'email'}
+                                                                className={cn(!nota!.enviado_email && "bg-orange-500/10 text-orange-700")}
                                                             >
                                                                 <Mail className="w-4 h-4 mr-2" /> Email
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem 
                                                                 onClick={() => handleSend(nota!, 'webhook')} 
                                                                 disabled={!isWebhookConfigured || sending === nota!.id + 'webhook'}
+                                                                className={cn(!isWebhookConfigured && "bg-blue-500/10 text-blue-700")}
                                                             >
                                                                 <Link className="w-4 h-4 mr-2" /> Webhook N8N
                                                             </DropdownMenuItem>
