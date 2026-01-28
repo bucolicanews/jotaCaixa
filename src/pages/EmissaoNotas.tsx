@@ -15,6 +15,7 @@ import { useNotasFiscais } from '@/hooks/use-notas-fiscais'; // NOVO HOOK
 import NotaFiscalCard from '@/components/notas-fiscais/NotaFiscalCard'; // NOVO COMPONENTE
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // <-- IMPORT ADICIONADO
 
 const EmissaoNotas: React.FC = () => {
     const { role, perfil, carregando: carregandoSessao } = useSessao();
