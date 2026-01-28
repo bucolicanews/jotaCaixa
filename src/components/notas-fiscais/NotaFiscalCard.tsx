@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw, Send } from 'lucide-react';
+import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw, Send, Edit } from 'lucide-react';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { cn } from '@/lib/utils';
@@ -44,11 +44,13 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState<string | null>(null);
 
-    const isNFEmitted = notaFiscal?.status === 'Nota Emitida' || notaFiscal?.status === 'Enviada Cliente' || notaFiscal?.status === 'Enviada com Sucesso' || notaFiscal?.status === 'Erro Envio';
+    // A NF é considerada 'emitida' se tiver um registro no banco
+    const isNFEmitted = !!notaFiscal;
     const isNFUploaded = !!notaFiscal?.anexo_url;
     const isWebhookConfigured = !!configNF?.webhook_n8n_url;
-    const isFullySent = notaFiscal?.status === 'Enviada com Sucesso'; // NOVO: Status final
+    const isFullySent = notaFiscal?.status === 'Enviada com Sucesso';
     const isSendingError = notaFiscal?.status === 'Erro Envio';
+    const isNFEdited = notaFiscal?.editada; // NOVO
 
     useEffect(() => {
         if (notaFiscal) {
@@ -58,12 +60,20 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     }, [notaFiscal]);
 
     const handleUpload = async () => {
-        if (!file || !numeroNota || !dataEmissao) {
-            toast.error('Preencha o número da NF, a data e selecione o arquivo.');
+        if (!file && isNFEmitted) {
+            toast.error('Selecione um novo arquivo para atualizar a NF.');
+            return;
+        }
+        if (!file && !isNFEmitted) {
+            toast.error('Selecione o arquivo da NF.');
+            return;
+        }
+        if (!numeroNota || !dataEmissao) {
+            toast.error('Preencha o número da NF e a data de emissão.');
             return;
         }
         setUploading(true);
-        await handleUploadNF(parcela, file, numeroNota, dataEmissao);
+        await handleUploadNF(parcela, file!, numeroNota, dataEmissao);
         setUploading(false);
         setFile(null);
     };
@@ -84,22 +94,34 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
         }
     };
     
-    const getStatusBadge = (status: string | undefined) => {
-        if (!status || status === 'Pendente Emissão') return <Badge variant="warning">Pendente Emissão</Badge>;
-        if (status === 'Nota Emitida') return <Badge variant="default">Emitida</Badge>;
-        if (status === 'Enviada Cliente') return <Badge variant="secondary">Aguardando Confirmação</Badge>;
-        if (status === 'Enviada com Sucesso') return <Badge variant="success">Enviada com Sucesso</Badge>;
-        if (status === 'Erro Envio') return <Badge variant="destructive">Erro Envio</Badge>;
-        return <Badge variant="secondary">{status}</Badge>;
+    const getStatusBadge = (nota: NotaFiscal | undefined) => {
+        if (!nota) return <Badge variant="warning">Pendente Emissão</Badge>;
+        
+        switch (nota.status) {
+            case 'Nota Emitida':
+                if (nota.enviado_email || nota.enviado_whatsapp) {
+                    return <Badge variant="default">Enviada Parcial</Badge>;
+                }
+                return <Badge variant="default">Emitida</Badge>;
+            case 'Enviada Cliente':
+                return <Badge variant="secondary">Aguardando Confirmação</Badge>;
+            case 'Enviada com Sucesso':
+                return <Badge variant="success">Enviada com Sucesso</Badge>;
+            case 'Erro Envio':
+                return <Badge variant="destructive">Erro Envio</Badge>;
+            default:
+                return <Badge variant="warning">Pendente Emissão</Badge>;
+        }
     };
 
     return (
         <Card className={cn("border-l-4", isNFEmitted ? (isFullySent ? "border-green-500" : (isSendingError ? "border-red-500" : "border-blue-500")) : "border-yellow-500")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg">
+                <CardTitle className="text-lg flex items-center gap-2">
                     {parcela.cliente_nome}
+                    {isNFEdited && <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Editada</Badge>}
                 </CardTitle>
-                {getStatusBadge(notaFiscal?.status)}
+                {getStatusBadge(notaFiscal)}
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -115,6 +137,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                 <div className="space-y-3 p-3 border rounded-md">
                     <h3 className="font-semibold text-base flex items-center">
                         <FileText className="w-4 h-4 mr-2" /> Dados da Nota Fiscal
+                        {isNFEmitted && <Badge variant="secondary" className="ml-2 text-xs flex items-center gap-1"><Edit className="w-3 h-3" /> Editar</Badge>}
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -124,7 +147,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                                 id="numeroNota" 
                                 value={numeroNota} 
                                 onChange={(e) => setNumeroNota(e.target.value)} 
-                                disabled={uploading || isNFEmitted}
+                                disabled={uploading}
                                 placeholder="Ex: 12345"
                             />
                         </div>
@@ -132,7 +155,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                             <Label htmlFor="dataEmissao">Data Emissão</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dataEmissao && "text-muted-foreground")} disabled={uploading || isNFEmitted}>
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dataEmissao && "text-muted-foreground")} disabled={uploading}>
                                         {dataEmissao ? format(dataEmissao, 'dd/MM/yyyy', { locale: ptBR }) : "Selecione a data"}
                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
@@ -147,7 +170,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                                 type="file" 
                                 accept=".pdf,.xml" 
                                 onChange={(e) => setFile(e.target.files?.[0] || null)} 
-                                disabled={uploading || isNFEmitted}
+                                disabled={uploading}
                             />
                         </div>
                     </div>
@@ -165,6 +188,13 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                         <Button onClick={handleUpload} disabled={uploading || !file || !numeroNota || !dataEmissao} className="w-full">
                             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                             Anexar NF e Marcar como Emitida
+                        </Button>
+                    )}
+                    
+                    {isNFEmitted && (
+                        <Button onClick={handleUpload} disabled={uploading || !numeroNota || !dataEmissao} className="w-full mt-2" variant="secondary">
+                            {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                            {isNFUploaded ? 'Atualizar Dados e Reenviar NF' : 'Atualizar Dados (Sem Novo Anexo)'}
                         </Button>
                     )}
                 </div>

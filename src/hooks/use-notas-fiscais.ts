@@ -301,16 +301,20 @@ export function useNotasFiscais(
 
             const { data: { publicUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
 
+            // Verifica se já existe uma NF para esta parcela
+            const notaExistente = notasFiscais[parcela.id];
+            
             const dataToSave: Partial<NotaFiscal> = {
                 proprietario_id: ownerId,
                 parcela_id: parcela.id,
-                status: 'Nota Emitida',
+                status: 'Nota Emitida', // Resetar status para Emitida
                 numero_nota: numeroNota,
                 valor: parcela.valor_parcela,
                 data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
                 anexo_url: publicUrl,
-                enviado_whatsapp: false,
-                enviado_email: false,
+                enviado_whatsapp: false, // Resetar flags de envio
+                enviado_email: false, // Resetar flags de envio
+                editada: !!notaExistente, // Marcar como editada se já existia
             };
 
             const { data: notaSalva, error: dbError } = await supabase
@@ -337,6 +341,7 @@ export function useNotasFiscais(
                     anexo_url: publicUrl,
                     enviado_whatsapp: false,
                     enviado_email: false,
+                    editada: !!notaExistente,
                     created_at: notaSalva.created_at,
                     updated_at: notaSalva.updated_at,
                     id: notaSalva.id,
@@ -352,7 +357,7 @@ export function useNotasFiscais(
         } finally {
             setCarregando(false);
         }
-    }, [ownerId, refetch, configNF, handleSendNF]);
+    }, [ownerId, refetch, configNF, handleSendNF, notasFiscais]);
 
     return {
         parcelasParaNF,

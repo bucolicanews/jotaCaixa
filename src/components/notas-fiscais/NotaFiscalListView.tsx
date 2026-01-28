@@ -2,7 +2,7 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, FileText, Link, Mail, MessageSquare, Eye, Send } from 'lucide-react';
+import { Loader2, FileText, Link, Mail, MessageSquare, Eye, Send, Edit } from 'lucide-react';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { cn } from '@/lib/utils';
@@ -97,7 +97,10 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
 
                             return (
                                 <TableRow key={parcela.id}>
-                                    <TableCell className="font-medium text-sm">{parcela.cliente_nome}</TableCell>
+                                    <TableCell className="font-medium text-sm">
+                                        {parcela.cliente_nome}
+                                        {nota?.editada && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}
+                                    </TableCell>
                                     <TableCell className="font-mono text-xs">{nota?.numero_nota || '-'}</TableCell>
                                     <TableCell className="font-semibold">{formatCurrency(parcela.valor_parcela)}</TableCell>
                                     <TableCell className="text-sm">{formatarData(parcela.data_pagamento)}</TableCell>
