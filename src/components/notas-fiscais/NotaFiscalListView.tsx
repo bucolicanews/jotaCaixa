@@ -7,6 +7,12 @@ import { formatCurrency, formatarData } from '@/utils/formatters';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'; // IMPORT ADICIONADO
 
 interface NotaFiscalListViewProps {
     parcelasParaNF: ParcelaNF[];
