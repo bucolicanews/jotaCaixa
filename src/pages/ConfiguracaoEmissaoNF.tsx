@@ -19,12 +19,15 @@ import {
     Mail,
     MessageSquare,
     AlertTriangle,
+    Copy,
+    Check,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast as showToast } from 'sonner';
 
 interface NFConfig {
     webhook_n8n_url: string | null;
@@ -40,6 +43,13 @@ const DEFAULT_CONFIG: NFConfig = {
         'Prezado(a) {cliente_nome},\n\nSua Nota Fiscal Nº {numero_nota} no valor de {valor} foi emitida. Segue o anexo em PDF.\n\nAtenciosamente,\n{empresa_nome}',
 };
 
+const CONFIRMATION_URL = 'https://jqoirlswewggyppgvgnv.supabase.co/functions/v1/confirm-nf-delivery';
+const CONFIRMATION_JSON_EXAMPLE = `{
+  "nota_fiscal_id": "UUID_DA_NOTA_FISCAL",
+  "status_envio": "SUCCESS", 
+  "mensagem": "NF enviada com sucesso por e-mail e WhatsApp."
+}`;
+
 const ConfiguracaoEmissaoNF: React.FC = () => {
     const { ownerId } = useOwner();
     const { role } = useSessao();
@@ -47,6 +57,7 @@ const ConfiguracaoEmissaoNF: React.FC = () => {
     const [config, setConfig] = useState<NFConfig>(DEFAULT_CONFIG);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [copiedUrl, setCopiedUrl] = useState(false);
 
     const fetchConfig = useCallback(async () => {
         if (!ownerId) return;
@@ -100,6 +111,13 @@ const ConfiguracaoEmissaoNF: React.FC = () => {
         } finally {
             setSaving(false);
         }
+    };
+    
+    const handleCopyUrl = () => {
+        navigator.clipboard.writeText(CONFIRMATION_URL);
+        setCopiedUrl(true);
+        showToast.success('URL copiada!');
+        setTimeout(() => setCopiedUrl(false), 2000);
     };
 
     const isReadOnly = !['Admin', 'Cliente'].includes(role);
@@ -168,6 +186,33 @@ const ConfiguracaoEmissaoNF: React.FC = () => {
                                 disabled={isReadOnly}
                             />
                         </div>
+                        
+                        <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+                            <AlertTriangle className="h-4 w-4 text-blue-600" />
+                            <AlertTitle className="text-blue-800 dark:text-blue-200">
+                                URL de Confirmação (Resposta do N8N)
+                            </AlertTitle>
+                            <AlertDescription className="text-xs text-blue-700 dark:text-blue-300 space-y-2">
+                                <p>Após o N8N enviar a NF ao cliente, ele deve enviar um POST para a URL abaixo para atualizar o status final no sistema:</p>
+                                <div className="flex items-center gap-2">
+                                    <code className="flex-1 bg-muted p-2 rounded font-mono text-xs break-all">
+                                        {CONFIRMATION_URL}
+                                    </code>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={handleCopyUrl}
+                                        className="h-8 flex-shrink-0"
+                                    >
+                                        {copiedUrl ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    </Button>
+                                </div>
+                                <p><strong>JSON de Resposta Esperado:</strong></p>
+                                <pre className="bg-muted p-2 rounded font-mono text-xs overflow-x-auto">
+                                    {CONFIRMATION_JSON_EXAMPLE}
+                                </pre>
+                            </AlertDescription>
+                        </Alert>
                     </CardContent>
                 </Card>
 
