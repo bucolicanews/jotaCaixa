@@ -192,7 +192,11 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                     )}
                     
                     {isNFEmitted && (
-                        <Button onClick={handleUpload} disabled={uploading || !numeroNota || !dataEmissao} className="w-full mt-2" variant="secondary">
+                        <Button 
+                            onClick={handleUpload} 
+                            disabled={uploading || !numeroNota || !dataEmissao} 
+                            className="w-full mt-2 bg-orange-500 hover:bg-orange-600 text-white"
+                        >
                             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                             {isNFUploaded ? 'Atualizar Dados e Reenviar NF' : 'Atualizar Dados (Sem Novo Anexo)'}
                         </Button>
