@@ -16,6 +16,7 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'contratos', label: 'Contratos', path: '/contratos', grupo: 'financeiro' },
   { key: 'contas_pagar', label: 'Contas a Pagar', path: '/contas-pagar', grupo: 'financeiro' },
   { key: 'contas_receber', label: 'Contas a Receber', path: '/contas-receber', grupo: 'financeiro' },
+  { key: 'emissao_nf', label: 'Emissão NF', path: '/emissao-notas', grupo: 'financeiro' }, // NOVO
   { key: 'bancos', label: 'Fluxo de Caixa / Bancos', path: '/bancos', grupo: 'financeiro' },
   { key: 'conciliacao', label: 'Conciliacao', path: '/conciliacao', grupo: 'financeiro' },
   { key: 'extratos', label: 'Extratos', path: '/extratos', grupo: 'financeiro' },

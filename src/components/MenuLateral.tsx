@@ -48,7 +48,7 @@ const SECOES_MENU: MenuSection[] = [
         itens: [
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Emissão NF', caminho: '/emissao-notas', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' }, // NOVO ITEM
+            { nome: 'Emissão NF', caminho: '/emissao-notas', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' }, // PERMISSÃO ATUALIZADA
             { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
         ]
     },
@@ -78,7 +78,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_patrimoniais' },
             { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'DRE', caminho: '/relatorios/dre', icone: BarChart3, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Balancete', caminho: '/relatorios/balancete', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
@@ -125,7 +125,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
             { nome: 'PagBank', caminho: '/configuracoes-pagbank', icone: CreditCard, perfis: ['Admin'], permissionKey: 'configuracoes' },
-            { nome: 'Configuração NF', caminho: '/configuracao-nf', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' }, // NOVO ITEM
+            { nome: 'Configuração NF', caminho: '/configuracao-nf', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' }, // PERMISSÃO ATUALIZADA
         ]
     },
     {

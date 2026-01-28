@@ -24,4 +24,5 @@ export type PermissoesUsuario = {
   contas_patrimoniais: boolean;
   documentos_societarios: boolean;
   visualizar_proprio_ponto: boolean;
+  emissao_nf: boolean; // NOVO CAMPO
 };
