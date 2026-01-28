@@ -54,11 +54,11 @@ import ContasPatrimoniais from "./pages/ContasPatrimoniais";
 import Extratos from "./pages/Extratos";
 import Exportar from "./pages/Exportar";
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
-import Balancete from "./pages/Balancete"; // NOVO IMPORT
-import Razao from "./pages/Razao"; // NOVO IMPORT
-import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
-import Protocolos from "./pages/Protocolos"; // NOVO IMPORT
-import ConfirmarRecebimento from "./pages/ConfirmarRecebimento"; // NOVO IMPORT
+import Balancete from "./pages/Balancete";
+import Razao from "./pages/Razao";
+import Lancamentos from "./pages/Lancamentos";
+import Protocolos from "./pages/Protocolos";
+import ConfirmarRecebimento from "./pages/ConfirmarRecebimento";
 import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
 import GerenciarConfiguracoesExtrato from "./pages/GerenciarConfiguracoesExtrato";
@@ -68,6 +68,8 @@ import PagamentoPix from "./pages/PagamentoPix";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GlobalHandlers from "@/components/GlobalHandlers";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import EmissaoNotas from "./pages/EmissaoNotas"; // NOVO IMPORT
+import ConfiguracaoEmissaoNF from "./pages/ConfiguracaoEmissaoNF"; // NOVO IMPORT
 
 
 const queryClient = new QueryClient();
@@ -111,6 +113,7 @@ const App = () => (
             
               <Route path="/contas-pagar" element={<ProtectedRoute permissionKey="contas_pagar"><ContasPagar /></ProtectedRoute>} />
               <Route path="/contas-receber" element={<ProtectedRoute permissionKey="contas_receber"><ContasReceber /></ProtectedRoute>} />
+              <Route path="/emissao-notas" element={<ProtectedRoute permissionKey="contas_receber"><EmissaoNotas /></ProtectedRoute>} /> {/* NOVA ROTA */}
               <Route path="/bancos" element={<ProtectedRoute permissionKey="bancos"><Bancos /></ProtectedRoute>} />
               <Route path="/contas-patrimoniais" element={<ProtectedRoute permissionKey="contas_patrimoniais"><ContasPatrimoniais /></ProtectedRoute>} />
               <Route path="/conciliacao" element={<ProtectedRoute permissionKey="conciliacao"><Conciliacao /></ProtectedRoute>} />
@@ -125,6 +128,7 @@ const App = () => (
               <Route path="/relatorios/lancamentos-nao-mapeados" element={<ProtectedRoute permissionKey="lancamentos"><LancamentosNaoMapeados /></ProtectedRoute>} />
               <Route path="/configuracoes" element={<ProtectedRoute permissionKey="configuracoes"><Configuracoes /></ProtectedRoute>} />
               <Route path="/configuracoes-pagbank" element={<ProtectedRoute permissionKey="configuracoes"><ErrorBoundary><ConfiguracoesPagBank /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/configuracao-nf" element={<ProtectedRoute permissionKey="configuracoes"><ConfiguracaoEmissaoNF /></ProtectedRoute>} /> {/* NOVA ROTA */}
               <Route path="/planos" element={<ProtectedRoute permissionKey=""><GerenciarPlanos /></ProtectedRoute>} />
               <Route path="/plano-contas" element={<ProtectedRoute permissionKey="plano_contas"><PlanoContasPage /></ProtectedRoute>} />
               <Route path="/gerenciar-usuarios" element={<ProtectedRoute permissionKey="cadastrar_usuarios"><GerenciarUsuarios /></ProtectedRoute>} />
