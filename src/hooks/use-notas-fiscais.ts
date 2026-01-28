@@ -257,15 +257,16 @@ export function useNotasFiscais(
                     anexo_url: nota.anexo_url,
                 };
 
-                const response = await fetch(configNF.webhook_n8n_url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(webhookPayload),
+                // CHAMADA PARA A NOVA EDGE FUNCTION
+                const { data, error: invokeError } = await supabase.functions.invoke('send-n8n-webhook', {
+                    body: {
+                        webhookUrl: configNF.webhook_n8n_url,
+                        payload: webhookPayload,
+                    },
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Webhook N8N falhou com status: ${response.status}`);
-                }
+                if (invokeError) throw invokeError;
+                if (!data.success) throw new Error(data.error || 'Erro desconhecido na Edge Function.');
                 
                 showSuccess('Webhook N8N enviado com sucesso! Aguardando confirmação de envio.');
                 
