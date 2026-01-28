@@ -25,10 +25,10 @@ serve(async (req) => {
 
     console.log(`[forcar-baixa-pagbank] Parcela: ${parcela_id}, Transação: ${codigo_transacao}, Force: ${force || false}`);
 
-    // 1. Buscar a parcela
+    // 1. Buscar a parcela com join para pegar a conta patrimonial
     const { data: parcela, error: pError } = await supabaseAdmin
       .from('admin_parcelas_receber')
-      .select('*')
+      .select('*, admin_contas_receber(id_conta_patrimonial)')
       .eq('id', parcela_id)
       .single();
 
@@ -121,19 +121,6 @@ serve(async (req) => {
 
     console.log(`[forcar-baixa-pagbank] Conta PagBank: ${config.conta_id}, Conta Despesa Taxa: ${config.conta_despesa_taxa || 'não configurada'}`);
 
-    // 9. Buscar saldo atual da conta PagBank
-    const { data: saldoConta, error: saldoError } = await supabaseAdmin
-      .from('saldo_contas')
-      .select('saldo_inicial')
-      .eq('conta_id', config.conta_id)
-      .eq('proprietario_id', parcela.admin_id)
-      .single();
-
-    if (saldoError) throw new Error('Saldo da conta PagBank não encontrado.');
-
-    const saldoAtual = saldoConta.saldo_inicial || 0;
-    console.log(`[forcar-baixa-pagbank] Saldo atual da conta: ${saldoAtual}`);
-
     // 10. Criar recebimento com valor líquido
     const dataRecebimento = new Date().toISOString().split('T')[0];
     
@@ -158,56 +145,81 @@ serve(async (req) => {
 
     console.log(`[forcar-baixa-pagbank] Recebimento criado: ${recebimento.id}`);
 
-    // 11. Lançar taxa contábil (se houver taxa e conta de despesa configurada)
+    // 11. Criar lançamentos contábeis em partida dobrada
+    const dataLancamento = new Date().toISOString();
+    const lancamentosPayload = [];
+    
+    // 11.1. DÉBITO: Conta PagBank (Ativo aumenta)
+    const idDebitoPagBank = crypto.randomUUID();
+    lancamentosPayload.push({
+      id: idDebitoPagBank,
+      proprietario_id: parcela.admin_id,
+      data_movimentacao: dataLancamento,
+      descricao: `Recebimento PagBank - Transação: ${codigo_transacao.trim()}${force ? ' (Forçado)' : ''}`,
+      valor: valor_liquido,
+      tipo: 'Entrada',
+      conta_contabil_id: config.conta_sintetica_id,
+      origem: 'baixa_manual_pagbank',
+      conta_resultado_id: null, // Será preenchido após criar os outros
+    });
+
+    // 11.2. DÉBITO: Taxa PagBank (Despesa aumenta) - se houver taxa
+    let idDebitoTaxa = null;
     if (taxa > 0 && config.conta_despesa_taxa) {
-      console.log(`[forcar-baixa-pagbank] Lançando taxa de ${taxa} na contabilidade`);
-
-      const dataLancamento = new Date().toISOString();
-
-      // 11.1. Débito na conta de despesa
-      const { error: debitoError } = await supabaseAdmin
-        .from('lancamentos')
-        .insert({
-          proprietario_id: parcela.admin_id,
-          conta_id: config.conta_despesa_taxa,
-          historico_id: null,
-          data_movimentacao: dataLancamento,
-          tipo: 'debito',
-          valor: taxa,
-          descricao: `Taxa PagBank - Transação: ${codigo_transacao.trim()}${force ? ' (Forçado)' : ''}`,
-          origem_tipo: 'recebimento',
-          origem_id: recebimento.id
-        });
-
-      if (debitoError) {
-        console.error('[forcar-baixa-pagbank] Erro ao lançar débito:', debitoError);
-        throw new Error(`Erro ao lançar débito da taxa: ${debitoError.message}`);
-      }
-
-      // 11.2. Crédito na conta PagBank (contrapartida)
-      const { error: creditoError } = await supabaseAdmin
-        .from('lancamentos')
-        .insert({
-          proprietario_id: parcela.admin_id,
-          conta_id: config.conta_id,
-          historico_id: null,
-          data_movimentacao: dataLancamento,
-          tipo: 'credito',
-          valor: taxa,
-          descricao: `Taxa PagBank (contrapartida) - Transação: ${codigo_transacao.trim()}${force ? ' (Forçado)' : ''}`,
-          origem_tipo: 'recebimento',
-          origem_id: recebimento.id
-        });
-
-      if (creditoError) {
-        console.error('[forcar-baixa-pagbank] Erro ao lançar crédito:', creditoError);
-        throw new Error(`Erro ao lançar crédito da taxa: ${creditoError.message}`);
-      }
-
-      console.log(`[forcar-baixa-pagbank] Taxa lançada com sucesso`);
+      idDebitoTaxa = crypto.randomUUID();
+      lancamentosPayload.push({
+        id: idDebitoTaxa,
+        proprietario_id: parcela.admin_id,
+        data_movimentacao: dataLancamento,
+        descricao: `Taxa PagBank - Transação: ${codigo_transacao.trim()}${force ? ' (Forçado)' : ''}`,
+        valor: taxa,
+        tipo: 'Entrada',
+        conta_contabil_id: config.conta_despesa_taxa,
+        origem: 'baixa_manual_pagbank',
+        conta_resultado_id: null,
+      });
+      console.log(`[forcar-baixa-pagbank] Lançamento de taxa criado: ${taxa}`);
     } else if (taxa > 0) {
       console.log(`[forcar-baixa-pagbank] Taxa detectada (${taxa}) mas conta de despesa não configurada. Pulando lançamento.`);
     }
+
+    // 11.3. CRÉDITO: Clientes a Receber (Ativo diminui - baixa do direito)
+    const idCreditoPatrimonial = crypto.randomUUID();
+    const contaPatrimonial = parcela.admin_contas_receber?.id_conta_patrimonial;
+    
+    if (contaPatrimonial) {
+      lancamentosPayload.push({
+        id: idCreditoPatrimonial,
+        proprietario_id: parcela.admin_id,
+        data_movimentacao: dataLancamento,
+        descricao: `Baixa Direito CR - Transação: ${codigo_transacao.trim()}${force ? ' (Forçado)' : ''}`,
+        valor: valor_bruto,
+        tipo: 'Saida',
+        conta_contabil_id: contaPatrimonial,
+        origem: 'baixa_manual_pagbank',
+        conta_resultado_id: idDebitoPagBank,
+      });
+    } else {
+      console.warn('[forcar-baixa-pagbank] Conta patrimonial não encontrada. Balanço pode ficar incompleto.');
+    }
+
+    // 11.4. Preencher conta_resultado_id dos débitos
+    lancamentosPayload[0].conta_resultado_id = idCreditoPatrimonial;
+    if (idDebitoTaxa) {
+      lancamentosPayload.find(l => l.id === idDebitoTaxa).conta_resultado_id = idCreditoPatrimonial;
+    }
+
+    // 11.5. Inserir todos os lançamentos
+    const { error: lancamentosError } = await supabaseAdmin
+      .from('lancamentos')
+      .insert(lancamentosPayload);
+
+    if (lancamentosError) {
+      console.error('[forcar-baixa-pagbank] Erro ao criar lançamentos:', lancamentosError);
+      throw new Error(`Erro ao criar lançamentos contábeis: ${lancamentosError.message}`);
+    }
+
+    console.log(`[forcar-baixa-pagbank] ${lancamentosPayload.length} lançamentos contábeis criados com sucesso`);
 
     // 12. Atualizar parcela
     const { error: updateParcelaError } = await supabaseAdmin
@@ -229,21 +241,7 @@ serve(async (req) => {
 
     console.log(`[forcar-baixa-pagbank] Parcela atualizada para status 'paga'`);
 
-    // 13. Atualizar saldo da conta
-    const novoSaldo = saldoAtual + valor_liquido;
-    
-    const { error: updateSaldoError } = await supabaseAdmin
-      .from('saldo_contas')
-      .update({ saldo_inicial: novoSaldo })
-      .eq('conta_id', config.conta_id)
-      .eq('proprietario_id', parcela.admin_id);
-
-    if (updateSaldoError) {
-      console.error('[forcar-baixa-pagbank] Erro ao atualizar saldo:', updateSaldoError);
-      throw new Error(`Erro ao atualizar saldo: ${updateSaldoError.message}`);
-    }
-
-    console.log(`[forcar-baixa-pagbank] Saldo atualizado de ${saldoAtual} para ${novoSaldo}`);
+    // 13. Saldo calculado dinamicamente pelos lançamentos contábeis (não precisa mais atualizar saldo_contas)
 
     // 14. Retornar sucesso
     return new Response(
@@ -254,8 +252,7 @@ serve(async (req) => {
           : `Baixa realizada com sucesso! Valor líquido: R$ ${valor_liquido.toFixed(2)}, Taxa: R$ ${taxa.toFixed(2)}`,
         recebimento_id: recebimento.id,
         valor_liquido,
-        taxa,
-        novo_saldo: novoSaldo
+        taxa
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

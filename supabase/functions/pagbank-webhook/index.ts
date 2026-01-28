@@ -120,26 +120,7 @@ serve(async (req) => {
 
     if (configError || !config) throw new Error("Configuração PagBank não encontrada.");
 
-    // 3. Atualização do Saldo Bancário (Saldo Real)
-    if (config.conta_sintetica_id) {
-      const { data: saldoConta } = await supabaseAdmin
-        .from('saldo_contas')
-        .select('id, saldo_inicial')
-        .eq('proprietario_id', parcela.admin_id)
-        .eq('conta_contabil_id', config.conta_sintetica_id)
-        .maybeSingle();
-
-      if (saldoConta) {
-        const novoSaldo = (saldoConta.saldo_inicial || 0) + valorLiquido;
-        await supabaseAdmin
-          .from('saldo_contas')
-          .update({ 
-            saldo_inicial: novoSaldo,
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', saldoConta.id);
-      }
-    }
+    // 3. Saldo calculado dinamicamente pelos lançamentos contábeis (não precisa mais atualizar saldo_contas)
 
     await supabaseAdmin.from('admin_parcelas_receber').update({
       status: 'paga',
