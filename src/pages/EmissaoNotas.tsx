@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import NotaFiscalCard from '@/components/notas-fiscais/NotaFiscalCard'; // IMPORT FALTANTE
 
 const EmissaoNotas: React.FC = () => {
     const { role, perfil, carregando: carregandoSessao } = useSessao();
