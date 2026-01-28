@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { TableCell } from '@/components/ui/table'; // IMPORT FALTANTE
 
 interface NotaFiscalInlineEditorProps {
     parcela: ParcelaNF;
