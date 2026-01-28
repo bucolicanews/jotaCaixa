@@ -185,49 +185,6 @@ export function useNotasFiscais(
         fetchDados();
     }, [fetchDados]);
 
-    const handleUploadNF = useCallback(async (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => {
-        if (!ownerId) return;
-
-        setCarregando(true);
-        try {
-            const fileExt = file.name.split('.').pop();
-            const filePath = `${ownerId}/${parcela.id}/nf-${numeroNota}-${uuidv4().substring(0, 4)}.${fileExt}`;
-            
-            const { error: uploadError } = await supabase.storage
-                .from(NF_BUCKET)
-                .upload(filePath, file, { upsert: true });
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
-
-            const dataToSave: Partial<NotaFiscal> = {
-                proprietario_id: ownerId,
-                parcela_id: parcela.id,
-                status: 'Nota Emitida',
-                numero_nota: numeroNota,
-                valor: parcela.valor_parcela,
-                data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
-                anexo_url: publicUrl,
-                enviado_whatsapp: false,
-                enviado_email: false,
-            };
-
-            const { error: dbError } = await supabase
-                .from('notas_fiscais')
-                .upsert(dataToSave, { onConflict: 'parcela_id' });
-
-            if (dbError) throw dbError;
-
-            showSuccess('Nota Fiscal anexada e status atualizado para "Nota Emitida"!');
-            refetch();
-        } catch (error: any) {
-            showError('Falha ao anexar NF: ' + error.message);
-        } finally {
-            setCarregando(false);
-        }
-    }, [ownerId, refetch]);
-
     const handleSendNF = useCallback(async (nota: NotaFiscal, tipo: 'whatsapp' | 'email' | 'webhook') => {
         if (!ownerId || !configNF || !nota.anexo_url) return;
 
@@ -259,6 +216,8 @@ export function useNotasFiscais(
                     valor: nota.valor,
                     data_emissao: nota.data_emissao,
                     anexo_url: nota.anexo_url,
+                    // NOVO CAMPO: URL de confirmação para o N8N
+                    url_confirmacao: `${Deno.env.get('SUPABASE_URL')}/functions/v1/confirm-nf-delivery`,
                 };
 
                 // CHAMADA PARA A NOVA EDGE FUNCTION
@@ -274,6 +233,7 @@ export function useNotasFiscais(
                 
                 showSuccess('Webhook N8N enviado com sucesso! Aguardando confirmação de envio.');
                 
+                // Atualiza o status para 'Enviada Cliente' (status intermediário)
                 await supabase.from('notas_fiscais').update({ status: 'Enviada Cliente' }).eq('id', nota.id);
 
             } else if (tipo === 'whatsapp') {
@@ -313,6 +273,75 @@ export function useNotasFiscais(
             showError('Falha no envio: ' + error.message);
         }
     }, [ownerId, configNF, parcelasParaNF, ownerType, refetch]);
+
+    const handleUploadNF = useCallback(async (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => {
+        if (!ownerId) return;
+
+        setCarregando(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const filePath = `${ownerId}/${parcela.id}/nf-${numeroNota}-${uuidv4().substring(0, 4)}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from(NF_BUCKET)
+                .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
+
+            const dataToSave: Partial<NotaFiscal> = {
+                proprietario_id: ownerId,
+                parcela_id: parcela.id,
+                status: 'Nota Emitida',
+                numero_nota: numeroNota,
+                valor: parcela.valor_parcela,
+                data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
+                anexo_url: publicUrl,
+                enviado_whatsapp: false,
+                enviado_email: false,
+            };
+
+            const { data: notaSalva, error: dbError } = await supabase
+                .from('notas_fiscais')
+                .upsert(dataToSave, { onConflict: 'parcela_id' })
+                .select()
+                .single();
+
+            if (dbError) throw dbError;
+
+            showSuccess('Nota Fiscal anexada e status atualizado para "Nota Emitida"!');
+            
+            // 🚨 NOVO: Acionar o webhook N8N imediatamente após o upload, se configurado
+            if (configNF?.webhook_n8n_url) {
+                // Cria um objeto NotaFiscal completo para o envio
+                const notaCompleta: NotaFiscal = {
+                    ...notaSalva,
+                    proprietario_id: ownerId,
+                    parcela_id: parcela.id,
+                    status: 'Nota Emitida',
+                    numero_nota: numeroNota,
+                    valor: parcela.valor_parcela,
+                    data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
+                    anexo_url: publicUrl,
+                    enviado_whatsapp: false,
+                    enviado_email: false,
+                    created_at: notaSalva.created_at,
+                    updated_at: notaSalva.updated_at,
+                    id: notaSalva.id,
+                };
+                
+                // Chama o handler de envio (que fará o webhook)
+                await handleSendNF(notaCompleta, 'webhook');
+            }
+
+            refetch();
+        } catch (error: any) {
+            showError('Falha ao anexar NF: ' + error.message);
+        } finally {
+            setCarregando(false);
+        }
+    }, [ownerId, refetch, configNF, handleSendNF]);
 
     return {
         parcelasParaNF,

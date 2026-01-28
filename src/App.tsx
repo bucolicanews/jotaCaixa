@@ -168,6 +168,9 @@ const App = () => (
 
               <Route path="/protocolos" element={<ProtectedRoute permissionKey="protocolos"><Protocolos /></ProtectedRoute>} />
 
+              {/* ROTA DE CONFIRMAÇÃO DO N8N (NÃO É ROTA DE FRONTEND) */}
+              {/* A URL de confirmação é: https://SEU_PROJETO_ID.supabase.co/functions/v1/confirm-nf-delivery */}
+
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

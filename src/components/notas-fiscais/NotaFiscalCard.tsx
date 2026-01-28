@@ -44,10 +44,11 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState<string | null>(null);
 
-    const isNFEmitted = notaFiscal?.status === 'Nota Emitida' || notaFiscal?.status === 'Enviada Cliente';
+    const isNFEmitted = notaFiscal?.status === 'Nota Emitida' || notaFiscal?.status === 'Enviada Cliente' || notaFiscal?.status === 'Enviada com Sucesso';
     const isNFUploaded = !!notaFiscal?.anexo_url;
     const isWebhookConfigured = !!configNF?.webhook_n8n_url;
-    const isFullySent = notaFiscal?.enviado_email && notaFiscal?.enviado_whatsapp;
+    const isFullySent = notaFiscal?.status === 'Enviada com Sucesso'; // NOVO: Status final
+    const isSendingError = notaFiscal?.status === 'Erro Envio';
 
     useEffect(() => {
         if (notaFiscal) {
@@ -82,16 +83,23 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
             window.open(notaFiscal.anexo_url, '_blank');
         }
     };
+    
+    const getStatusBadge = (status: string | undefined) => {
+        if (!status || status === 'Pendente Emissão') return <Badge variant="warning">Pendente Emissão</Badge>;
+        if (status === 'Nota Emitida') return <Badge variant="default">Emitida</Badge>;
+        if (status === 'Enviada Cliente') return <Badge variant="secondary">Enviando...</Badge>;
+        if (status === 'Enviada com Sucesso') return <Badge variant="success">Enviada com Sucesso</Badge>;
+        if (status === 'Erro Envio') return <Badge variant="destructive">Erro Envio</Badge>;
+        return <Badge variant="secondary">{status}</Badge>;
+    };
 
     return (
-        <Card className={cn("border-l-4", isNFEmitted ? (isFullySent ? "border-green-500" : "border-blue-500") : "border-yellow-500")}>
+        <Card className={cn("border-l-4", isNFEmitted ? (isFullySent ? "border-green-500" : (isSendingError ? "border-red-500" : "border-blue-500")) : "border-yellow-500")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg">
                     {parcela.cliente_nome}
                 </CardTitle>
-                <Badge variant={isNFEmitted ? (isFullySent ? 'success' : 'default') : 'warning'}>
-                    {notaFiscal?.status || 'Pendente Emissão'}
-                </Badge>
+                {getStatusBadge(notaFiscal?.status)}
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -192,7 +200,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                             <Button 
                                 onClick={() => handleSend('webhook')} 
                                 disabled={sending !== null || !isWebhookConfigured}
-                                variant={notaFiscal?.status === 'Enviada Cliente' ? 'default' : 'secondary'}
+                                variant={notaFiscal?.status === 'Enviada com Sucesso' ? 'default' : 'secondary'}
                                 className="w-full"
                             >
                                 {sending === 'webhook' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link className="mr-2 h-4 w-4" />}
@@ -201,9 +209,10 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                         </div>
                         
                         <div className="text-xs text-muted-foreground pt-2 border-t">
-                            <p>Status de Envio: 
-                                <span className={cn("ml-1 font-semibold", isFullySent ? 'text-green-600' : 'text-red-600')}>
-                                    {isFullySent ? 'Enviado (Email e WhatsApp)' : (notaFiscal?.enviado_email || notaFiscal?.enviado_whatsapp ? 'Parcialmente Enviado' : 'Pendente')}
+                            <p className="flex items-center">
+                                Status de Envio: 
+                                <span className={cn("ml-1 font-semibold", isFullySent ? 'text-green-600' : (isSendingError ? 'text-red-600' : 'text-amber-600'))}>
+                                    {isFullySent ? 'Enviada com Sucesso' : (isSendingError ? 'Erro no Envio' : (notaFiscal?.status === 'Enviada Cliente' ? 'Aguardando Confirmação' : 'Pendente'))}
                                 </span>
                             </p>
                             {!isWebhookConfigured && <p className="text-red-500 flex items-center mt-1"><AlertTriangle className="w-3 h-3 mr-1" /> Webhook N8N não configurado.</p>}
