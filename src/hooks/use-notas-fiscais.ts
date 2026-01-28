@@ -137,8 +137,14 @@ export function useNotasFiscais(
                         shouldInclude = true;
                     }
                 } else if (filtroStatus === 'enviada') {
-                    // Inclui notas com status 'Enviada Cliente' OU 'Nota Emitida' que já foram enviadas
-                    if (notaExistente && (notaExistente.status === 'Enviada Cliente' || notaExistente.enviado_email || notaExistente.enviado_whatsapp)) {
+                    // Inclui notas que foram enviadas (status final, erro, ou flags de envio)
+                    if (notaExistente && (
+                        notaExistente.status === 'Enviada Cliente' || 
+                        notaExistente.status === 'Enviada com Sucesso' || 
+                        notaExistente.status === 'Erro Envio' ||
+                        notaExistente.enviado_email === true || 
+                        notaExistente.enviado_whatsapp === true
+                    )) {
                         shouldInclude = true;
                     }
                 }
