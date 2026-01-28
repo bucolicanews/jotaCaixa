@@ -44,7 +44,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState<string | null>(null);
 
-    const isNFEmitted = notaFiscal?.status === 'Nota Emitida' || notaFiscal?.status === 'Enviada Cliente' || notaFiscal?.status === 'Enviada com Sucesso';
+    const isNFEmitted = notaFiscal?.status === 'Nota Emitida' || notaFiscal?.status === 'Enviada Cliente' || notaFiscal?.status === 'Enviada com Sucesso' || notaFiscal?.status === 'Erro Envio';
     const isNFUploaded = !!notaFiscal?.anexo_url;
     const isWebhookConfigured = !!configNF?.webhook_n8n_url;
     const isFullySent = notaFiscal?.status === 'Enviada com Sucesso'; // NOVO: Status final
@@ -87,7 +87,7 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     const getStatusBadge = (status: string | undefined) => {
         if (!status || status === 'Pendente Emissão') return <Badge variant="warning">Pendente Emissão</Badge>;
         if (status === 'Nota Emitida') return <Badge variant="default">Emitida</Badge>;
-        if (status === 'Enviada Cliente') return <Badge variant="secondary">Enviando...</Badge>;
+        if (status === 'Enviada Cliente') return <Badge variant="secondary">Aguardando Confirmação</Badge>;
         if (status === 'Enviada com Sucesso') return <Badge variant="success">Enviada com Sucesso</Badge>;
         if (status === 'Erro Envio') return <Badge variant="destructive">Erro Envio</Badge>;
         return <Badge variant="secondary">{status}</Badge>;

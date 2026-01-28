@@ -204,6 +204,12 @@ export function useNotasFiscais(
 
         try {
             if (tipo === 'webhook' && configNF.webhook_n8n_url) {
+                
+                // --- CORREÇÃO CRÍTICA: Usar a URL do projeto Supabase ---
+                const supabaseUrl = supabase.supabaseUrl;
+                const urlConfirmacao = `${supabaseUrl}/functions/v1/confirm-nf-delivery`;
+                // -------------------------------------------------------
+
                 const webhookPayload = {
                     parcela_id: nota.parcela_id,
                     nota_fiscal_id: nota.id,
@@ -216,8 +222,7 @@ export function useNotasFiscais(
                     valor: nota.valor,
                     data_emissao: nota.data_emissao,
                     anexo_url: nota.anexo_url,
-                    // NOVO CAMPO: URL de confirmação para o N8N
-                    url_confirmacao: `${Deno.env.get('SUPABASE_URL')}/functions/v1/confirm-nf-delivery`,
+                    url_confirmacao: urlConfirmacao, // USANDO URL CORRIGIDA
                 };
 
                 // CHAMADA PARA A NOVA EDGE FUNCTION

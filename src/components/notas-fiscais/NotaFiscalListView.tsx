@@ -45,7 +45,9 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                 }
                 return <Badge variant="default">Emitida</Badge>;
             case 'Enviada Cliente':
-                return <Badge variant="success">Enviada</Badge>;
+                return <Badge variant="secondary">Aguardando Confirmação</Badge>; // Status Intermediário
+            case 'Enviada com Sucesso':
+                return <Badge variant="success">Enviada com Sucesso</Badge>;
             case 'Erro Envio':
                 return <Badge variant="destructive">Erro Envio</Badge>;
             default:
