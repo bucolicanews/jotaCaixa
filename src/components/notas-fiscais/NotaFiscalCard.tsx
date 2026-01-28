@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw } from 'lucide-react';
+import { Loader2, Upload, FileText, CheckCircle2, Mail, MessageSquare, Link, AlertTriangle, Receipt, CalendarIcon, RefreshCw, Send } from 'lucide-react'; // <-- 'Send' ADICIONADO AQUI
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge'; // <-- IMPORT ADICIONADO
+import { Badge } from '@/components/ui/badge';
 
 interface NotaFiscalCardProps {
     parcela: ParcelaNF;
