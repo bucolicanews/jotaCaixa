@@ -66,110 +66,111 @@ export function useNotasFiscais(
         const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
         const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
 
-        // 1. Buscar todas as parcelas PAGAS
-        let parcelasQuery = supabase
-            .from(tabelaParcelas)
-            .select(`
-                id,
-                valor_parcela,
-                data_pagamento,
-                data_vencimento,
-                conta_receber_id,
-                ${tabelaContas} (
-                    descricao,
-                    cliente_id,
-                    clientes: ${tabelaClientes} ( nome, razao_social, documento, telefone, email )
-                )
-            `)
-            .eq(ownerKey, ownerId)
-            .eq('status', 'paga')
-            .order('data_pagamento', { ascending: false });
+        try { // <-- ABRINDO O BLOCO TRY
+            // 1. Buscar todas as parcelas PAGAS
+            let parcelasQuery = supabase
+                .from(tabelaParcelas)
+                .select(`
+                    id,
+                    valor_parcela,
+                    data_pagamento,
+                    data_vencimento,
+                    conta_receber_id,
+                    ${tabelaContas} (
+                        descricao,
+                        cliente_id,
+                        clientes: ${tabelaClientes} ( nome, razao_social, documento, telefone, email )
+                    )
+                `)
+                .eq(ownerKey, ownerId)
+                .eq('status', 'paga')
+                .order('data_pagamento', { ascending: false });
 
-        if (filtroPeriodo?.from) {
-            parcelasQuery = parcelasQuery.gte('data_pagamento', format(filtroPeriodo.from, 'yyyy-MM-dd'));
-        }
-        if (filtroPeriodo?.to) {
-            parcelasQuery = parcelasQuery.lte('data_pagamento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
-        }
-
-        const { data: parcelasData, error: pError } = await parcelasQuery;
-        if (pError) throw pError;
-
-        const parcelasBrutas = (parcelasData || []) as any[];
-        const parcelaIds = parcelasBrutas.map(p => p.id);
-
-        // 2. Buscar Notas Fiscais existentes para essas parcelas
-        let notasQuery = supabase
-            .from('notas_fiscais')
-            .select('*')
-            .eq('proprietario_id', ownerId)
-            .in('parcela_id', parcelaIds);
-
-        if (filtroStatus !== 'todos') {
-            if (filtroStatus === 'pendente') {
-                notasQuery = notasQuery.eq('status', 'Pendente Emissão');
-            } else if (filtroStatus === 'emitida') {
-                notasQuery = notasQuery.eq('status', 'Nota Emitida');
-            } else if (filtroStatus === 'enviada') {
-                notasQuery = notasQuery.eq('enviado_email', true).eq('enviado_whatsapp', true);
+            if (filtroPeriodo?.from) {
+                parcelasQuery = parcelasQuery.gte('data_pagamento', format(filtroPeriodo.from, 'yyyy-MM-dd'));
             }
-        }
-
-        const { data: notasData, error: nError } = await notasQuery;
-        if (nError) throw nError;
-
-        const notasMap = (notasData || []).reduce((acc, nf) => {
-            acc[nf.parcela_id] = nf;
-            return acc;
-        }, {} as Record<string, NotaFiscal>);
-        setNotasFiscais(notasMap as any);
-
-        // 3. Mapear e filtrar as parcelas
-        let finalParcelas: ParcelaNF[] = [];
-
-        for (const p of parcelasBrutas) {
-            const notaExistente = notasMap[p.id];
-            
-            // Se o filtro for 'pendente', só inclui se não houver nota
-            if (filtroStatus === 'pendente' && notaExistente) continue;
-            
-            // Se o filtro for 'emitida', só inclui se o status for 'Nota Emitida'
-            if (filtroStatus === 'emitida' && notaExistente?.status !== 'Nota Emitida') continue;
-            
-            // Se o filtro for 'enviada', só inclui se ambos os flags forem true
-            if (filtroStatus === 'enviada' && (!notaExistente || !notaExistente.enviado_email || !notaExistente.enviado_whatsapp)) continue;
-
-            const contaReceber = p[tabelaContas];
-            const cliente = contaReceber?.clientes;
-            
-            const clienteNome = cliente?.razao_social || cliente?.nome || 'N/A';
-            const descricao = contaReceber?.descricao || 'N/A';
-
-            if (filtroTexto && !clienteNome.toLowerCase().includes(filtroTexto) && !descricao.toLowerCase().includes(filtroTexto)) {
-                continue;
+            if (filtroPeriodo?.to) {
+                parcelasQuery = parcelasQuery.lte('data_pagamento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
             }
 
-            finalParcelas.push({
-                id: p.id,
-                valor_parcela: p.valor_parcela,
-                data_pagamento: p.data_pagamento,
-                descricao_conta: descricao,
-                cliente_id: contaReceber?.cliente_id,
-                cliente_nome: clienteNome,
-                cliente_telefone: cliente?.telefone,
-                cliente_email: cliente?.email,
-            });
+            const { data: parcelasData, error: pError } = await parcelasQuery;
+            if (pError) throw pError;
+
+            const parcelasBrutas = (parcelasData || []) as any[];
+            const parcelaIds = parcelasBrutas.map(p => p.id);
+
+            // 2. Buscar Notas Fiscais existentes para essas parcelas
+            let notasQuery = supabase
+                .from('notas_fiscais')
+                .select('*')
+                .eq('proprietario_id', ownerId)
+                .in('parcela_id', parcelaIds);
+
+            if (filtroStatus !== 'todos') {
+                if (filtroStatus === 'pendente') {
+                    notasQuery = notasQuery.eq('status', 'Pendente Emissão');
+                } else if (filtroStatus === 'emitida') {
+                    notasQuery = notasQuery.eq('status', 'Nota Emitida');
+                } else if (filtroStatus === 'enviada') {
+                    notasQuery = notasQuery.eq('enviado_email', true).eq('enviado_whatsapp', true);
+                }
+            }
+
+            const { data: notasData, error: nError } = await notasQuery;
+            if (nError) throw nError;
+
+            const notasMap = (notasData || []).reduce((acc, nf) => {
+                acc[nf.parcela_id] = nf;
+                return acc;
+            }, {} as Record<string, NotaFiscal>);
+            setNotasFiscais(notasMap as any);
+
+            // 3. Mapear e filtrar as parcelas
+            let finalParcelas: ParcelaNF[] = [];
+
+            for (const p of parcelasBrutas) {
+                const notaExistente = notasMap[p.id];
+                
+                // Se o filtro for 'pendente', só inclui se não houver nota
+                if (filtroStatus === 'pendente' && notaExistente) continue;
+                
+                // Se o filtro for 'emitida', só inclui se o status for 'Nota Emitida'
+                if (filtroStatus === 'emitida' && notaExistente?.status !== 'Nota Emitida') continue;
+                
+                // Se o filtro for 'enviada', só inclui se ambos os flags forem true
+                if (filtroStatus === 'enviada' && (!notaExistente || !notaExistente.enviado_email || !notaExistente.enviado_whatsapp)) continue;
+
+                const contaReceber = p[tabelaContas];
+                const cliente = contaReceber?.clientes;
+                
+                const clienteNome = cliente?.razao_social || cliente?.nome || 'N/A';
+                const descricao = contaReceber?.descricao || 'N/A';
+
+                if (filtroTexto && !clienteNome.toLowerCase().includes(filtroTexto) && !descricao.toLowerCase().includes(filtroTexto)) {
+                    continue;
+                }
+
+                finalParcelas.push({
+                    id: p.id,
+                    valor_parcela: p.valor_parcela,
+                    data_pagamento: p.data_pagamento,
+                    descricao_conta: descricao,
+                    cliente_id: contaReceber?.cliente_id,
+                    cliente_nome: clienteNome,
+                    cliente_telefone: cliente?.telefone,
+                    cliente_email: cliente?.email,
+                });
+            }
+
+            setParcelasParaNF(finalParcelas);
+
+        } catch (error) { // <-- FECHANDO O BLOCO TRY E ABRINDO O CATCH
+            console.error('Erro ao buscar dados de NF:', error);
+            showError('Falha ao carregar dados de Notas Fiscais: ' + (error as Error).message);
+            setParcelasParaNF([]);
+        } finally {
+            setCarregando(false);
         }
-
-        setParcelasParaNF(finalParcelas);
-
-    } catch (error: any) {
-        console.error('Erro ao buscar dados de NF:', error);
-        showError('Falha ao carregar dados de Notas Fiscais: ' + error.message);
-        setParcelasParaNF([]);
-    } finally {
-        setCarregando(false);
-    }
     }, [ownerId, ownerType, filtroPeriodo, filtroStatus, filtroTexto, refreshKey]);
 
     useEffect(() => {
