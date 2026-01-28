@@ -125,6 +125,7 @@ export function useNotasFiscais(
                 const notaExistente = notasMap[p.id];
                 let shouldInclude = false;
 
+                // --- LÓGICA DE FILTRO CORRIGIDA ---
                 if (filtroStatus === 'todos') {
                     shouldInclude = true;
                 } else if (filtroStatus === 'pendente') {
@@ -132,14 +133,16 @@ export function useNotasFiscais(
                         shouldInclude = true;
                     }
                 } else if (filtroStatus === 'emitida') {
-                    if (notaExistente && notaExistente.status === 'Nota Emitida') {
+                    if (notaExistente && notaExistente.status === 'Nota Emitida' && !notaExistente.enviado_email && !notaExistente.enviado_whatsapp) {
                         shouldInclude = true;
                     }
                 } else if (filtroStatus === 'enviada') {
-                    if (notaExistente && (notaExistente.enviado_email || notaExistente.enviado_whatsapp)) {
+                    // Inclui notas com status 'Enviada Cliente' OU 'Nota Emitida' que já foram enviadas
+                    if (notaExistente && (notaExistente.status === 'Enviada Cliente' || notaExistente.enviado_email || notaExistente.enviado_whatsapp)) {
                         shouldInclude = true;
                     }
                 }
+                // --- FIM LÓGICA DE FILTRO CORRIGIDA ---
 
                 if (shouldInclude) {
                     const contaReceber = p[tabelaContas];
@@ -287,7 +290,7 @@ export function useNotasFiscais(
                 window.open(url, '_blank');
                 showSuccess('Abrindo WhatsApp. Confirme o envio manualmente.');
                 
-                await supabase.from('notas_fiscais').update({ enviado_whatsapp: true }).eq('id', nota.id);
+                await supabase.from('notas_fiscais').update({ enviado_whatsapp: true, status: 'Enviada Cliente' }).eq('id', nota.id);
 
             } else if (tipo === 'email') {
                 if (!parcela.cliente_email) throw new Error('Email do cliente não cadastrado.');
@@ -302,7 +305,7 @@ export function useNotasFiscais(
                 window.open(mailtoLink, '_blank');
                 showSuccess('Abrindo cliente de e-mail. Anexe o PDF e envie manualmente.');
                 
-                await supabase.from('notas_fiscais').update({ enviado_email: true }).eq('id', nota.id);
+                await supabase.from('notas_fiscais').update({ enviado_email: true, status: 'Enviada Cliente' }).eq('id', nota.id);
             }
             
             refetch();

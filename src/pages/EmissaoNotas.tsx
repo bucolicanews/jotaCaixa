@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Receipt, Filter, Search, AlertTriangle } from 'lucide-react';
+import { Loader2, Receipt, Filter, Search, AlertTriangle, LayoutGrid, List } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -13,9 +13,11 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { useNotasFiscais } from '@/hooks/use-notas-fiscais'; // NOVO HOOK
 import NotaFiscalCard from '@/components/notas-fiscais/NotaFiscalCard'; // NOVO COMPONENTE
+import NotaFiscalListView from '@/components/notas-fiscais/NotaFiscalListView'; // NOVO COMPONENTE
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // <-- IMPORT ADICIONADO
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 const EmissaoNotas: React.FC = () => {
     const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -25,6 +27,7 @@ const EmissaoNotas: React.FC = () => {
     const [filtroStatus, setFiltroStatus] = useState('pendente');
     const [filtroTexto, setFiltroTexto] = useState('');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card'); // NOVO ESTADO
 
     const { 
         parcelasParaNF, 
@@ -127,29 +130,47 @@ const EmissaoNotas: React.FC = () => {
             )}
 
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-xl">Parcelas Pagas ({parcelasParaNF.length})</CardTitle>
+                    <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as 'card' | 'list')} className="h-8">
+                        <ToggleGroupItem value="card" aria-label="Visualização Card">
+                            <LayoutGrid className="h-4 w-4" />
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="list" aria-label="Visualização Lista">
+                            <List className="h-4 w-4" />
+                        </ToggleGroupItem>
+                    </ToggleGroup>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-6">
-                        {parcelasParaNF.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">
-                                Nenhuma parcela paga encontrada com os filtros aplicados.
-                            </p>
-                        ) : (
-                            parcelasParaNF.map(parcela => (
+                    {parcelasParaNF.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">
+                            Nenhuma parcela paga encontrada com os filtros aplicados.
+                        </p>
+                    ) : viewMode === 'card' ? (
+                        <div className="space-y-6">
+                            {parcelasParaNF.map(parcela => (
                                 <NotaFiscalCard
                                     key={parcela.id}
                                     parcela={parcela}
-                                    notaFiscal={notasFiscais[parcela.id]} // CORREÇÃO AQUI: Acessando o mapa pela chave
+                                    notaFiscal={notasFiscais[parcela.id]}
                                     configNF={configNF}
                                     onUpdate={refetch}
                                     handleUploadNF={handleUploadNF}
                                     handleSendNF={handleSendNF}
                                 />
-                            ))
-                        )}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <NotaFiscalListView
+                            parcelasParaNF={parcelasParaNF}
+                            notasFiscais={notasFiscais}
+                            configNF={configNF}
+                            carregando={carregando}
+                            handleUploadNF={handleUploadNF}
+                            handleSendNF={handleSendNF}
+                            onUpdate={refetch}
+                        />
+                    )}
                 </CardContent>
             </Card>
         </LayoutPrincipal>
