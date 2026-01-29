@@ -38,6 +38,17 @@ export const formatDDMMYYYYToISO = (dateString: string): string | null => {
 };
 
 /**
+ * Remove todos os caracteres não numéricos de uma string.
+ * @param phone Número de telefone com formatação.
+ * @returns Apenas dígitos.
+ */
+export const cleanPhoneNumber = (phone: string | null | undefined): string | null => {
+    if (!phone) return null;
+    const cleaned = String(phone).replace(/\D/g, '');
+    return cleaned.length > 0 ? cleaned : null;
+};
+
+/**
  * Normaliza uma string para comparação (lowercase, trim, remove acentos e caracteres especiais).
  */
 export const normalizeString = (str: string | null | undefined): string => {
@@ -54,7 +65,7 @@ export const normalizeString = (str: string | null | undefined): string => {
  * Sanitiza conteúdo de texto para ser seguro dentro de um Textarea controlado por React,
  * removendo apenas tags e atributos de desenvolvimento, mas permitindo HTML válido.
  * 
- * NOTA: A remoção da substituição de tags HTML (ex: < -> &lt;) é crucial para salvar HTML.
+ * NOTA: A remoção da substituição de tags HTML (ex: < -> <) é crucial para salvar HTML.
  */
 export function sanitizeConteudo(conteudo: string | null | undefined): string {
     if (!conteudo) return "";

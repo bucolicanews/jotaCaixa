@@ -17,6 +17,7 @@ import FormIdentificacao from '../cliente-forms/FormIdentificacao';
 import FormContato from '../cliente-forms/FormContato';
 import { fetchAddressByCep } from '@/utils/cep-lookup';
 import FormEndereco from '../cliente-forms/FormEndereco';
+import { cleanPhoneNumber } from '@/utils/formatters'; // IMPORTADO
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -159,13 +160,13 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       nome: values.nome,
       razao_social: values.razao_social || null,
       nome_fantasia: values.nome_fantasia || null,
-      documento: values.documento || null,
+      documento: cleanPhoneNumber(values.documento), // LIMPEZA
       email: values.email || null,
-      telefone: values.telefone || null,
-      telefone_fixo: values.telefone_fixo || null,
+      telefone: cleanPhoneNumber(values.telefone), // LIMPEZA
+      telefone_fixo: cleanPhoneNumber(values.telefone_fixo), // LIMPEZA
       
       // Dados Cadastrais
-      cep: values.cep || null,
+      cep: cleanPhoneNumber(values.cep), // LIMPEZA
       endereco: values.endereco || null,
       numero: values.numero || null,
       complemento: values.complemento || null,

@@ -35,7 +35,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Plano } from '@/types/plano';
 import { fetchAddressByCep } from '@/utils/cep-lookup';
-import { sanitizeConteudo } from '@/utils/formatters';
+import { sanitizeConteudo, cleanPhoneNumber } from '@/utils/formatters'; // IMPORTADO cleanPhoneNumber
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -78,7 +78,7 @@ const formSchema = z.object({
   cnpj: textOptional,
   plano_id: z.string().optional(),
   
-  // NOVOS CAMPOS DE ASSINATURA
+  // NOVOS CAMPO DE ASSINATURA
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
   
@@ -174,7 +174,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     },
   });
   
-  const { watch, setValue, reset, handleSubmit, control } = form;
+  const { watch, setValue, getValues, reset, handleSubmit, control } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
   
@@ -384,12 +384,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 data_fim_acesso: values.data_fim_acesso ? format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z' : null,
                 razao_social: values.razao_social || null,
                 nome_fantasia: values.nome_fantasia || null,
-                documento: values.documento || null,
-                cnpj: values.cnpj || null,
-                cpf: values.cpf || null,
-                rg: values.rg || null,
-                telefone: values.telefone || null,
-                cep: values.cep || null,
+                documento: cleanPhoneNumber(values.documento), // LIMPEZA
+                cnpj: cleanPhoneNumber(values.cnpj), // LIMPEZA
+                cpf: cleanPhoneNumber(values.cpf), // LIMPEZA
+                rg: cleanPhoneNumber(values.rg), // LIMPEZA
+                telefone: cleanPhoneNumber(values.telefone), // LIMPEZA
+                cep: cleanPhoneNumber(values.cep), // LIMPEZA
                 endereco: values.endereco || null,
                 numero: values.numero || null,
                 complemento: values.complemento || null,
@@ -427,12 +427,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
                 data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
                 tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
-                cpf: values.cpf || null,
-                rg: values.rg || null,
+                cpf: cleanPhoneNumber(values.cpf), // LIMPEZA
+                rg: cleanPhoneNumber(values.rg), // LIMPEZA
                 nome_mae: values.nome_mae || null,
                 nome_pai: values.nome_pai || null,
-                telefone: values.telefone || null,
-                cep: values.cep || null,
+                telefone: cleanPhoneNumber(values.telefone), // LIMPEZA
+                cep: cleanPhoneNumber(values.cep), // LIMPEZA
                 endereco: values.endereco || null,
                 numero: values.numero || null,
                 complemento: values.complemento || null,

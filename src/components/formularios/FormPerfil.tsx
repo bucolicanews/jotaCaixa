@@ -20,6 +20,7 @@ import LogoUpload from '../LogoUpload';
 import AvatarUpload from '../AvatarUpload'; // Import the new component
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
+import { cleanPhoneNumber } from '@/utils/formatters'; // IMPORTADO
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -236,12 +237,12 @@ const onSubmit = async (values: FormValues) => {
       // Edição de Cliente (Empresa)
       
       // Campos de Tags (Dados Cadastrais do Cliente)
-      dataToUpdate.cpf = values.cpf || null;
-      dataToUpdate.rg = values.rg || null;
+      dataToUpdate.cpf = cleanPhoneNumber(values.cpf); // LIMPEZA
+      dataToUpdate.rg = cleanPhoneNumber(values.rg); // LIMPEZA
       dataToUpdate.nome_mae = values.nome_mae || null;
       dataToUpdate.nome_pai = values.nome_pai || null;
-      dataToUpdate.telefone = values.telefone || null;
-      dataToUpdate.cep = values.cep || null;
+      dataToUpdate.telefone = cleanPhoneNumber(values.telefone); // LIMPEZA
+      dataToUpdate.cep = cleanPhoneNumber(values.cep); // LIMPEZA
       dataToUpdate.endereco = values.endereco || null;
       dataToUpdate.numero = values.numero || null;
       dataToUpdate.complemento = values.complemento || null;
@@ -252,7 +253,8 @@ const onSubmit = async (values: FormValues) => {
       // Campos específicos de Cliente
       dataToUpdate.razao_social = values.razao_social || null;
       dataToUpdate.nome_fantasia = values.nome_fantasia || null;
-      dataToUpdate.documento = values.documento || null;
+      dataToUpdate.documento = cleanPhoneNumber(values.documento); // LIMPEZA
+      dataToUpdate.cnpj = cleanPhoneNumber(values.cnpj); // LIMPEZA
       
       // CRÍTICO: Sincroniza a URL da logo com o campo de assinatura
       dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
@@ -263,13 +265,13 @@ const onSubmit = async (values: FormValues) => {
     } else if (isAdminProfile) {
       // Edição de Admin
       
-      dataToUpdate.cpf = values.cpf || null;
-      dataToUpdate.cnpj = values.cnpj || null;
-      dataToUpdate.rg = values.rg || null;
+      dataToUpdate.cpf = cleanPhoneNumber(values.cpf); // LIMPEZA
+      dataToUpdate.cnpj = cleanPhoneNumber(values.cnpj); // LIMPEZA
+      dataToUpdate.rg = cleanPhoneNumber(values.rg); // LIMPEZA
       dataToUpdate.nome_mae = values.nome_mae || null;
       dataToUpdate.nome_pai = values.nome_pai || null;
-      dataToUpdate.telefone = values.telefone || null;
-      dataToUpdate.cep = values.cep || null;
+      dataToUpdate.telefone = cleanPhoneNumber(values.telefone); // LIMPEZA
+      dataToUpdate.cep = cleanPhoneNumber(values.cep); // LIMPEZA
       dataToUpdate.endereco = values.endereco || null;
       dataToUpdate.numero = values.numero || null;
       dataToUpdate.complemento = values.complemento || null;
@@ -369,7 +371,7 @@ return (
                                             <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isClient} /></FormControl>
                                             <FormLabel className="font-normal">{p.label}</FormLabel>
                                         </FormItem>
-                                    )} />
+                                    ))} />
                                 ))}
                             </div>
                         </div>
