@@ -34,4 +34,5 @@ export interface ParcelaNF {
     cliente_nome: string;
     cliente_telefone: string | null;
     cliente_email: string | null;
+    cliente_id_grupo: string | null;
 }

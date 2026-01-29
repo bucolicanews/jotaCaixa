@@ -79,7 +79,7 @@ export function useNotasFiscais(
                     ${tabelaContas} (
                         descricao,
                         cliente_id,
-                        clientes: ${tabelaClientes} ( nome, razao_social, documento, telefone, email )
+                        clientes: ${tabelaClientes} ( nome, razao_social, documento, telefone, email, id_grupo )
                     )
                 `)
                 .eq(ownerKey, ownerId)
@@ -167,6 +167,7 @@ export function useNotasFiscais(
                             cliente_nome: clienteNome,
                             cliente_telefone: cliente?.telefone,
                             cliente_email: cliente?.email,
+                            cliente_id_grupo: cliente?.id_grupo,
                         });
                     }
                 }
@@ -224,6 +225,7 @@ export function useNotasFiscais(
                     cliente_nome: parcela.cliente_nome,
                     cliente_email: parcela.cliente_email,
                     cliente_telefone: parcela.cliente_telefone,
+                    cliente_id_grupo: parcela.cliente_id_grupo,
                     numero_nota: nota.numero_nota,
                     valor: nota.valor,
                     data_emissao: nota.data_emissao,

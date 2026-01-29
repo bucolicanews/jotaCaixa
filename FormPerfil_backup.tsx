@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -296,8 +296,11 @@ const onSubmit = async (values: FormValues) => {
   }
 };
 
+const formMethods = form;
+
 return (
-  <Form {...form}>
+  <FormProvider {...formMethods}>
+    <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <Tabs defaultValue="pessoal" className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
@@ -363,23 +366,12 @@ return (
                             </div>
                             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
                                 {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                                    <FormField 
-                                        key={p.key} 
-                                        control={form.control} 
-                                        name={`permissoes.${p.key}`} 
-                                        render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl>
-                                                    <Checkbox 
-                                                        checked={field.value} 
-                                                        onCheckedChange={field.onChange} 
-                                                        disabled={isSubmitting || isReadOnly || isClient} 
-                                                    />
-                                                </FormControl>
-                                                <FormLabel className="font-normal">{p.label}</FormLabel>
-                                            </FormItem>
-                                        )} 
-                                    />
+                                    <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
+                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isClient} /></FormControl>
+                                            <FormLabel className="font-normal">{p.label}</FormLabel>
+                                        </FormItem>
+                                    ))} />
                                 ))}
                             </div>
                         </div>
@@ -468,6 +460,7 @@ return (
         </Button>
       </form>
     </Form>
+  </FormProvider>
 );
 };
 
