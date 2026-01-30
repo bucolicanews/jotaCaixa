@@ -32,13 +32,13 @@ export function GerarLinkPagBankDialog({
   onSuccess,
 }: GerarLinkPagBankDialogProps) {
   const { ownerId } = useSessao();
-  const [installments, setInstallments] = useState('1');
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  
+  // ESTADOS DO CHECKOUT (não misturar com PIX)
+  const [checkoutLink, setCheckoutLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
-  const [pixPaymentPageUrl, setPixPaymentPageUrl] = useState<string | null>(null);
 
   const handleGerarLink = async () => {
     const functionName = 'create-pagbank-checkout';
@@ -51,8 +51,7 @@ export function GerarLinkPagBankDialog({
       setLoading(true);
       
       // Limpar estados anteriores antes de gerar novo
-      setPaymentLink(null);
-      setPixPaymentPageUrl(null);
+      setCheckoutLink(null);
 
       if (!ownerId) {
         throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
@@ -62,61 +61,31 @@ export function GerarLinkPagBankDialog({
         body,
       });
 
-      console.log('[GerarLinkPagBank] Resposta Bruta:', { data, error });
-
-      // LOG PARA HOMOLOGAÇÃO PAGBANK
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (SUCESSO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Data:', JSON.stringify(data, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
+      console.log('[GerarLinkPagBank] Resposta:', { data, error });
 
       if (error) throw error;
 
       if (!data.success) {
         throw new Error(data.error || 'Erro ao gerar link de pagamento');
       }
-
-      toast.success('Link de pagamento gerado com sucesso!');
       
-      setPaymentLink(data.checkout_link);
-      setClienteInfo(data.cliente);
-      
-      // Capturar URL do PIX se existir
-      if (data.pix_payment_page_url) {
-        setPixPaymentPageUrl(data.pix_payment_page_url);
+      // Validar que o checkout_link foi gerado
+      if (!data.checkout_link) {
+        throw new Error('Link de checkout não foi gerado pelo PagBank');
       }
+
+      toast.success('Link de checkout gerado com sucesso!');
+      
+      // Salvar apenas dados do CHECKOUT (não misturar com PIX)
+      setCheckoutLink(data.checkout_link);
+      setClienteInfo(data.cliente);
       
       if (onSuccess) {
         onSuccess();
       }
     } catch (error: any) {
-      console.error('Erro ao gerar link PagBank:', error);
-      let errorMessage = 'Erro ao gerar link de pagamento. Verifique os logs da função.';
-      let errorResponse = null;
-
-      if (error.context && typeof error.context.json === 'function') {
-        try {
-          const errorBody = await error.context.json();
-          errorResponse = errorBody;
-          if (errorBody.error) {
-            errorMessage = errorBody.error;
-          }
-        } catch (e) {
-          // Ignore if JSON parsing fails
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
-      // LOG PARA HOMOLOGAÇÃO PAGBANK (ERRO)
-      console.warn('=== 🧾 LOG HOMOLOGAÇÃO PAGBANK (ERRO) ===');
-      console.log('📍 Função:', functionName);
-      console.log('📤 Request Body:', JSON.stringify(body, null, 2));
-      console.log('📥 Response Error:', JSON.stringify(errorResponse || error, null, 2));
-      console.warn('=== FIM LOG HOMOLOGAÇÃO PAGBANK ===');
-
-      toast.error(errorMessage);
+      console.error('[GerarLinkPagBank] Erro:', error);
+      toast.error(error.message || 'Erro ao gerar link de pagamento');
     } finally {
       setLoading(false);
     }
@@ -138,20 +107,17 @@ export function GerarLinkPagBankDialog({
       toast.error('Telefone do cliente nao encontrado');
       return;
     }
+    
+    if (!checkoutLink) {
+      toast.error('Link de checkout não disponível');
+      return;
+    }
 
     const telefone = clienteInfo.telefone.replace(/\D/g, '');
     const telefoneFormatado = telefone.startsWith('55') ? telefone : `55${telefone}`;
     
-    let mensagem = '';
-    
-    if (pixPaymentPageUrl) {
-      mensagem = `Ola ${clienteInfo.nome}! 👋\n\n📱 *Pagamento PIX Facilitado*\n\n👉 Clique no link para ver o QR Code:\n${pixPaymentPageUrl}\n\n💰 Valor: *R$ ${valorParcela.toFixed(2)}*\n📝 ${descricao}\n\n✅ Rapido, facil e seguro!`;
-    } else if (paymentLink) {
-      mensagem = `Ola ${clienteInfo.nome}!\n\nSegue o link para pagamento:\n💰 Valor: R$ ${valorParcela.toFixed(2)}\n📝 ${descricao}\n\n🔗 ${paymentLink}`;
-    } else {
-      toast.error('Nenhum link de pagamento disponivel');
-      return;
-    }
+    // Mensagem para CHECKOUT (múltiplas formas de pagamento)
+    const mensagem = `Ola ${clienteInfo.nome}!\n\n💳 Link de Pagamento\n\n👉 Escolha a forma de pagamento:\n${checkoutLink}\n\n💰 Valor: R$ ${valorParcela.toFixed(2)}\n📝 ${descricao}\n\n✅ Aceita PIX, Boleto e Cartão!`;
     
     const url = `https://wa.me/${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
     
@@ -191,19 +157,16 @@ export function GerarLinkPagBankDialog({
   };
 
   const handleClose = () => {
-    setPaymentLink(null);
-    setInstallments('1');
+    setCheckoutLink(null);
     setCopied(false);
     setClienteInfo(null);
-    setPixPaymentPageUrl(null);
     onOpenChange(false);
   };
 
   const handleReset = () => {
-    setPaymentLink(null);
+    setCheckoutLink(null);
     setCopied(false);
     setClienteInfo(null);
-    setPixPaymentPageUrl(null);
   };
 
   return (
@@ -216,11 +179,13 @@ export function GerarLinkPagBankDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {!paymentLink ? (
+        {!checkoutLink ? (
           <div className="space-y-4 py-4">
             <Alert className="bg-blue-50 border-blue-200">
               <AlertDescription className="text-blue-800">
                 O cliente poderá escolher entre PIX, Boleto ou Cartão de Crédito no checkout.
+                <br />
+                <strong>Link expira em 24 horas.</strong>
               </AlertDescription>
             </Alert>
           </div>
@@ -228,52 +193,29 @@ export function GerarLinkPagBankDialog({
           <div className="space-y-4 py-4">
             <Alert className="bg-green-50 border-green-200">
               <AlertDescription className="text-green-800">
-                Link de pagamento gerado com sucesso! Compartilhe com o cliente.
+                Link de checkout gerado com sucesso! Compartilhe com o cliente.
               </AlertDescription>
             </Alert>
 
-            {pixPaymentPageUrl && (
-              <div className="space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <Label className="text-blue-900 font-semibold">🔗 Link de Pagamento PIX</Label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={pixPaymentPageUrl} 
-                    readOnly 
-                    className="flex-1 p-2 border rounded text-sm bg-white"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleCopyLink(pixPaymentPageUrl)}
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-600">Envie este link para o cliente acessar a página de pagamento</p>
-              </div>
-            )}
-
-            {paymentLink && (
             <div className="space-y-2">
-              <Label>Link de Pagamento</Label>
+              <Label>Link de Pagamento (Checkout)</Label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
-                  value={paymentLink} 
+                  value={checkoutLink} 
                   readOnly 
                   className="flex-1 p-2 border rounded text-sm bg-muted"
                 />
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleCopyLink(paymentLink)}
+                  onClick={() => handleCopyLink(checkoutLink)}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
+              <p className="text-xs text-gray-600">O cliente escolhe a forma de pagamento (PIX, Boleto ou Cartão)</p>
             </div>
-            )}
 
             <div className="border-t pt-4">
               <Label className="mb-3 block">Enviar para o Cliente</Label>
@@ -313,7 +255,7 @@ export function GerarLinkPagBankDialog({
         )}
 
         <DialogFooter>
-          {!paymentLink ? (
+          {!checkoutLink ? (
             <>
               <Button variant="outline" onClick={handleClose} disabled={loading}>
                 Cancelar

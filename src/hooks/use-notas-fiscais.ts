@@ -150,7 +150,10 @@ export function useNotasFiscais(
                 if (filtroStatus === 'todos') {
                     shouldInclude = true;
                 } else if (filtroStatus === 'pendente') {
-                    if (!notaExistente) {
+                    if (!notaExistente && !(recebimentoInfo && (
+                        recebimentoInfo.forma_pagamento === 'Dinheiro' || 
+                        recebimentoInfo.forma_pagamento === 'Bens'
+                    ))) {
                         shouldInclude = true;
                     }
                 } else if (filtroStatus === 'emitida') {
@@ -164,6 +167,13 @@ export function useNotasFiscais(
                         notaExistente.status === 'Erro Envio' ||
                         notaExistente.enviado_email === true || 
                         notaExistente.enviado_whatsapp === true
+                    )) {
+                        shouldInclude = true;
+                    }
+                } else if (filtroStatus === 'nao-emitidas') {
+                    if (!notaExistente && recebimentoInfo && (
+                        recebimentoInfo.forma_pagamento === 'Dinheiro' || 
+                        recebimentoInfo.forma_pagamento === 'Bens'
                     )) {
                         shouldInclude = true;
                     }

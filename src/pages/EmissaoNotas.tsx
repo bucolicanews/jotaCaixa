@@ -95,6 +95,7 @@ const EmissaoNotas: React.FC = () => {
                                 <SelectItem value="pendente">Pendente Emissão</SelectItem>
                                 <SelectItem value="emitida">Nota Emitida</SelectItem>
                                 <SelectItem value="enviada">Enviada ao Cliente</SelectItem>
+                                <SelectItem value="nao-emitidas">Notas Não Emitidas</SelectItem>
                                 <SelectItem value="todos">Todos os Status</SelectItem>
                             </SelectContent>
                         </Select>

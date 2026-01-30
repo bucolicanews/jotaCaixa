@@ -130,6 +130,12 @@ serve(async (req) => {
       updateData.pagbank_qr_code = qrCode;
       updateData.pagbank_qr_code_text = qrCodeText;
       updateData.pagbank_payment_link = pixPaymentPageUrl;
+      
+      // Salvar data de expiração do PIX
+      const dataExpiracao = chargeRequest.qr_codes?.[0]?.expiration_date;
+      if (dataExpiracao) {
+        updateData.pagbank_link_expira_em = dataExpiracao;
+      }
     }
 
     await supabaseAdmin.from('admin_parcelas_receber').update(updateData).eq('id', parcela_id);

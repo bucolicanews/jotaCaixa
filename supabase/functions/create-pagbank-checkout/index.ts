@@ -210,16 +210,22 @@ serve(async (req) => {
     console.log(`[create-pagbank-checkout] - Link: ${payLink}`);
     console.log(`[create-pagbank-checkout] - Expira em: ${dataExpiracao24h.toISOString()} (24h padrão PagBank)`);
 
+    // Dados que serão salvos no banco (CAMPOS DO CHECKOUT)
+    const checkoutUpdateData = {
+      pagbank_checkout_id: checkoutResponse.id,
+      pagbank_checkout_link: payLink,
+      pagbank_link_expira_em: dataExpiracao24h.toISOString(),
+      pagbank_status: 'WAITING',
+      pagbank_updated_at: new Date().toISOString(),
+      pagbank_payment_method: 'checkout', // Marca como checkout
+    };
+    
+    console.log('[create-pagbank-checkout] Salvando no banco:', checkoutUpdateData);
+
     // Salvar no banco
     await supabaseAdmin
       .from('admin_parcelas_receber')
-      .update({
-        pagbank_checkout_id: checkoutResponse.id,
-        pagbank_checkout_link: payLink,
-        pagbank_link_expira_em: dataExpiracao24h.toISOString(),
-        pagbank_status: 'WAITING',
-        pagbank_updated_at: new Date().toISOString(),
-      })
+      .update(checkoutUpdateData)
       .eq('id', parcela_id);
 
     // Log de criação

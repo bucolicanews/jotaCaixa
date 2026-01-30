@@ -14,7 +14,8 @@ interface ParcelaData {
   pagbank_qr_code_text: string | null;
   pagbank_status: string | null;
   pagbank_link_expira_em: string | null;
-  admin_contas_receber: {
+  conta_receber_id?: string | null;
+  admin_contas_receber?: {
     descricao: string;
   } | null;
 }
@@ -37,6 +38,9 @@ export default function PagamentoPix() {
       setLoading(true);
       setError(null);
       
+      console.log('[PagamentoPix] Buscando parcela ID:', id);
+      
+      // BUSCA SIMPLIFICADA: Buscar apenas os campos da parcela (sem JOIN)
       const { data, error: fetchError } = await supabase
         .from('admin_parcelas_receber')
         .select(`
@@ -46,18 +50,67 @@ export default function PagamentoPix() {
           pagbank_qr_code_text,
           pagbank_status,
           pagbank_link_expira_em,
-          admin_contas_receber!inner (descricao)
+          conta_receber_id
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       
-      if (fetchError || !data) {
+      console.log('[PagamentoPix] Resultado da query:', { data, fetchError });
+      
+      if (fetchError) {
+        console.error('[PagamentoPix] Erro ao buscar:', fetchError);
+        setError('Erro ao buscar cobrança: ' + fetchError.message);
+        return;
+      }
+      
+      if (!data) {
+        console.error('[PagamentoPix] Nenhum dado retornado');
         setError('Cobrança não encontrada');
         return;
       }
       
-      setParcela(data);
+      console.log('[PagamentoPix] Parcela encontrada:', {
+        id,
+        tem_qr_code: !!data.pagbank_qr_code,
+        tem_qr_code_text: !!data.pagbank_qr_code_text,
+        status: data.pagbank_status,
+        link_expira_em: data.pagbank_link_expira_em
+      });
+      
+      // Verificar se tem QR Code
+      if (!data.pagbank_qr_code || !data.pagbank_qr_code_text) {
+        console.error('[PagamentoPix] PIX não foi gerado para esta parcela');
+        setError('PIX ainda não foi gerado. Solicite ao responsável para gerar o PIX.');
+        return;
+      }
+      
+      // Buscar descrição da conta (opcional, não bloqueia se falhar)
+      let parcelaCompleta: ParcelaData = {
+        valor_parcela: data.valor_parcela,
+        data_vencimento: data.data_vencimento,
+        pagbank_qr_code: data.pagbank_qr_code,
+        pagbank_qr_code_text: data.pagbank_qr_code_text,
+        pagbank_status: data.pagbank_status,
+        pagbank_link_expira_em: data.pagbank_link_expira_em,
+        conta_receber_id: data.conta_receber_id,
+        admin_contas_receber: null
+      };
+      
+      if (data.conta_receber_id) {
+        const { data: conta } = await supabase
+          .from('admin_contas_receber')
+          .select('descricao')
+          .eq('id', data.conta_receber_id)
+          .maybeSingle();
+        
+        if (conta) {
+          parcelaCompleta.admin_contas_receber = { descricao: conta.descricao };
+        }
+      }
+      
+      setParcela(parcelaCompleta);
     } catch (err: any) {
+      console.error('[PagamentoPix] Exceção:', err);
       setError(err.message || 'Erro ao buscar cobrança');
     } finally {
       setLoading(false);
