@@ -35,4 +35,8 @@ export interface ParcelaNF {
     cliente_telefone: string | null;
     cliente_email: string | null;
     cliente_id_grupo: string | null;
+    
+    // NOVOS CAMPOS DE RECEBIMENTO
+    forma_pagamento: string | null;
+    data_recebimento: string | null;
 }

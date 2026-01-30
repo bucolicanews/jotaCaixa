@@ -65,6 +65,7 @@ export function useNotasFiscais(
         const tabelaParcelas = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         const tabelaContas = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
         const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
+        const tabelaRecebimentos = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_recebimentos' : 'recebimentos';
         const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
 
         try {
@@ -83,7 +84,7 @@ export function useNotasFiscais(
                     )
                 `)
                 .eq(ownerKey, ownerId)
-                .eq('status', 'paga')
+                .eq('status', 'paga') // Apenas parcelas pagas
                 .order('data_pagamento', { ascending: false });
 
             if (filtroPeriodo?.from) {
@@ -106,6 +107,7 @@ export function useNotasFiscais(
                 return;
             }
 
+            // 1. Buscar Notas Fiscais existentes
             const { data: notasData, error: nError } = await supabase
                 .from('notas_fiscais')
                 .select('*')
@@ -118,14 +120,33 @@ export function useNotasFiscais(
                 return acc;
             }, {} as Record<string, NotaFiscal>);
             setNotasFiscais(notasMap);
+            
+            // 2. Buscar dados de recebimento (forma de pagamento)
+            const { data: recebimentosData, error: rError } = await supabase
+                .from(tabelaRecebimentos)
+                .select('parcela_id, forma_pagamento, data_recebimento')
+                .in('parcela_id', parcelaIds)
+                .order('data_recebimento', { ascending: false });
+            if (rError) throw rError;
+            
+            const recebimentosMap = (recebimentosData || []).reduce((acc, r) => {
+                // Mapeia apenas o recebimento mais recente por parcela
+                if (!acc[r.parcela_id]) {
+                    acc[r.parcela_id] = r;
+                }
+                return acc;
+            }, {} as Record<string, { parcela_id: string, forma_pagamento: string, data_recebimento: string }>);
+
 
             let finalParcelas: ParcelaNF[] = [];
 
             for (const p of parcelasBrutas) {
                 const notaExistente = notasMap[p.id];
+                const recebimentoInfo = recebimentosMap[p.id];
+                
                 let shouldInclude = false;
 
-                // --- LÓGICA DE FILTRO CORRIGIDA ---
+                // --- LÓGICA DE FILTRO ---
                 if (filtroStatus === 'todos') {
                     shouldInclude = true;
                 } else if (filtroStatus === 'pendente') {
@@ -137,7 +158,6 @@ export function useNotasFiscais(
                         shouldInclude = true;
                     }
                 } else if (filtroStatus === 'enviada') {
-                    // Inclui notas que foram enviadas (status final, erro, ou flags de envio)
                     if (notaExistente && (
                         notaExistente.status === 'Enviada Cliente' || 
                         notaExistente.status === 'Enviada com Sucesso' || 
@@ -148,7 +168,7 @@ export function useNotasFiscais(
                         shouldInclude = true;
                     }
                 }
-                // --- FIM LÓGICA DE FILTRO CORRIGIDA ---
+                // --- FIM LÓGICA DE FILTRO ---
 
                 if (shouldInclude) {
                     const contaReceber = p[tabelaContas];
@@ -168,6 +188,10 @@ export function useNotasFiscais(
                             cliente_telefone: cliente?.telefone,
                             cliente_email: cliente?.email,
                             cliente_id_grupo: cliente?.id_grupo,
+                            
+                            // NOVOS DADOS
+                            forma_pagamento: recebimentoInfo?.forma_pagamento || null,
+                            data_recebimento: recebimentoInfo?.data_recebimento || null,
                         });
                     }
                 }
@@ -212,10 +236,8 @@ export function useNotasFiscais(
         try {
             if (tipo === 'webhook' && configNF.webhook_n8n_url) {
                 
-                // --- CORREÇÃO CRÍTICA: Usar a URL do projeto Supabase ---
                 const supabaseUrl = supabase.supabaseUrl;
                 const urlConfirmacao = `${supabaseUrl}/functions/v1/confirm-nf-delivery`;
-                // -------------------------------------------------------
 
                 const webhookPayload = {
                     parcela_id: nota.parcela_id,
@@ -230,10 +252,9 @@ export function useNotasFiscais(
                     valor: nota.valor,
                     data_emissao: nota.data_emissao,
                     anexo_url: nota.anexo_url,
-                    url_confirmacao: urlConfirmacao, // USANDO URL CORRIGIDA
+                    url_confirmacao: urlConfirmacao,
                 };
 
-                // CHAMADA PARA A NOVA EDGE FUNCTION
                 const { data, error: invokeError } = await supabase.functions.invoke('send-n8n-webhook', {
                     body: {
                         webhookUrl: configNF.webhook_n8n_url,
@@ -246,7 +267,6 @@ export function useNotasFiscais(
                 
                 showSuccess('Webhook N8N enviado com sucesso! Aguardando confirmação de envio.');
                 
-                // Atualiza o status para 'Enviada Cliente' (status intermediário)
                 await supabase.from('notas_fiscais').update({ status: 'Enviada Cliente' }).eq('id', nota.id);
 
             } else if (tipo === 'whatsapp') {
@@ -287,36 +307,44 @@ export function useNotasFiscais(
         }
     }, [ownerId, configNF, parcelasParaNF, ownerType, refetch]);
 
-    const handleUploadNF = useCallback(async (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => {
+    const handleUploadNF = useCallback(async (parcela: ParcelaNF, file: File | undefined, numeroNota: string, dataEmissao: Date) => {
         if (!ownerId) return;
 
         setCarregando(true);
         try {
-            const fileExt = file.name.split('.').pop();
-            const filePath = `${ownerId}/${parcela.id}/nf-${numeroNota}-${uuidv4().substring(0, 4)}.${fileExt}`;
+            let publicUrl = notasFiscais[parcela.id]?.anexo_url || null;
             
-            const { error: uploadError } = await supabase.storage
-                .from(NF_BUCKET)
-                .upload(filePath, file, { upsert: true });
+            if (file) {
+                const fileExt = file.name.split('.').pop();
+                const filePath = `${ownerId}/${parcela.id}/nf-${numeroNota}-${uuidv4().substring(0, 4)}.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from(NF_BUCKET)
+                    .upload(filePath, file, { upsert: true });
 
-            if (uploadError) throw uploadError;
+                if (uploadError) throw uploadError;
 
-            const { data: { publicUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
+                const { data: { publicUrl: newUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
+                publicUrl = newUrl;
+            }
 
-            // Verifica se já existe uma NF para esta parcela
+            if (!publicUrl) {
+                throw new Error('Nenhum arquivo anexado e nenhuma URL anterior encontrada.');
+            }
+
             const notaExistente = notasFiscais[parcela.id];
             
             const dataToSave: Partial<NotaFiscal> = {
                 proprietario_id: ownerId,
                 parcela_id: parcela.id,
-                status: 'Nota Emitida', // Resetar status para Emitida
+                status: 'Nota Emitida',
                 numero_nota: numeroNota,
                 valor: parcela.valor_parcela,
                 data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
                 anexo_url: publicUrl,
-                enviado_whatsapp: false, // Resetar flags de envio
-                enviado_email: false, // Resetar flags de envio
-                editada: !!notaExistente, // Marcar como editada se já existia
+                enviado_whatsapp: notaExistente?.enviado_whatsapp || false,
+                enviado_email: notaExistente?.enviado_email || false,
+                editada: !!notaExistente,
             };
 
             const { data: notaSalva, error: dbError } = await supabase
@@ -329,9 +357,7 @@ export function useNotasFiscais(
 
             showSuccess('Nota Fiscal anexada e status atualizado para "Nota Emitida"!');
             
-            // 🚨 NOVO: Acionar o webhook N8N imediatamente após o upload, se configurado
             if (configNF?.webhook_n8n_url) {
-                // Cria um objeto NotaFiscal completo para o envio
                 const notaCompleta: NotaFiscal = {
                     ...notaSalva,
                     proprietario_id: ownerId,
@@ -341,15 +367,14 @@ export function useNotasFiscais(
                     valor: parcela.valor_parcela,
                     data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
                     anexo_url: publicUrl,
-                    enviado_whatsapp: false,
-                    enviado_email: false,
-                    editada: !!notaExistente,
+                    enviado_whatsapp: notaSalva.enviado_whatsapp,
+                    enviado_email: notaSalva.enviado_email,
+                    editada: notaSalva.editada,
                     created_at: notaSalva.created_at,
                     updated_at: notaSalva.updated_at,
                     id: notaSalva.id,
                 };
                 
-                // Chama o handler de envio (que fará o webhook)
                 await handleSendNF(notaCompleta, 'webhook');
             }
 

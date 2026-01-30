@@ -51,6 +51,7 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                         <TableHead className="w-[150px]">Cliente</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Pagamento</TableHead>
+                        <TableHead className="w-[100px]">Forma</TableHead> {/* NOVA COLUNA */}
                         <TableHead className="w-[100px]">Nº NF</TableHead>
                         <TableHead className="w-[120px]">Emissão</TableHead>
                         <TableHead className="w-[120px]">Anexo/Upload</TableHead>
@@ -61,7 +62,7 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                 <TableBody>
                     {parcelasParaNF.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
+                            <TableCell colSpan={9} className="text-center py-4 text-muted-foreground">
                                 Nenhuma parcela paga encontrada.
                             </TableCell>
                         </TableRow>
@@ -77,6 +78,7 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                                     </TableCell>
                                     <TableCell className="font-semibold">{formatCurrency(parcela.valor_parcela)}</TableCell>
                                     <TableCell className="text-sm">{formatarData(parcela.data_pagamento)}</TableCell>
+                                    <TableCell className="text-sm font-medium">{parcela.forma_pagamento || '-'}</TableCell> {/* NOVA CÉLULA */}
                                     
                                     {/* Componente de Edição Inline */}
                                     <NotaFiscalInlineEditor
