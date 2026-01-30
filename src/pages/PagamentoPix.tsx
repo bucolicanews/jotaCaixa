@@ -14,6 +14,7 @@ interface ParcelaData {
   pagbank_qr_code_text: string | null;
   pagbank_status: string | null;
   pagbank_link_expira_em: string | null;
+  pagbank_checkout_link: string | null;
   conta_receber_id?: string | null;
   admin_contas_receber?: {
     descricao: string;
@@ -26,6 +27,7 @@ export default function PagamentoPix() {
   
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copiedCheckout, setCopiedCheckout] = useState(false);
   const [parcela, setParcela] = useState<ParcelaData | null>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -50,6 +52,7 @@ export default function PagamentoPix() {
           pagbank_qr_code_text,
           pagbank_status,
           pagbank_link_expira_em,
+          pagbank_checkout_link,
           conta_receber_id
         `)
         .eq('id', id)
@@ -92,6 +95,7 @@ export default function PagamentoPix() {
         pagbank_qr_code_text: data.pagbank_qr_code_text,
         pagbank_status: data.pagbank_status,
         pagbank_link_expira_em: data.pagbank_link_expira_em,
+        pagbank_checkout_link: data.pagbank_checkout_link,
         conta_receber_id: data.conta_receber_id,
         admin_contas_receber: null
       };
@@ -129,6 +133,21 @@ export default function PagamentoPix() {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast.error('Erro ao copiar código');
+    }
+  };
+  
+  const copiarLinkCheckout = async () => {
+    if (!parcela?.pagbank_checkout_link) return;
+    
+    try {
+      await navigator.clipboard.writeText(parcela.pagbank_checkout_link);
+      setCopiedCheckout(true);
+      toast.success('Link de Checkout copiado!', {
+        description: 'Cole para compartilhar ou abrir em outra aba'
+      });
+      setTimeout(() => setCopiedCheckout(false), 2000);
+    } catch (err) {
+      toast.error('Erro ao copiar link');
     }
   };
   
@@ -286,6 +305,47 @@ export default function PagamentoPix() {
             </ol>
           </AlertDescription>
         </Alert>
+        
+        {parcela.pagbank_checkout_link && (
+          <div className="space-y-3 pt-4 border-t">
+            <div className="text-center space-y-2">
+              <h2 className="text-lg font-semibold text-purple-700">Link de Checkout</h2>
+              <p className="text-sm text-gray-600">Ou pague com outras opções (PIX, Boleto, Cartão)</p>
+            </div>
+            
+            <div className="bg-purple-50 p-3 rounded-lg border border-purple-300 max-h-20 overflow-y-auto">
+              <p className="break-all text-xs font-mono text-gray-700">
+                {parcela.pagbank_checkout_link}
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                onClick={copiarLinkCheckout}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                size="lg"
+              >
+                {copiedCheckout ? (
+                  <>
+                    <Check className="mr-2 w-4 h-4" /> Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="mr-2 w-4 h-4" /> Copiar Link
+                  </>
+                )}
+              </Button>
+              
+              <Button 
+                onClick={() => window.open(parcela.pagbank_checkout_link!, '_blank')}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                size="lg"
+              >
+                Abrir Checkout
+              </Button>
+            </div>
+          </div>
+        )}
         
         <div className="text-xs text-center text-gray-500 pt-4 border-t">
           <p>Pagamento 100% seguro via PagBank</p>

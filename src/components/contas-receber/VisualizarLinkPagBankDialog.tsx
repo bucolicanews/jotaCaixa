@@ -66,8 +66,6 @@ export function VisualizarLinkPagBankDialog({
     manualInput?: boolean;
   } | null>(null);
 
-  const linkToUse = paymentLink || checkoutLink;
-
   useEffect(() => {
     const fetchTemplate = async () => {
       if (!ownerId) return;
@@ -439,12 +437,25 @@ export function VisualizarLinkPagBankDialog({
               </div>
             )}
 
-            {linkToUse && (
+            {paymentLink && (
+              <div className="space-y-2">
+                <Label className="text-xs">Link de Pagamento PIX</Label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input readOnly value={paymentLink} className="h-9 text-xs bg-muted truncate" />
+                  <Button size="icon" variant="outline" className="h-9 w-full sm:w-9" onClick={() => handleCopyLink(paymentLink, 'link')}>
+                      {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="sm:hidden ml-2">Copiar Link</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {checkoutLink && (
               <div className="space-y-2">
                 <Label className="text-xs">Link de Checkout</Label>
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <Input readOnly value={linkToUse} className="h-9 text-xs bg-muted truncate" />
-                  <Button size="icon" variant="outline" className="h-9 w-full sm:w-9" onClick={() => handleCopyLink(linkToUse, 'link')}>
+                  <Input readOnly value={checkoutLink} className="h-9 text-xs bg-muted truncate" />
+                  <Button size="icon" variant="outline" className="h-9 w-full sm:w-9" onClick={() => handleCopyLink(checkoutLink, 'link')}>
                       {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       <span className="sm:hidden ml-2">Copiar Link</span>
                   </Button>
@@ -460,7 +471,7 @@ export function VisualizarLinkPagBankDialog({
                       const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorParcela);
                       
                       // Se tem QR Code (PIX), usa a URL da página como prioridade
-                      const conteudoPrincipal = (qrCode && paymentLink) ? paymentLink : (linkToUse || qrCodeText || '');
+                      const conteudoPrincipal = (qrCode && paymentLink) ? paymentLink : (checkoutLink || qrCodeText || '');
 
                       // Usa o template de PIX se tiver QR Code, senão usa template de link
                       const templateParaUsar = qrCode ? whatsappTemplatePix : whatsappTemplateLink;
@@ -608,7 +619,7 @@ export function VisualizarLinkPagBankDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Gerar Novo Link de Pagamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              {linkToUse ? (
+              {(paymentLink || checkoutLink) ? (
                 <div className="space-y-2">
                   <p>Já existe um link ativo para esta parcela.</p>
                   <Alert>
