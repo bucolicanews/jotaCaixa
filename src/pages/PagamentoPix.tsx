@@ -84,12 +84,8 @@ export default function PagamentoPix() {
         link_expira_em: data.pagbank_link_expira_em
       });
       
-      // Verificar se tem QR Code
-      if (!data.pagbank_qr_code || !data.pagbank_qr_code_text) {
-        console.error('[PagamentoPix] PIX não foi gerado para esta parcela');
-        setError('PIX ainda não foi gerado. Solicite ao responsável para gerar o PIX.');
-        return;
-      }
+      // NÃO BLOQUEAR se não tem QR Code - deixar a página decidir o que mostrar
+      // A validação de expiração e status será feita mais abaixo
       
       // Buscar descrição da conta (opcional, não bloqueia se falhar)
       let parcelaCompleta: ParcelaData = {
@@ -203,6 +199,64 @@ export default function PagamentoPix() {
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor_parcela)}
             </p>
           </div>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Se não tem PIX mas tem checkout, mostrar checkout
+  if ((!parcela.pagbank_qr_code || !parcela.pagbank_qr_code_text) && parcela.pagbank_checkout_link) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 space-y-6 shadow-lg">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold text-purple-700">Pagamento Disponível</h1>
+            {parcela.admin_contas_receber?.descricao && (
+              <p className="text-sm text-gray-600">{parcela.admin_contas_receber.descricao}</p>
+            )}
+          </div>
+          
+          <div className="space-y-3 text-center bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <p className="text-sm font-semibold text-gray-700">Valor a pagar:</p>
+            <p className="text-4xl font-bold text-purple-600">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor_parcela)}
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600 text-center">Link de Pagamento:</p>
+            <div className="bg-gray-100 p-3 rounded-lg border border-gray-300">
+              <p className="break-all text-xs font-mono text-gray-700">
+                {parcela.pagbank_checkout_link}
+              </p>
+            </div>
+            
+            <Button 
+              onClick={() => window.open(parcela.pagbank_checkout_link!, '_blank')}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-6 text-lg font-semibold"
+              size="lg"
+            >
+              Abrir Link de Pagamento
+            </Button>
+          </div>
+          
+          <div className="text-xs text-center text-gray-500 pt-4 border-t">
+            <p>Pagamento 100% seguro via PagBank</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Se não tem PIX E não tem checkout, mostrar erro
+  if (!parcela.pagbank_qr_code || !parcela.pagbank_qr_code_text) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-amber-600 mx-auto" />
+          <h1 className="text-2xl font-bold text-amber-700">PIX não gerado</h1>
+          <p className="text-gray-600">O PIX ainda não foi gerado para esta cobrança.</p>
+          <p className="text-sm text-gray-500">Entre em contato para gerar o código PIX.</p>
         </Card>
       </div>
     );
