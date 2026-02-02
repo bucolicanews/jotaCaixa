@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
-import ReciboRecebimentoDialog from './ReciboRecebimentoDialog'; // NOVO IMPORT
+import ReciboRecebimentoDialog from './ReciboRecebimentoDialog';
+import EditarParcelaPagaDialog from './EditarParcelaPagaDialog';
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
@@ -50,6 +51,7 @@ interface TabelaParcelasProps {
     onRegerarLinkPagBank?: (parcela: ExtendedParcelaDetalhada) => void;
     onMapearComExtrato?: (parcela: ExtendedParcelaDetalhada) => void;
     onGerarBoleto?: (parcela: ExtendedParcelaDetalhada) => void;
+    onRefreshData?: () => void;
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -63,10 +65,13 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     onRegerarLinkPagBank,
     onMapearComExtrato,
     onGerarBoleto,
+    onRefreshData,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
     const [parcelaParaRecibo, setParcelaParaRecibo] = useState<string | null>(null);
+    const [editarDialogOpen, setEditarDialogOpen] = useState(false);
+    const [parcelaParaEditar, setParcelaParaEditar] = useState<string | null>(null);
 
     // Função para verificar se o link expirou
     const isLinkExpirado = (parcela: ExtendedParcelaDetalhada): boolean => {
@@ -77,6 +82,11 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     const handleOpenRecibo = (parcelaId: string) => {
         setParcelaParaRecibo(parcelaId);
         setReciboDialogOpen(true);
+    };
+
+    const handleOpenEditar = (parcelaId: string) => {
+        setParcelaParaEditar(parcelaId);
+        setEditarDialogOpen(true);
     };
 
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -150,6 +160,16 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                             className="bg-blue-500 hover:bg-blue-600 text-white"
                                                         >
                                                             <FileText className="w-4 h-4 mr-2" /> Recibo
+                                                        </Button>
+                                                    )}
+                                                    {isPaga && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            onClick={() => handleOpenEditar(p.id)}
+                                                            className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                                                        >
+                                                            <Edit className="w-4 h-4 mr-2" /> Editar
                                                         </Button>
                                                     )}
                                                     {!isPaga && onMapearComExtrato && (
@@ -591,6 +611,18 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                 parcelaId={parcelaParaRecibo}
                 open={reciboDialogOpen}
                 onOpenChange={setReciboDialogOpen}
+            />
+            
+            <EditarParcelaPagaDialog
+                parcelaId={parcelaParaEditar}
+                open={editarDialogOpen}
+                onOpenChange={setEditarDialogOpen}
+                onSaveComplete={() => {
+                    setEditarDialogOpen(false);
+                    if (onRefreshData) {
+                        onRefreshData();
+                    }
+                }}
             />
         </Card>
     );

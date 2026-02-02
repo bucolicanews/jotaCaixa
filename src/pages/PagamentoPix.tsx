@@ -41,9 +41,11 @@ export default function PagamentoPix() {
       setError(null);
       
       console.log('[PagamentoPix] Buscando parcela ID:', id);
+      console.log('[PagamentoPix] Tipo do ID:', typeof id);
+      console.log('[PagamentoPix] Supabase URL:', supabase.supabaseUrl);
       
       // BUSCA SIMPLIFICADA: Buscar apenas os campos da parcela (sem JOIN)
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError, count } = await supabase
         .from('admin_parcelas_receber')
         .select(`
           valor_parcela,
@@ -54,11 +56,13 @@ export default function PagamentoPix() {
           pagbank_link_expira_em,
           pagbank_checkout_link,
           conta_receber_id
-        `)
+        `, { count: 'exact' })
         .eq('id', id)
         .maybeSingle();
       
-      console.log('[PagamentoPix] Resultado da query:', { data, fetchError });
+      console.log('[PagamentoPix] Resultado da query:', { data, fetchError, count });
+      console.log('[PagamentoPix] Data é null?', data === null);
+      console.log('[PagamentoPix] Tem erro?', !!fetchError);
       
       if (fetchError) {
         console.error('[PagamentoPix] Erro ao buscar:', fetchError);

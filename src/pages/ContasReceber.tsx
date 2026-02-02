@@ -777,6 +777,7 @@ const ContasReceber = () => {
             }}
             onMapearComExtrato={handleMapearComExtrato}
             onGerarBoleto={handleGerarBoleto}
+            onRefreshData={buscarDados}
           />
         </TabsContent>
         

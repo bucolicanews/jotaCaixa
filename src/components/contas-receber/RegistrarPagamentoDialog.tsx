@@ -390,6 +390,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const [loading, setLoading] = useState(false); 
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<FormValues & { isPagamentoParcial: boolean, saldoRestante: number } | null>(null);
+  const [showConfirmacaoCodigoDialog, setShowConfirmacaoCodigoDialog] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState<FormValues | null>(null);
   
   const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
   
@@ -585,6 +587,13 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         return;
     }
     
+    const codigoTransacao = values.codigo_transacao?.trim();
+    if (!codigoTransacao) {
+        setPendingSubmitData(values);
+        setShowConfirmacaoCodigoDialog(true);
+        return;
+    }
+    
     const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
     const isBankPayment = contaDestinoDetalhe?.plano_contas?.is_banco === true;
     
@@ -600,6 +609,34 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     await saveDirectPayment(values);
     onOpenChange(false);
+  };
+
+  const handleConfirmarSemCodigo = async () => {
+    if (!pendingSubmitData) return;
+    
+    pendingSubmitData.codigo_transacao = 'Não Informado';
+    setShowConfirmacaoCodigoDialog(false);
+    
+    const contaDestinoDetalhe = contasDestino.find(c => c.id === pendingSubmitData.conta_id);
+    const isBankPayment = contaDestinoDetalhe?.plano_contas?.is_banco === true;
+    
+    if (isBankPayment) {
+        setPendingPaymentData({ 
+            ...pendingSubmitData, 
+            isPagamentoParcial: isPagamentoParcial, 
+            saldoRestante: saldoRestante 
+        });
+        setExtratoManualDialog(true);
+        return;
+    }
+    
+    await saveDirectPayment(pendingSubmitData);
+    onOpenChange(false);
+  };
+
+  const handleCancelarSemCodigo = () => {
+    setShowConfirmacaoCodigoDialog(false);
+    setPendingSubmitData(null);
   };
 
   return (
@@ -1152,6 +1189,41 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={showConfirmacaoCodigoDialog} onOpenChange={setShowConfirmacaoCodigoDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Código de Transação Não Informado</DialogTitle>
+            <DialogDescription>
+              Você deseja prosseguir sem o código da transação? Este código é obrigatório para o banco PagBank.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3 pt-4">
+            <p className="text-sm text-muted-foreground">
+              Ao continuar sem o código, o campo será preenchido automaticamente com "Não Informado".
+            </p>
+            
+            <div className="flex gap-3 justify-end">
+              <Button 
+                variant="outline" 
+                onClick={handleCancelarSemCodigo}
+              >
+                Não, voltar
+              </Button>
+              <Button 
+                onClick={handleConfirmarSemCodigo}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Sim, prosseguir
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
