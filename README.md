@@ -1,4 +1,4 @@
-# Jota App - Sistema de Gestão Financeira, Contábil ,  RHh e Pagbank, NF-e controle n8n
+# Jota App - Sistema de Gestão Financeira, Contábil ,  RHh e Pagbank, NF-e controle n8n/
 
 ![Version](https://img.shields.io/badge/version-2.5-blue)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)
