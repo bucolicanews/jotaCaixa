@@ -86,12 +86,12 @@ const tableCheck =
     return (count ?? 0) > 0;
   };
 
-type QueryBuilder = PostgrestFilterBuilder<any, any, any>;
+type QueryBuilder = PostgrestFilterBuilder<any, any, any, any>;
 
 const planoContaCheck =
   (applyFilters: (query: QueryBuilder) => QueryBuilder): RequirementChecker =>
   async (ownerId: string) => {
-    let query = supabase
+    let query: any = supabase
       .from('plano_contas')
       .select('id', { count: 'exact', head: true })
       .eq('proprietario_id', ownerId)
