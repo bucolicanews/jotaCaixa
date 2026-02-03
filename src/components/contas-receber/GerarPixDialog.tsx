@@ -233,7 +233,7 @@ ${pixPaymentPageUrl}
                       type="text" 
                       value={pixPaymentPageUrl} 
                       readOnly 
-                      className="flex-1 p-2 border rounded text-sm bg-white"
+                      className="flex-1 p-2 border rounded text-sm text-blue-900 bg-white"
                     />
                     <Button
                       size="sm"

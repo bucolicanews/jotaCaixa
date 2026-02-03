@@ -59,6 +59,20 @@ serve(async (req) => {
 
     // 3. Preparar Request
     let taxId = (cliente.cpf || cliente.cnpj || cliente.documento || '').replace(/\D/g, '');
+
+    console.log('[create-pagbank-payment] Cliente:', {
+      nome: cliente.nome,
+      cpf: cliente.cpf,
+      cnpj: cliente.cnpj,
+      documento: cliente.documento,
+      taxId_final: taxId
+    });
+
+    // Validar se taxId existe e tem tamanho válido (11 para CPF ou 14 para CNPJ)
+    if (!taxId || (taxId.length !== 11 && taxId.length !== 14)) {
+      throw new Error(`❌ Verifique o cadastro do cliente!\n\nCliente: "${cliente.nome}"\nProblema: CPF/CNPJ ${!taxId ? 'não informado' : 'inválido'}${taxId ? ` (${taxId.length} dígitos)` : ''}.\n\n✅ Solução: Acesse o cadastro do cliente e preencha um CPF válido (11 dígitos) ou CNPJ válido (14 dígitos).`);
+    }
+
     let nomeCliente = cliente.nome.trim();
     if (!nomeCliente.includes(' ')) nomeCliente += ' Cliente';
 
