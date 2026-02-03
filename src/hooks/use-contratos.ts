@@ -127,7 +127,37 @@ export function useContratos(): ContratosHook {
         conta_receber_id: contrato.contas_receber?.[0]?.id ?? null,
       }))
 
-      let fetchedContratos = processedData as ContratoComCliente[]
+      // NOVO: Busca por parcelas pagas em lote
+      const contratoIds = processedData.map((c) => c.id)
+      let contratosComParcelasPagas: string[] = []
+
+      if (contratoIds.length > 0) {
+        const { data: parcelasData, error: parcelasError } = await supabase
+          .from('parcelas_contas_receber')
+          .select('contas_receber(contrato_id)')
+          .in('contas_receber.contrato_id', contratoIds)
+          .eq('status', 'paga')
+          .not('contas_receber.contrato_id', 'is', null)
+
+        if (parcelasError) {
+          console.error('Erro ao buscar parcelas pagas:', parcelasError)
+          // Continua mesmo com erro, assumindo que não há parcelas pagas
+        } else {
+          // Extrai IDs únicos dos contratos que possuem parcelas pagas
+          contratosComParcelasPagas = [
+            ...new Set(
+              parcelasData
+                .map((p: any) => p.contas_receber?.contrato_id)
+                .filter((id: string | undefined) => id),
+            ),
+          ] as string[]
+        }
+      }
+
+      let fetchedContratos = processedData.map((c: any) => ({
+        ...c,
+        tem_parcelas_pagas: contratosComParcelasPagas.includes(c.id),
+      })) as ContratoComCliente[]
 
       // Filtragem de status (se não for 'todos')
       if (filtroStatus !== 'todos') {
@@ -175,53 +205,6 @@ export function useContratos(): ContratosHook {
   }, [carregandoSessao, isAdmin, empresaId, buscarContratos])
 
   // --- Mutação de Contratos ---
-
-  const handleDeleteContract = useCallback(
-    async (contrato: ContratoGerado) => {
-      if (
-        !window.confirm(
-          'Tem certeza que deseja excluir este contrato? Isso tentará reverter os lançamentos contábeis e excluir as contas a receber associadas.',
-        )
-      )
-        return
-
-      setCarregando(true)
-
-      try {
-        if (!contrato.proprietario_id) {
-          throw new Error('ID do proprietário do contrato não encontrado.')
-        }
-
-        // Chamada para a nova RPC que verifica parcelas pagas, reverte lançamentos e deleta
-        const { data, error: rpcError } = await supabase.rpc(
-          'delete_contract_and_reverse_accounting',
-          {
-            p_contrato_id: contrato.id,
-            p_proprietario_id: contrato.proprietario_id,
-          },
-        )
-
-        if (rpcError) throw rpcError
-
-        const result = data?.[0]
-
-        if (result && !result.success) {
-          // Se a RPC retornou FALSE (ex: parcelas pagas)
-          showError(result.message)
-        } else {
-          showSuccess(result?.message || 'Contrato deletado com sucesso.')
-        }
-
-        refetch()
-      } catch (error: any) {
-        console.error('Erro ao deletar contrato:', error)
-        showError('Falha ao excluir contrato: ' + error.message)
-      } finally {
-        setCarregando(false)
-      }
-    },
-    [refetch],
-  )
 
   const handleBlockContract = useCallback(
     async (contrato: ContratoGerado) => {
@@ -329,7 +312,6 @@ export function useContratos(): ContratosHook {
         setOrdenacao,
 
         // Mutations
-        handleDeleteContract,
         handleBlockContract,
         handleReactivateContract,
     };
