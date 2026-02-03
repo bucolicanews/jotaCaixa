@@ -762,6 +762,15 @@ const PreencherContrato: React.FC = () => {
           <Card>
             <CardHeader><CardTitle>2. Detalhes Financeiros</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              {isEditing && parcelasPagas.length > 0 && (
+                <Alert variant="default">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Contrato em Edição</AlertTitle>
+                  <AlertDescription>
+                    Este contrato possui **{parcelasPagas.length} parcela(s) já paga(s)**. Ao salvar, apenas as parcelas em aberto serão recalculadas/substituídas. O valor total do contrato será ajustado.
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Valor Base (R$)</Label>
