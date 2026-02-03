@@ -116,7 +116,6 @@ export default function ContratosTable({
                         variant="outline"
                         size="icon"
                         onClick={() => {
-                          console.log('BOTÃO OK', c.id)
                           setContratoSelecionado(c)
                           setAditivosDialogOpen(true)
                         }}
