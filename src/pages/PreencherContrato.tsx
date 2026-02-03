@@ -73,6 +73,13 @@ const PreencherContrato: React.FC = () => {
 
   const isEditing = !!contratoId;
 
+  const { tabelaContasReceber, tabelaParcelasReceber, ownerKey } = useMemo(() => {
+    const tc = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
+    const tp = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const ok = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
+    return { tabelaContasReceber: tc, tabelaParcelasReceber: tp, ownerKey: ok };
+  }, [isAdminOrEmployee]);
+
     const [resolvedOwnerId, setResolvedOwnerId] = useState<string | null>(null);
   
         useEffect(() => {
@@ -280,7 +287,6 @@ const PreencherContrato: React.FC = () => {
             }
             
             // Lógica para carregar parcelas pagas
-            const tabelaParcelasReceber = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
             
             const { data: oldContaSintetica } = await supabase
                 .from(tabelaContasReceber)
@@ -448,11 +454,6 @@ const PreencherContrato: React.FC = () => {
 
     setIsSubmitting(true);
     
-    // Determina as tabelas e chaves
-    const tabelaContasReceber = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
-    const tabelaParcelasReceber = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-    const ownerKey = isAdminOrEmployee ? 'admin_id' : 'empresa_id';
-    
     // Busca as contas contábeis mapeadas
     const { data: configData } = await supabase
         .from('configuracao_contratos')
@@ -476,28 +477,6 @@ const PreencherContrato: React.FC = () => {
     const temConfigContabil = !!contaPatrimonialId && !!contaReceitaId && !!contaParcelaId;
 
     try {
-        let valorTotalFinal = valorTotal;
-        let valorParcela = valorTotal;
-        let parcelasParaInserir = [];
-
-        if (tipoLancamento === 'unico') {
-            valorTotalFinal = valorTotal;
-            valorParcela = valorTotal;
-            parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorTotal, data_vencimento: format(dataVencimentoUnico!, 'yyyy-MM-dd'), status: 'aberta' });
-        } else if (tipoLancamento === 'parcelar') {
-            valorTotalFinal = valorTotal;
-            valorParcela = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
-            for (let i = 0; i < numeroParcelas; i++) {
-                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
-            }
-        } else if (tipoLancamento === 'repetir') {
-            valorTotalFinal = valorTotal * numeroParcelas;
-            valorParcela = valorTotal;
-            for (let i = 0; i < numeroParcelas; i++) {
-                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
-            }
-        }
-        
         let currentContratoId = contratoId;
         let contaReceberId: string | null = null;
         let valorTotalPago = 0; // Novo estado para rastrear o valor já pago
@@ -642,10 +621,12 @@ const PreencherContrato: React.FC = () => {
             contaReceberId = newContaSintetica.id;
         }
         
+        if (!contaReceberId) throw new Error("Falha ao obter ID da Conta a Receber.");
+        
         // 5. Inserir Novas Parcelas Abertas
         const parcelasComId = parcelasParaInserir.map(p => ({
             ...p,
-            conta_receber_id: contaReceberId,
+            conta_receber_id: contaReceberId!,
             [ownerKey]: proprietarioContratoId,
             ...(temConfigContabil && { id_conta_contabil: contaParcelaId })
         }));
