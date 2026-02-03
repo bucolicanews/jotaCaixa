@@ -39,4 +39,7 @@ export interface ContratoGerado {
   // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO (CONTRATANTE)
   assinatura_proprietario_nome?: string | null;
   assinatura_proprietario_url?: string | null;
+  
+  // Metadados para ações
+  tem_parcelas_pagas?: boolean;
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock, CheckCircle2, Building2 } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock, CheckCircle2, Building2, Trash2 } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -38,12 +38,15 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false); // NOVO ESTADO
+  const [isDeleting, setIsDeleting] = useState(false); // NOVO ESTADO PARA DELEÇÃO
   const { printContent } = usePrint();
   
   const ownerId = contrato?.proprietario_id; // O proprietário do contrato é quem define a configuração
   const isMyContract = ownerId === usuario?.id || (role === 'Cliente' && ownerId === (usuario as any)?.cliente_id);
   const isCanceledOrBlocked = contrato?.status === 'cancelado' || contrato?.status === 'bloqueado';
   const isAssinado = contrato?.status === 'ativo' || contrato?.status === 'concluido'; // NOVO
+
+  const temParcelasPagas = contrato?.tem_parcelas_pagas ?? false; // NOVO: Usa o metadado do contrato
 
   const fetchConfig = useCallback(async () => {
     if (!ownerId) {
@@ -300,6 +303,29 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     }
   };
 
+  const handleDeleteContract = async () => {
+    if (!contrato) return;
+    setIsDeleting(true);
+
+    try {
+        // Chama a função RPC que verifica se há parcelas pagas antes de deletar
+        const { error: rpcError } = await supabase.rpc('delete_contract_if_no_payments', {
+            p_contrato_id: contrato.id,
+        });
+
+        if (rpcError) throw rpcError;
+
+        showSuccess('Contrato deletado com sucesso.');
+        // Força o recarregamento da página de contratos
+        window.location.href = '/contratos';
+    } catch (error: any) {
+        console.error('Erro ao deletar contrato:', error);
+        showError('Falha ao deletar contrato: ' + error.message);
+    } finally {
+        setIsDeleting(false);
+    }
+  };
+
   if (!contrato) return null;
   
   // Verifica o tipo de conteúdo salvo no contrato
@@ -396,6 +422,51 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         </Tabs>
         
         <div className="flex justify-between pt-4 border-t">
+            {isMyContract && (
+                // NOVO: Botão de Deletar (sempre visível)
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" disabled={isDeleting}>
+                            <Trash2 className="w-4 h-4 mr-2" /> Deletar Contrato
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                {temParcelasPagas ? 'Atenção: Contrato com Pagamentos' : 'Confirmar Deleção do Contrato'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {temParcelasPagas ? (
+                                    <>
+                                        Não é possível deletar este contrato pois ele possui parcelas que já foram pagas.
+                                        <br /><br />
+                                        Caso queira que o contrato ou as outras parcelas sejam suspensas, utilize o botão **Bloquear Contrato** abaixo.
+                                    </>
+                                ) : (
+                                    `Tem certeza que deseja deletar o contrato permanentemente? Esta ação não pode ser desfeita e removerá todas as parcelas associadas.`
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDeleteContract}
+                                disabled={isDeleting || temParcelasPagas}
+                                className={temParcelasPagas ? 'hidden' : ''} // Esconde o botão de ação se tiver parcelas pagas
+                            >
+                                {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Confirmar Deleção'}
+                            </AlertDialogAction>
+                            {/* Se tiver parcelas pagas, o botão de ação é o de Bloquear */}
+                            {temParcelasPagas && (
+                                <AlertDialogAction onClick={() => { onOpenChange(false); }} className="bg-primary hover:bg-primary/90">
+                                    Ir para Bloquear
+                                </AlertDialogAction>
+                            )}
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+            
             {isMyContract && (
                 isCanceledOrBlocked ? (
                     <AlertDialog>
