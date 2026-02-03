@@ -18,9 +18,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
+import { TabelaParcelasEdicao } from '@/components/contratos/TabelaParcelasEdicao';
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { ptBR } from 'date-fns/locale';
+
 import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
 import { useCapitalSocial } from '@/hooks/use-capital-social'; // NOVO IMPORT
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -66,6 +68,8 @@ const PreencherContrato: React.FC = () => {
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null); // NOVO ESTADO PARA EDIÇÃO
   const [dadosContratada, setDadosContratada] = useState<any>(null);
+  const [parcelasPagas, setParcelasPagas] = useState<any[]>([]); // NOVO ESTADO
+  const [novasParcelas, setNovasParcelas] = useState<any[]>([]); // NOVO ESTADO
 
   const isEditing = !!contratoId;
 
@@ -274,6 +278,28 @@ const PreencherContrato: React.FC = () => {
                     setTituloDocumento((contratoExistente.valores_tags_preenchidos as any)['titulo']);
                 }
             }
+            
+            // Lógica para carregar parcelas pagas
+            const tabelaParcelasReceber = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+            
+            const { data: oldContaSintetica } = await supabase
+                .from(tabelaContasReceber)
+                .select('id')
+                .eq('contrato_gerado_id', contratoExistente.id)
+                .single();
+                
+            if (oldContaSintetica) {
+                const { data: existingParcelas } = await supabase
+                    .from(tabelaParcelasReceber)
+                    .select('id, numero_parcela, valor_parcela, data_vencimento, status')
+                    .eq('conta_receber_id', oldContaSintetica.id)
+                    .neq('status', 'aberta') // Apenas parcelas pagas/finalizadas
+                    .order('numero_parcela', { ascending: true });
+                    
+                if (existingParcelas) {
+                    setParcelasPagas(existingParcelas.map(p => ({ ...p, isNew: false })));
+                }
+            }
         }
     }
     
@@ -474,8 +500,9 @@ const PreencherContrato: React.FC = () => {
         
         let currentContratoId = contratoId;
         let contaReceberId: string | null = null;
+        let valorTotalPago = 0; // Novo estado para rastrear o valor já pago
         
-        // 1. SE FOR EDIÇÃO: Deletar lançamentos contábeis antigos e conta sintética
+        // 1. SE FOR EDIÇÃO: Preservar parcelas pagas e obter a conta sintética
         if (isEditing && contratoInicial) {
             // 1.1. Buscar a conta sintética antiga
             const { data: oldContaSintetica } = await supabase
@@ -487,25 +514,70 @@ const PreencherContrato: React.FC = () => {
             if (oldContaSintetica) {
                 contaReceberId = oldContaSintetica.id;
                 
-                // 1.2. Deletar lançamentos contábeis antigos (usando o ID da conta sintética)
+                // 1.2. Buscar todas as parcelas existentes
+                const { data: existingParcelas, error: parcelasError } = await supabase
+                    .from(tabelaParcelasReceber)
+                    .select('id, valor_parcela, status')
+                    .eq('conta_receber_id', contaReceberId);
+                    
+                if (parcelasError) throw parcelasError;
+                
+                // 1.3. Separar parcelas pagas (status != 'aberta')
+                const parcelasPagas = existingParcelas.filter(p => p.status !== 'aberta');
+                const parcelasAbertasAntigasIds = existingParcelas.filter(p => p.status === 'aberta').map(p => p.id);
+                
+                // 1.4. Deletar APENAS as parcelas abertas antigas
+                if (parcelasAbertasAntigasIds.length > 0) {
+                    await supabase.from(tabelaParcelasReceber)
+                        .delete()
+                        .in('id', parcelasAbertasAntigasIds);
+                }
+                
+                // 1.5. Calcular o valor total das parcelas pagas
+                valorTotalPago = parcelasPagas.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+                
+                // 1.6. Deletar lançamentos contábeis antigos (apenas os de criação do CR, que serão refeitos)
                 await supabase.from('lancamentos')
                     .delete()
                     .eq('origem', 'lancamento_cr')
                     .eq('proprietario_id', proprietarioContratoId)
                     .or(`descricao.ilike.%CR ID: ${contaReceberId.substring(0, 8)}%`);
-                    
-                // 1.3. Deletar parcelas antigas e a conta sintética (CASCADE)
-                await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberId);
             }
         }
         
-        // 2. Inserir/Atualizar Contrato Gerado
+        // 2. Preparar as novas parcelas a serem inseridas
+        let valorTotalNovasParcelas = 0;
+        let valorParcela = valorTotal;
+        let parcelasParaInserir = [];
+
+        if (tipoLancamento === 'unico') {
+            valorTotalNovasParcelas = valorTotal;
+            valorParcela = valorTotal;
+            parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorTotal, data_vencimento: format(dataVencimentoUnico!, 'yyyy-MM-dd'), status: 'aberta' });
+        } else if (tipoLancamento === 'parcelar') {
+            valorTotalNovasParcelas = valorTotal;
+            valorParcela = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
+            for (let i = 0; i < numeroParcelas; i++) {
+                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
+            }
+        } else if (tipoLancamento === 'repetir') {
+            valorTotalNovasParcelas = valorTotal * numeroParcelas;
+            valorParcela = valorTotal;
+            for (let i = 0; i < numeroParcelas; i++) {
+                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(dataPrimeiroVencimento!, i * intervaloDias), 'yyyy-MM-dd'), status: 'aberta' });
+            }
+        }
+        
+        // O valor total final do contrato é a soma do que já foi pago (valorTotalPago) + o valor das novas parcelas (valorTotalNovasParcelas)
+        const valorTotalFinal = valorTotalPago + valorTotalNovasParcelas;
+        
+        // 3. Inserir/Atualizar Contrato Gerado
         const contratoPayload = {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId,
             status: status,
-            valor_total: valorTotalFinal,
+            valor_total: valorTotalFinal, // Atualizado com o valor total real
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
             valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento, tipo_conteudo: 'html' },
@@ -522,16 +594,16 @@ const PreencherContrato: React.FC = () => {
             currentContratoId = data.id;
         }
         
-        // 3. Inserir Nova Conta Sintética (Contas a Receber)
+        // 4. Inserir Nova Conta Sintética (Contas a Receber) OU ATUALIZAR A EXISTENTE
         const contaReceberPayload = isAdminOrEmployee ? {
             admin_id: proprietarioContratoId,
             cliente_id: clienteSelecionadoId,
             descricao: `Contrato: ${tituloDocumento}`,
-            valor_total: valorTotalFinal,
+            valor_total: valorTotalFinal, // Atualizado com o valor total real
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
             data_vencimento: parcelasParaInserir[0].data_vencimento,
             tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
-            status: 'aberta',
+            status: 'aberta', // O status deve ser 'aberta' se houver parcelas abertas, ou 'paga' se todas forem pagas.
             origem: 'contrato',
             contrato_gerado_id: currentContratoId,
             id_conta_patrimonial: contaPatrimonialId,
@@ -540,7 +612,7 @@ const PreencherContrato: React.FC = () => {
             empresa_id: proprietarioContratoId,
             cliente_id: clienteSelecionadoId,
             descricao: `Contrato: ${tituloDocumento}`,
-            valor_total: valorTotalFinal,
+            valor_total: valorTotalFinal, // Atualizado com o valor total real
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
             data_vencimento: parcelasParaInserir[0].data_vencimento,
             tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
@@ -551,19 +623,29 @@ const PreencherContrato: React.FC = () => {
             id_conta_resultado: contaReceitaId,
         };
         
-        const { data: newContaSintetica, error: contaError } = await supabase
-            .from(tabelaContasReceber)
-            .insert(contaReceberPayload)
-            .select('id')
-            .single();
-            
-        if (contaError) throw contaError;
-        contaReceberId = newContaSintetica.id;
+        if (isEditing && contaReceberId) {
+            // Atualizar a conta sintética existente
+            const { error: contaError } = await supabase
+                .from(tabelaContasReceber)
+                .update(contaReceberPayload)
+                .eq('id', contaReceberId);
+            if (contaError) throw contaError;
+        } else {
+            // Inserir nova conta sintética (se não for edição ou se a conta sintética não foi encontrada)
+            const { data: newContaSintetica, error: contaError } = await supabase
+                .from(tabelaContasReceber)
+                .insert(contaReceberPayload)
+                .select('id')
+                .single();
+                
+            if (contaError) throw contaError;
+            contaReceberId = newContaSintetica.id;
+        }
         
-        // 4. Inserir Parcelas
-        const parcelasComId = parcelasParaInserir.map(p => ({ 
-            ...p, 
-            conta_receber_id: contaReceberId, 
+        // 5. Inserir Novas Parcelas Abertas
+        const parcelasComId = parcelasParaInserir.map(p => ({
+            ...p,
+            conta_receber_id: contaReceberId,
             [ownerKey]: proprietarioContratoId,
             ...(temConfigContabil && { id_conta_contabil: contaParcelaId })
         }));
@@ -571,7 +653,7 @@ const PreencherContrato: React.FC = () => {
         const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
         if (parcelError) throw parcelError;
         
-        // 5. Lançamentos Contábeis (Partidas Dobradas)
+        // 6. Lançamentos Contábeis (Partidas Dobradas)
         if (temConfigContabil && status !== 'rascunho') {
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
             const launchDescription = `Contrato: ${tituloDocumento}`;
