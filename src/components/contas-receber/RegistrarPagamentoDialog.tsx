@@ -36,6 +36,7 @@ interface ParcelaParaPagamento {
 
 const formSchema = z.object({
   valor_recebido: z.coerce.number().positive('O valor deve ser maior que zero.'),
+  taxa_bancaria: z.coerce.number().min(0, 'A taxa não pode ser negativa.').optional(),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
   codigo_transacao: z.string().optional(),
@@ -82,6 +83,8 @@ export async function saveRecebimentoAndLancamentos({
     const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     const valorRecebido = values.valor_recebido;
+    const taxaBancaria = values.taxa_bancaria || 0;
+    const valorLiquido = valorRecebido - taxaBancaria;
     const valorPagoAnterior = parcela.valor_pago || 0;
     const novoValorPagoTotal = valorPagoAnterior + valorRecebido;
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
@@ -140,6 +143,8 @@ export async function saveRecebimentoAndLancamentos({
             anexo_url: comprovanteUrl,
             observacao: values.observacao || null,
             codigo_transacao: values.codigo_transacao || null,
+            pagbank_taxa_valor: taxaBancaria,
+            pagbank_valor_liquido: valorLiquido,
         };
     } else {
         recebimentoBasePayload = { 
@@ -151,6 +156,8 @@ export async function saveRecebimentoAndLancamentos({
             anexo_url: comprovanteUrl,
             observacao: values.observacao || null,
             codigo_transacao: values.codigo_transacao || null,
+            pagbank_taxa_valor: taxaBancaria,
+            pagbank_valor_liquido: valorLiquido,
         };
     }
 
@@ -317,6 +324,7 @@ export async function saveRecebimentoAndLancamentos({
         throw new Error('Conta de destino não possui vínculo contábil.');
     }
     
+    // Lançamento do Valor Líquido
     const idAtivo = crypto.randomUUID();
     const idPatrimonial = crypto.randomUUID();
     
@@ -324,8 +332,8 @@ export async function saveRecebimentoAndLancamentos({
         id: idAtivo,
         proprietario_id: proprietarioDaSessao,
         data_movimentacao: dataPagamentoISO,
-        descricao: `Recebimento Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
-        valor: valorRecebido,
+        descricao: `Recebimento (Líquido) Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
+        valor: valorLiquido,
         tipo: 'Entrada' as const,
         conta_bancaria_id: values.conta_id,
         conta_contabil_id: contaContabilCaixaBanco,
@@ -339,8 +347,8 @@ export async function saveRecebimentoAndLancamentos({
             id: idPatrimonial,
             proprietario_id: proprietarioDaSessao,
             data_movimentacao: dataPagamentoISO,
-            descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-            valor: valorRecebido,
+            descricao: `Estorno Patrimonial (Líquido) CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: valorLiquido,
             tipo: 'Saida' as const,
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_patrimonial_id,
@@ -350,6 +358,46 @@ export async function saveRecebimentoAndLancamentos({
         });
     } else {
         console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
+    }
+
+    // Lançamento da Taxa Bancária como Despesa
+    if (taxaBancaria > 0) {
+        if (!contaTaxasBancarias) {
+            throw new Error('Conta de Taxas Bancárias não configurada.');
+        }
+
+        const idTaxaDespesa = crypto.randomUUID();
+        const idTaxaPatrimonial = crypto.randomUUID();
+
+        lancamentosPayload.push({
+            id: idTaxaDespesa,
+            proprietario_id: proprietarioDaSessao,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Taxa Bancária Recebimento: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: taxaBancaria,
+            tipo: 'Entrada' as const,
+            conta_bancaria_id: null,
+            conta_contabil_id: contaTaxasBancarias,
+            origem: 'recebimento_manual',
+            historico_id: values.historico_id,
+            conta_resultado_id: idTaxaPatrimonial,
+        });
+
+        if (values.conta_patrimonial_id) {
+            lancamentosPayload.push({
+                id: idTaxaPatrimonial,
+                proprietario_id: proprietarioDaSessao,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Estorno Patrimonial (Taxa) CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+                valor: taxaBancaria,
+                tipo: 'Saida' as const,
+                conta_bancaria_id: null,
+                conta_contabil_id: values.conta_patrimonial_id,
+                historico_id: values.historico_id,
+                origem: 'recebimento_manual',
+                conta_resultado_id: idTaxaDespesa,
+            });
+        }
     }
     
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
@@ -405,6 +453,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     resolver: zodResolver(formSchema),
     defaultValues: {
       valor_recebido: 0,
+      taxa_bancaria: 0,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
       codigo_transacao: '',
@@ -509,6 +558,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     reset({
         valor_recebido: saldoDevedor,
+        taxa_bancaria: 0,
         data_pagamento: new Date(),
         forma_pagamento: 'Pix',
         codigo_transacao: '',
@@ -543,9 +593,11 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchConfigAndDefaults, parcela]);
 
   const valorRecebido = form.watch('valor_recebido');
+  const taxaBancaria = form.watch('taxa_bancaria');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
   const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
   const saldoRestante = saldoDevedor - valorRecebido;
+  const valorLiquido = (valorRecebido || 0) - (taxaBancaria || 0);
   const isRecebimentoMaior = valorRecebido > saldoDevedor;
   const valorAcrescimo = isRecebimentoMaior ? valorRecebido - saldoDevedor : 0;
 
@@ -711,6 +763,40 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                     </FormItem>
                   )}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="taxa_bancaria"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Taxa Bancária</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                          value={field.value ?? 0}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormItem>
+                  <FormLabel>Valor Líquido</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={valorLiquido.toFixed(2)}
+                      disabled
+                      className="disabled:opacity-100 disabled:cursor-default"
+                    />
+                  </FormControl>
+                </FormItem>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1168,6 +1254,42 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 conciliação.
               </DialogDescription>
             </DialogHeader>
+
+            <div className="space-y-1 text-sm mt-2 p-3 bg-muted/50 rounded-md border">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Valor Bruto (Recebido)</span>
+                <span>
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(pendingPaymentData.valor_recebido)}
+                </span>
+              </div>
+              {(pendingPaymentData.taxa_bancaria || 0) > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Taxa Bancária</span>
+                  <span>
+                    -{" "}
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(pendingPaymentData.taxa_bancaria || 0)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold border-t pt-1 mt-1">
+                <span>Valor Líquido (No Banco)</span>
+                <span>
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(
+                    pendingPaymentData.valor_recebido -
+                      (pendingPaymentData.taxa_bancaria || 0)
+                  )}
+                </span>
+              </div>
+            </div>
 
             <FormExtratoManualCR
               parcela={parcela}
