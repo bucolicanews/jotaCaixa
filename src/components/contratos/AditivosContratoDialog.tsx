@@ -113,7 +113,7 @@ export function AditivosContratoDialog({
           .from('admin_parcelas_receber')
           .select('*')
           .eq('conta_receber_id', effectiveCRId)
-          .neq('status', 'paga')
+          .in('status', ['aberta', 'parcial', 'reprogramada'])
           .order('numero_parcela', { ascending: true })
 
         if (parcelasError) {
@@ -146,27 +146,27 @@ export function AditivosContratoDialog({
 
     const valorAjusteNum = parseFloat(valorAjuste)
     const parcelasAfetadas = parcelas.filter(p => selectedParcelas.includes(p.id))
-    const valorContratoAnterior = parcelas.reduce((sum, p) => sum + p.valor, 0)
+    const valorContratoAnterior = parcelas.reduce((sum, p) => sum + p.valor_parcela, 0)
 
     let parcelasAtualizadas: { id: string, novo_valor: number }[] = []
 
     if (modoDistribuicao === 'fixo') {
       const ajustePorParcela = valorAjusteNum / parcelasAfetadas.length
       parcelasAfetadas.forEach(p => {
-        const novoValor = tipoAditivo === 'acrescimo' ? p.valor + ajustePorParcela : p.valor - ajustePorParcela
+        const novoValor = tipoAditivo === 'acrescimo' ? p.valor_parcela + ajustePorParcela : p.valor_parcela - ajustePorParcela
         parcelasAtualizadas.push({ id: p.id, novo_valor: Math.max(0, novoValor) })
       })
     } else { // Proporcional
-      const valorTotalAfetado = parcelasAfetadas.reduce((sum, p) => sum + p.valor, 0)
+      const valorTotalAfetado = parcelasAfetadas.reduce((sum, p) => sum + p.valor_parcela, 0)
       if (valorTotalAfetado === 0) {
         showError('Não é possível aplicar ajuste proporcional a parcelas com valor total zero.')
         setIsSaving(false)
         return
       }
       parcelasAfetadas.forEach(p => {
-        const proporcao = p.valor / valorTotalAfetado
+        const proporcao = p.valor_parcela / valorTotalAfetado
         const ajusteDaParcela = valorAjusteNum * proporcao
-        const novoValor = tipoAditivo === 'acrescimo' ? p.valor + ajusteDaParcela : p.valor - ajusteDaParcela
+        const novoValor = tipoAditivo === 'acrescimo' ? p.valor_parcela + ajusteDaParcela : p.valor_parcela - ajusteDaParcela
         parcelasAtualizadas.push({ id: p.id, novo_valor: Math.max(0, novoValor) })
       })
     }
@@ -258,7 +258,7 @@ export function AditivosContratoDialog({
                           {new Date(p.data_vencimento).toLocaleDateString('pt-BR')}
                         </span>
                         <span className='font-bold'>
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)}
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor_parcela)}
                         </span>
                       </div>
                     </label>
@@ -275,11 +275,11 @@ export function AditivosContratoDialog({
               <div className='grid grid-cols-2 gap-4'>
                 <div>
                   <Label htmlFor="tipoAditivo">Tipo de Aditivo</Label>
-                  <Select value={tipoAditivo} onValueChange={(v: any) => setTipoAditivo(v)}>
+                  <Select value={tipoAditivo} onValueChange={(v: 'acrescimo' | 'reducao') => setTipoAditivo(v)}>
                     <SelectTrigger id="tipoAditivo">
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[10000]">
                       <SelectItem value="acrescimo">Acréscimo</SelectItem>
                       <SelectItem value="reducao">Redução</SelectItem>
                     </SelectContent>
@@ -299,11 +299,11 @@ export function AditivosContratoDialog({
 
               <div>
                 <Label htmlFor="modoDistribuicao">Modo de Distribuição</Label>
-                <Select value={modoDistribuicao} onValueChange={(v: any) => setModoDistribuicao(v)}>
+                <Select value={modoDistribuicao} onValueChange={(v: 'proporcional' | 'fixo') => setModoDistribuicao(v)}>
                   <SelectTrigger id="modoDistribuicao">
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10000]">
                     <SelectItem value="proporcional">Proporcional ao valor da parcela</SelectItem>
                     <SelectItem value="fixo">Valor fixo dividido igualmente</SelectItem>
                   </SelectContent>
@@ -342,4 +342,3 @@ export function AditivosContratoDialog({
     </Dialog>
   )
 }
-

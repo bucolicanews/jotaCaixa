@@ -110,7 +110,8 @@ export default function ContratosTable({
                       <Edit className="w-4 h-4" />
                     </Button>
 
-                    {c.status === 'ativo' && c.proprietario_id === empresaId && (
+                    {(c.status === 'ativo' || c.status === 'pendente_assinatura') &&
+                      c.proprietario_id === empresaId && (
                       <Button
                         type="button"
                         variant="outline"
