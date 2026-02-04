@@ -24,6 +24,8 @@ import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { v4 as uuidv4 } from 'uuid';
 import FormExtratoManualCR from './FormExtratoManualCR'; // Importado para uso no modal
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // IMPORT FALTANTE
+import { Textarea } from '../ui/textarea'; // Importado para uso no modal
 
 interface ParcelaParaPagamento {
   id: string;
@@ -50,6 +52,7 @@ const formSchema = z.object({
   salvar_como_padrao: z.boolean().optional(),
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial válida.').nullable(),
   conta_acrescimo_id: z.string().uuid('Selecione a conta de acréscimo.').nullable().optional(),
+  observacao: z.string().optional(), // Adicionado observação ao esquema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -447,6 +450,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       historico_id: null,
       salvar_como_padrao: false,
       conta_patrimonial_id: null,
+      observacao: '',
     },
   });
   
@@ -553,6 +557,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         historico_id: defaultHistoricoId,
         salvar_como_padrao: false,
         conta_patrimonial_id: contaPatrimonialId,
+        observacao: '',
     });
     
     setIsInitialized(true);
@@ -975,6 +980,20 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   />
                 </div>
               )}
+              
+              <FormField
+                control={form.control}
+                name="observacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observação (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Detalhes adicionais" {...field} value={field.value ?? ''} rows={2} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {isPagamentoParcial && (
                 <div className="space-y-4 pt-4 border-t">
@@ -1063,6 +1082,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
+
                             <PopoverContent className="w-auto p-0">
                               <Calendar
                                 mode="single"
