@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -22,15 +22,15 @@ import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import FormExtratoManualCR from './FormExtratoManualCR';
+import { v4 as uuidv4 } from 'uuid';
 
 interface ParcelaParaPagamento {
   id: string;
   conta_receber_id: string;
-  empresa_id: string;
+  empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
   valor_parcela: number;
   valor_pago: number;
-  cliente_id: string | null;
+  cliente_id: string | null; // ID do cliente real (tbl_clientes)
   status?: string;
 }
 
@@ -90,6 +90,7 @@ export async function saveRecebimentoAndLancamentos({
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
+    // 1. Buscar Configurações Contábeis e PagBank
     const { data: configCRData, error: configCRError } = await supabase
         .from('configuracao_contas_receber')
         .select('tipo_registro, conta_contabil_id')
@@ -102,8 +103,8 @@ export async function saveRecebimentoAndLancamentos({
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
     const contaDesconto = configMap['desconto_concedido'];
+    const contaEstornoDesconto = configMap['estorno_desconto_concedido'];
     
-    // Busca a configuração de taxa do PagBank
     const { data: pagbankConfig, error: pagbankConfigError } = await supabase
         .from('configuracoes_pagbank')
         .select('conta_despesa_taxa_id, historico_taxa_id')
@@ -115,62 +116,51 @@ export async function saveRecebimentoAndLancamentos({
     const contaDespesaTaxa = pagbankConfig?.conta_despesa_taxa_id;
     const historicoTaxa = pagbankConfig?.historico_taxa_id;
     
+    // 2. Buscar Conta Sintética (para descrição e conta de resultado)
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
-        .select('descricao, id_conta_resultado')
+        .select('descricao, id_conta_resultado, id_conta_patrimonial')
         .eq('id', parcela.conta_receber_id)
         .single();
         
     if (csError) throw csError;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
     const contaReceitaResultado = contaSintetica?.id_conta_resultado;
+    const contaPatrimonialOriginal = contaSintetica?.id_conta_patrimonial;
 
+    // 3. Preparar dados de tempo e conta de destino
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
     
+    const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
+    const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
+    
+    if (!contaContabilCaixaBanco) {
+        throw new Error('Conta de destino não possui vínculo contábil.');
+    }
+    
     const lancamentosPayload: any[] = [];
     
+    // 4. Registrar Recebimento (Histórico)
     let recebimentoBasePayload;
-    
     const ownerKeyRecebimento = isAdmin ? 'admin_id' : 'empresa_id';
 
-    if (isAdmin) {
-        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
-        
-        if (!clienteIdPagador) {
-            throw new Error('ID do cliente pagador não encontrado.'); 
-        }
-        
-        recebimentoBasePayload = { 
-            parcela_id: parcela.id, 
-            [ownerKeyRecebimento]: proprietarioDaSessao,
-            valor_recebido: valorRecebido, 
-            cliente_id: clienteIdPagador,
-            conta_id: values.conta_id,
-            id_conta_contabil: contaRecebimento,
-            historico_id: values.historico_id,
-            id_conta_resultado: contaReceitaResultado,
-            anexo_url: comprovanteUrl,
-            observacao: values.observacao || null,
-            codigo_transacao: values.codigo_transacao || null,
-            pagbank_taxa_valor: taxaBancaria,
-            pagbank_valor_liquido: valorLiquido,
-        };
-    } else {
-        recebimentoBasePayload = { 
-            parcela_id: parcela.id, 
-            [ownerKeyRecebimento]: proprietarioDaSessao,
-            valor_recebido: valorRecebido,
-            conta_id: values.conta_id,
-            id_conta_resultado: contaReceitaResultado,
-            anexo_url: comprovanteUrl,
-            observacao: values.observacao || null,
-            codigo_transacao: values.codigo_transacao || null,
-            pagbank_taxa_valor: taxaBancaria,
-            pagbank_valor_liquido: valorLiquido,
-        };
-    }
+    recebimentoBasePayload = { 
+        parcela_id: parcela.id, 
+        [ownerKeyRecebimento]: proprietarioDaSessao,
+        valor_recebido: valorRecebido, 
+        cliente_id: parcela.cliente_id || parcela.empresa_id,
+        conta_id: values.conta_id,
+        id_conta_contabil: contaRecebimento,
+        historico_id: values.historico_id,
+        id_conta_resultado: contaReceitaResultado,
+        anexo_url: comprovanteUrl,
+        observacao: values.observacao || null,
+        codigo_transacao: values.codigo_transacao || null,
+        pagbank_taxa_valor: taxaBancaria,
+        pagbank_valor_liquido: valorLiquido,
+    };
 
     const { error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
         ...recebimentoBasePayload,
@@ -181,163 +171,9 @@ export async function saveRecebimentoAndLancamentos({
     
     if (recebimentoError) throw recebimentoError;
     
-    if (quitouComPagamentoAtual) {
-        await supabase.from(tabelaParcelas).update({
-            status: 'paga',
-            valor_pago: novoValorPagoTotal,
-            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-            ...(contaParcela && { id_conta_contabil: contaParcela })
-        }).eq('id', parcela.id);
-    } else {
-        if (values.acao_saldo_restante === 'desconto') {
-          await supabase.from(tabelaParcelas).update({
-            status: 'paga',
-            valor_pago: novoValorPagoTotal,
-            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`,
-            ...(contaParcela && { id_conta_contabil: contaParcela })
-          }).eq('id', parcela.id);
-          
-          if (!contaDesconto) {
-              throw new Error('Conta de Desconto Concedido não configurada.');
-          }
-          
-          if (!values.conta_patrimonial_id) {
-              throw new Error('Selecione a Conta Patrimonial para registrar o desconto.');
-          }
-          
-          const idDescontoDespesa = crypto.randomUUID();
-          const idDescontoPatrimonial = crypto.randomUUID();
-          
-          lancamentosPayload.push({
-              id: idDescontoDespesa,
-              proprietario_id: proprietarioDaSessao,
-              data_movimentacao: dataPagamentoISO,
-              descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-              valor: saldoRestanteCalculado,
-              tipo: 'Entrada' as const,
-              conta_bancaria_id: null,
-              conta_contabil_id: contaDesconto,
-              origem: 'recebimento_manual',
-              historico_id: values.historico_id,
-              conta_resultado_id: idDescontoPatrimonial,
-          });
-          
-          lancamentosPayload.push({
-              id: idDescontoPatrimonial,
-              proprietario_id: proprietarioDaSessao,
-              data_movimentacao: dataPagamentoISO,
-              descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-              valor: saldoRestanteCalculado,
-              tipo: 'Saida' as const,
-              conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id,
-              historico_id: values.historico_id,
-              origem: 'recebimento_manual',
-              conta_resultado_id: idDescontoDespesa,
-          });
-          
-        } else if (values.acao_saldo_restante === 'taxas_bancarias') {
-          await supabase.from(tabelaParcelas).update({
-            status: 'paga',
-            valor_pago: novoValorPagoTotal,
-            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de taxas bancárias. ${values.observacao || ''}`,
-            ...(contaParcela && { id_conta_contabil: contaParcela })
-          }).eq('id', parcela.id);
-          
-          if (!contaTaxasBancarias) {
-              throw new Error('Conta de Taxas Bancárias não configurada.');
-          }
-          
-          if (!values.conta_patrimonial_id) {
-              throw new Error('Selecione a Conta Patrimonial para registrar as taxas bancárias.');
-          }
-          
-          const idTaxasDespesa = crypto.randomUUID();
-          const idTaxasPatrimonial = crypto.randomUUID();
-          
-          lancamentosPayload.push({
-              id: idTaxasDespesa,
-              proprietario_id: proprietarioDaSessao,
-              data_movimentacao: dataPagamentoISO,
-              descricao: `Taxas Bancárias: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-              valor: saldoRestanteCalculado,
-              tipo: 'Entrada' as const,
-              conta_bancaria_id: null,
-              conta_contabil_id: contaTaxasBancarias,
-              origem: 'recebimento_manual',
-              historico_id: values.historico_id,
-              conta_resultado_id: idTaxasPatrimonial,
-          });
-          
-          lancamentosPayload.push({
-              id: idTaxasPatrimonial,
-              proprietario_id: proprietarioDaSessao,
-              data_movimentacao: dataPagamentoISO,
-              descricao: `Estorno Patrimonial Taxas Bancárias CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-              valor: saldoRestanteCalculado,
-              tipo: 'Saida' as const,
-              conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id,
-              historico_id: values.historico_id,
-              origem: 'recebimento_manual',
-              conta_resultado_id: idTaxasDespesa,
-          });
-          
-        } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
-          await supabase.from(tabelaParcelas).update({
-            status: 'paga', 
-            valor_pago: novoValorPagoTotal,
-            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-            observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`,
-            ...(contaParcela && { id_conta_contabil: contaParcela })
-          }).eq('id', parcela.id);
-
-          const baseParcelaPayload = isAdmin 
-            ? { admin_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) } 
-            : { empresa_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) };
-          
-          if (values.acao_saldo_restante === 'reprogramar') {
-            await supabase.from(tabelaParcelas).insert({
-                conta_receber_id: parcela.conta_receber_id,
-                ...baseParcelaPayload,
-                numero_parcela: 99,
-                valor_parcela: saldoRestanteCalculado,
-                data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
-                status: 'reprogramada'
-            });
-          } else {
-            const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
-            const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
-                conta_receber_id: parcela.conta_receber_id,
-                ...baseParcelaPayload,
-                numero_parcela: 100 + i,
-                valor_parcela: valorNovaParcela,
-                data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
-                status: 'reprogramada',
-            }));
-            await supabase.from(tabelaParcelas).insert(novasParcelas);
-          }
-        } else {
-            await supabase.from(tabelaParcelas).update({
-                status: 'parcial',
-                valor_pago: novoValorPagoTotal,
-                ...(contaParcela && { id_conta_contabil: contaParcela })
-            }).eq('id', parcela.id);
-        }
-    }
-    
-    const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
-    const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
-    
-    if (!contaContabilCaixaBanco) {
-        throw new Error('Conta de destino não possui vínculo contábil.');
-    }
-    
-    // Lançamento do Valor Líquido
-    const idAtivo = crypto.randomUUID();
-    const idPatrimonial = crypto.randomUUID();
+    // 5. Lançamento do Valor Líquido (D: Banco, C: Patrimonial)
+    const idAtivo = uuidv4();
+    const idPatrimonial = uuidv4();
     
     lancamentosPayload.push({
         id: idAtivo,
@@ -345,7 +181,7 @@ export async function saveRecebimentoAndLancamentos({
         data_movimentacao: dataPagamentoISO,
         descricao: `Recebimento (Líquido) Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
         valor: valorLiquido,
-        tipo: 'Entrada' as const,
+        tipo: 'Entrada' as const, // DÉBITO (Aumenta Ativo)
         conta_bancaria_id: values.conta_id,
         conta_contabil_id: contaContabilCaixaBanco,
         historico_id: values.historico_id,
@@ -360,7 +196,7 @@ export async function saveRecebimentoAndLancamentos({
             data_movimentacao: dataPagamentoISO,
             descricao: `Estorno Patrimonial (Líquido) CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
             valor: valorLiquido,
-            tipo: 'Saida' as const,
+            tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_patrimonial_id,
             historico_id: values.historico_id,
@@ -371,14 +207,14 @@ export async function saveRecebimentoAndLancamentos({
         console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
     }
 
-    // Lançamento da Taxa Bancária como Despesa
+    // 6. Lançamento da Taxa Bancária como Despesa
     if (taxaBancaria > 0) {
         if (!contaDespesaTaxa) {
             throw new Error('Conta de Despesa (Taxas Bancárias) não configurada nas Configurações PagBank.');
         }
 
-        const idTaxaDespesa = crypto.randomUUID();
-        const idTaxaCredito = crypto.randomUUID();
+        const idTaxaDespesa = uuidv4();
+        const idTaxaCredito = uuidv4();
 
         // DÉBITO: Despesa (Taxa Bancária)
         lancamentosPayload.push({
@@ -411,21 +247,157 @@ export async function saveRecebimentoAndLancamentos({
         });
     }
     
+    // 7. Lógica de Pagamento Parcial (Desconto, Taxas, Reprogramar)
+    if (!quitouComPagamentoAtual) {
+        if (values.acao_saldo_restante === 'desconto') {
+            if (!contaDesconto) throw new Error('Conta de Desconto Concedido não configurada.');
+            if (!values.conta_patrimonial_id) throw new Error('Selecione a Conta Patrimonial para registrar o desconto.');
+            
+            const idDescontoDespesa = uuidv4();
+            const idDescontoPatrimonial = uuidv4();
+            
+            // DÉBITO: Despesa (Desconto Concedido)
+            lancamentosPayload.push({
+                id: idDescontoDespesa,
+                proprietario_id: proprietarioDaSessao,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+                valor: saldoRestanteCalculado,
+                tipo: 'Entrada' as const,
+                conta_bancaria_id: null,
+                conta_contabil_id: contaDesconto,
+                origem: 'recebimento_manual',
+                historico_id: values.historico_id,
+                conta_resultado_id: idDescontoPatrimonial,
+            });
+            
+            // CRÉDITO: Patrimonial (Direito a Receber)
+            lancamentosPayload.push({
+                id: idDescontoPatrimonial,
+                proprietario_id: proprietarioDaSessao,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+                valor: saldoRestanteCalculado,
+                tipo: 'Saida' as const,
+                conta_bancaria_id: null,
+                conta_contabil_id: values.conta_patrimonial_id,
+                historico_id: values.historico_id,
+                origem: 'recebimento_manual',
+                conta_resultado_id: idDescontoDespesa,
+            });
+        }
+        // Lógica de reprogramar/parcelar não gera lançamento contábil imediato
+    }
+    
+    // 8. Lançamento de Acréscimo (se houver)
+    if (valorRecebido > parcela.valor_parcela && values.conta_acrescimo_id) {
+        const valorAcrescimo = valorRecebido - parcela.valor_parcela;
+        
+        const idAcrescimoReceita = uuidv4();
+        const idAcrescimoBanco = uuidv4();
+        
+        // DÉBITO: Banco/Caixa (Entrada de Ativo)
+        lancamentosPayload.push({
+            id: idAcrescimoBanco,
+            proprietario_id: proprietarioDaSessao,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Acréscimo Receita: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: valorAcrescimo,
+            tipo: 'Entrada' as const,
+            conta_bancaria_id: values.conta_id,
+            conta_contabil_id: contaContabilCaixaBanco,
+            origem: 'recebimento_manual',
+            historico_id: values.historico_id,
+            conta_resultado_id: idAcrescimoReceita,
+        });
+        
+        // CRÉDITO: Receita (Acréscimo)
+        lancamentosPayload.push({
+            id: idAcrescimoReceita,
+            proprietario_id: proprietarioDaSessao,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Receita Acréscimo: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: valorAcrescimo,
+            tipo: 'Saida' as const,
+            conta_bancaria_id: null,
+            conta_contabil_id: values.conta_acrescimo_id,
+            historico_id: values.historico_id,
+            origem: 'recebimento_manual',
+            conta_resultado_id: idAcrescimoBanco,
+        });
+    }
+    
+    // 9. Inserir todos os lançamentos
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
     if (lancamentoError) throw lancamentoError;
     
+    // 10. Atualizar Parcela e Conta Sintética (Lógica de Negócio)
+    let finalStatus: ParcelaParaPagamento['status'] = 'paga';
+    let observacaoFinal = values.observacao || null;
+    
+    if (!quitouComPagamentoAtual) {
+        if (values.acao_saldo_restante === 'desconto' || values.acao_saldo_restante === 'taxas_bancarias') {
+            finalStatus = 'paga';
+        } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
+            finalStatus = 'paga';
+            const baseParcelaPayload = isAdmin 
+                ? { admin_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) } 
+                : { empresa_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) };
+            
+            if (values.acao_saldo_restante === 'reprogramar') {
+                await supabase.from(tabelaParcelas).insert({
+                    conta_receber_id: parcela.conta_receber_id,
+                    ...baseParcelaPayload,
+                    numero_parcela: 99,
+                    valor_parcela: saldoRestanteCalculado,
+                    data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
+                    status: 'reprogramada'
+                });
+            } else {
+                const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
+                const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
+                    conta_receber_id: parcela.conta_receber_id,
+                    ...baseParcelaPayload,
+                    numero_parcela: 100 + i,
+                    valor_parcela: valorNovaParcela,
+                    data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+                    status: 'reprogramada',
+                }));
+                await supabase.from(tabelaParcelas).insert(novasParcelas);
+            }
+        } else {
+            finalStatus = 'parcial';
+        }
+    }
+    
+    await supabase.from(tabelaParcelas).update({
+        status: finalStatus,
+        valor_pago: novoValorPagoTotal,
+        data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
+        observacao: observacaoFinal,
+        ...(contaParcela && { id_conta_contabil: contaParcela })
+    }).eq('id', parcela.id);
+    
+    // Atualiza status da conta sintética se todas as parcelas estiverem pagas
+    const { count: parcelasPendentesCount } = await supabase
+        .from(tabelaParcelas)
+        .select('id', { count: 'exact', head: true })
+        .eq('conta_receber_id', parcela.conta_receber_id)
+        .in('status', ['aberta', 'parcial', 'reprogramada']);
+        
+    if (parcelasPendentesCount === 0) {
+        await supabase.from(tabelaContasReceber).update({ status: 'recebida' }).eq('id', parcela.conta_receber_id);
+    }
+    
+    // 11. Salvar Histórico Padrão (se marcado)
     if (values.salvar_como_padrao && values.historico_id) {
         await supabase
             .from('configuracao_historico_padrao')
-            .delete()
-            .eq('proprietario_id', proprietarioDaSessao)
-            .eq('tipo_registro', 'recebimento_padrao');
-            
-        await supabase.from('configuracao_historico_padrao').insert({
-            proprietario_id: proprietarioDaSessao,
-            tipo_registro: 'recebimento_padrao',
-            historico_id: values.historico_id,
-        });
+            .upsert({
+                proprietario_id: proprietarioDaSessao,
+                tipo_registro: 'recebimento_padrao',
+                historico_id: values.historico_id,
+            }, { onConflict: 'proprietario_id, tipo_registro' });
     }
 }
 
@@ -436,8 +408,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const isDirectAdmin = role === 'Admin';
   const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
   const isAdminUsuario = role === 'Usuario' && !!adminIdFromProfile;
-  const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
-  const isAdmin = isAdminOrEmployee;
+  const isAdmin = isDirectAdmin || isAdminUsuario;
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
@@ -534,6 +505,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .select('id, Conta, Descricao')
         .eq('proprietario_id', proprietarioDaSessao)
         .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
         .like('Conta', `${receitaCode}.%`)
         .order('Conta');
         
@@ -602,42 +574,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           setIsInitialized(false);
       }
   }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchConfigAndDefaults, parcela]);
-
-  const valorRecebido = form.watch('valor_recebido');
-  const taxaBancaria = form.watch('taxa_bancaria');
-  const acaoSaldoRestante = form.watch('acao_saldo_restante');
-  const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
-  const saldoRestante = saldoDevedor - valorRecebido;
-  const valorLiquido = (valorRecebido || 0) - (taxaBancaria || 0);
-  const isRecebimentoMaior = valorRecebido > saldoDevedor;
-  const valorAcrescimo = isRecebimentoMaior ? valorRecebido - saldoDevedor : 0;
-
-  const saveDirectPayment = async (values: FormValues) => {
-    if (!parcela || !proprietarioDaSessao || !values.conta_id || !values.conta_patrimonial_id) {
-        showError('Dados incompletos. Selecione a conta de destino e a conta patrimonial.');
-        return;
-    }
-    
-    setLoading(true);
-
-    try {
-        await saveRecebimentoAndLancamentos({
-            values: { ...values, observacao: null },
-            parcela,
-            proprietarioDaSessao,
-            isAdmin,
-            contasDestino,
-            comprovanteUrl: null,
-        });
-        
-        showSuccess('Pagamento registrado com sucesso!');
-        onSaveComplete();
-    } catch (error: any) {
-      showError(`Falha ao registrar pagamento: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !proprietarioDaSessao) {
@@ -1197,7 +1133,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                     }).format(valorAcrescimo)}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    O valor recebido é maior que o saldo devedor. Selecione a conta de receita para registrar o acréscimo.
+                    O valor recebido é maior que o saldo devedor. Selecione a
+                    conta de receita para registrar o acréscimo.
                   </p>
 
                   <FormField
@@ -1243,7 +1180,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 disabled={loading || form.formState.isSubmitting}
               >
                 {!loading && !form.formState.isSubmitting ? (
-                  'Confirmar Recebimento'
+                  "Confirmar Recebimento"
                 ) : (
                   <Loader2
                     className="mr-2 h-4 w-4 animate-spin"
@@ -1324,17 +1261,19 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       )}
 
       <Dialog open={showConfirmacaoCodigoDialog} onOpenChange={setShowConfirmacaoCodigoDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Código de Transação Não Informado</DialogTitle>
-            <DialogDescription>
-              Você deseja prosseguir sem o código da transação? Este código é obrigatório para o banco PagBank.
-            </DialogDescription>
-          </DialogHeader>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Código de Transação Não Informado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você deseja prosseguir sem o código da transação? Este código é
+              importante para a conciliação bancária.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
           <div className="flex flex-col gap-3 pt-4">
             <p className="text-sm text-muted-foreground">
-              Ao continuar sem o código, o campo será preenchido automaticamente com "Não Informado".
+              Ao continuar sem o código, o campo será preenchido
+              automaticamente com "Não Informado".
             </p>
             
             <div className="flex gap-3 justify-end">
@@ -1355,7 +1294,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               </Button>
             </div>
           </div>
-        </DialogContent>
+        </AlertDialogContent>
       </Dialog>
     </>
   );
