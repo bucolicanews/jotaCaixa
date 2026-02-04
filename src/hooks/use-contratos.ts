@@ -122,10 +122,14 @@ export function useContratos(): ContratosHook {
       showError('Erro ao carregar contratos: ' + error.message)
       setContratos([])
     } else {
-      const processedData = data.map((contrato: any) => ({
-        ...contrato,
-        conta_receber_id: contrato.contas_receber?.[0]?.id ?? null,
-      }))
+      const processedData = data.map((contrato: any) => {
+        const cr = contrato.contas_receber
+        const conta_receber_id = (Array.isArray(cr) ? cr[0]?.id : cr?.id) ?? null
+        return {
+          ...contrato,
+          conta_receber_id,
+        }
+      })
 
       // NOVO: Busca por parcelas pagas em lote
       const contratoIds = processedData.map((c) => c.id)

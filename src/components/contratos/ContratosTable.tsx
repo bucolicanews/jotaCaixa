@@ -144,6 +144,7 @@ export default function ContratosTable({
       <AditivosContratoDialog
         open={aditivosDialogOpen}
         onOpenChange={setAditivosDialogOpen}
+        contrato={contratoSelecionado}
         contaReceberId={contratoSelecionado?.conta_receber_id ?? null}
       />
     </>

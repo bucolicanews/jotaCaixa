@@ -493,7 +493,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                 ) : (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" disabled={isBlocking}>
+                            <Button size="sm" disabled={isBlocking} className="bg-orange-500 hover:bg-orange-600 text-white ml-[5px]">
                                 <Lock className="w-4 h-4 mr-2" /> Bloquear Contrato
                             </Button>
                         </AlertDialogTrigger>
