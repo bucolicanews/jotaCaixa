@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -23,6 +23,7 @@ import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { v4 as uuidv4 } from 'uuid';
+import FormExtratoManualCR from './FormExtratoManualCR'; // Importado para uso no modal
 
 interface ParcelaParaPagamento {
   id: string;
@@ -290,8 +291,8 @@ export async function saveRecebimentoAndLancamentos({
     }
     
     // 8. Lançamento de Acréscimo (se houver)
-    if (valorRecebido > parcela.valor_parcela && values.conta_acrescimo_id) {
-        const valorAcrescimo = valorRecebido - parcela.valor_parcela;
+    const valorAcrescimo = valorRecebido - parcela.valor_parcela;
+    if (valorAcrescimo > 0 && values.conta_acrescimo_id) {
         
         const idAcrescimoReceita = uuidv4();
         const idAcrescimoBanco = uuidv4();
@@ -449,7 +450,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     },
   });
   
-  const { reset } = form;
+  const { reset, watch } = form;
 
   const fetchHistoricos = useCallback(async () => {
     if (!proprietarioDaSessao) return;
@@ -574,6 +575,35 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           setIsInitialized(false);
       }
   }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchConfigAndDefaults, parcela]);
+
+  const valorRecebido = watch('valor_recebido');
+  const taxaBancaria = watch('taxa_bancaria') || 0;
+  const acaoSaldoRestante = watch('acao_saldo_restante');
+  
+  const valorLiquido = valorRecebido - taxaBancaria;
+  const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
+  const saldoRestante = saldoDevedor - valorRecebido;
+  const isRecebimentoMaior = valorRecebido > saldoDevedor;
+  const valorAcrescimo = isRecebimentoMaior ? valorRecebido - saldoDevedor : 0;
+
+  const saveDirectPayment = async (values: FormValues) => {
+    setLoading(true);
+    try {
+        await saveRecebimentoAndLancamentos({
+            values: { ...values, observacao: values.observacao || null },
+            parcela: parcela!,
+            proprietarioDaSessao,
+            isAdmin,
+            contasDestino,
+        });
+        showSuccess('Pagamento registrado com sucesso!');
+        onSaveComplete();
+    } catch (error: any) {
+        showError(`Falha ao registrar pagamento: ${error.message}`);
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !proprietarioDaSessao) {
