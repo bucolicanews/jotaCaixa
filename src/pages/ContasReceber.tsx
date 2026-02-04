@@ -30,6 +30,7 @@ import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPayment
 import { VisualizarBoletoDialog } from '@/components/contas-receber/VisualizarBoletoDialog';
 import ModalSelecionarTransacaoExtrato from '@/components/conciliacao/ModalSelecionarTransacaoExtrato';
 import { buscarTransacoesExtratoDisponiveis, vincularParcelaComExtrato, TransacaoExtratoCandidata } from '@/hooks/conciliacao/useMapeamentoInverso';
+import { toast } from 'sonner';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -816,7 +817,6 @@ const ContasReceber = () => {
           parcelaId={selectedParcela.id}
           valorParcela={selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
-          initialPaymentType={selectedPaymentType}
           onSuccess={() => {
             setPagbankDialogOpen(false);
             setSelectedPaymentType(null);

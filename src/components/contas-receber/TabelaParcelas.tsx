@@ -52,6 +52,7 @@ interface TabelaParcelasProps {
     onMapearComExtrato?: (parcela: ExtendedParcelaDetalhada) => void;
     onGerarBoleto?: (parcela: ExtendedParcelaDetalhada) => void;
     onRefreshData?: () => void;
+    onSyncStatus?: (parcelaId: string) => void; // NOVO PROP
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -66,6 +67,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     onMapearComExtrato,
     onGerarBoleto,
     onRefreshData,
+    onSyncStatus, // NOVO PROP
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
@@ -322,14 +324,26 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                                 )}
                                                             </div>
                                                             <PagBankPaymentStatus status={p.pagbank_status as any} />
-                                                            <Button
-                                                                size="xs"
-                                                                variant="outline"
-                                                                onClick={() => onVisualizarLinkPagBank?.(p)}
-                                                            >
-                                                                <Eye className="h-3 w-3 mr-1" />
-                                                                Ver Link
-                                                            </Button>
+                                                            <div className="flex flex-col gap-1">
+                                                                <Button
+                                                                    size="xs"
+                                                                    variant="outline"
+                                                                    onClick={() => onVisualizarLinkPagBank?.(p)}
+                                                                >
+                                                                    <Eye className="h-3 w-3 mr-1" />
+                                                                    Ver Link
+                                                                </Button>
+                                                                {!isPaga && (
+                                                                    <Button
+                                                                        size="xs"
+                                                                        variant="secondary"
+                                                                        onClick={() => onSyncStatus?.(p.id)}
+                                                                    >
+                                                                        <RefreshCw className="h-3 w-3 mr-1" />
+                                                                        Sincronizar
+                                                                    </Button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     )
                                                 ) : p.status === 'aberta' ? (
