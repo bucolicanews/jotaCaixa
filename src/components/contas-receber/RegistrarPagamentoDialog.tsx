@@ -674,415 +674,485 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Registrar Recebimento</DialogTitle>
-            <DialogDescription>
-              Saldo devedor da parcela:{" "}
-              {new Intl.NumberFormat("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              }).format(saldoDevedor)}
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Registrar Recebimento</DialogTitle>
+          <DialogDescription>
+            Saldo devedor da parcela:{" "}
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(saldoDevedor)}
+          </DialogDescription>
+        </DialogHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="valor_recebido"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor Recebido</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="data_pagamento"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Data</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "dd/MM/yy", { locale: ptBR })
-                              ) : (
-                                <span>Data</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                            locale={ptBR}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="taxa_bancaria"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Taxa Bancária</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...field}
-                          onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
-                          value={field.value ?? 0}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormItem>
-                  <FormLabel>Valor Líquido</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={valorLiquido.toFixed(2)}
-                      disabled
-                      className="disabled:opacity-100 disabled:cursor-default"
-                    />
-                  </FormControl>
-                </FormItem>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="forma_pagamento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Forma de Pagamento</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a forma" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                          <SelectItem value="Pix">Pix</SelectItem>
-                          <SelectItem value="Cartão">Cartão</SelectItem>
-                          <SelectItem value="Boleto">Boleto</SelectItem>
-                          <SelectItem value="Transferência">Transferência</SelectItem>
-                          <SelectItem value="Bens">Bens</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="codigo_transacao"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Código da Transação</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ID da transação externa" {...field} value={field.value ?? ''} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-                <FormField
-                  control={form.control}
-                  name="conta_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value || "0"}
-                        disabled={loadingContas}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={
-                                loadingContas
-                                  ? "Carregando Contas..."
-                                  : "Selecione a conta"
-                              }
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-
-                        <SelectContent>
-                          <SelectItem value="0" disabled>
-                            Selecione a conta
-                          </SelectItem>
-
-                          {contasDestino.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nome} ({c.tipo_saldo})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                      {contasDestino.length === 0 && !loadingContas &&(
-                        <p className="text-sm text-red-500">
-                          Nenhuma conta de saldo encontrada. Crie uma em{" "}
-                          <a href="/bancos" className="underline">
-                            Bancos / Caixas
-                          </a>
-                          .
-                        </p>
-                      )}
-                    </FormItem>
-                  )}
-                />
-
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="conta_patrimonial_id"
+                name="valor_recebido"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || "0"}
-                      disabled={loadingContasPatrimoniais}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              loadingContasPatrimoniais
-                                ? "Carregando Contas..."
-                                : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
-                        {contasPatrimoniais.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.Conta} - {c.Descricao}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    {contasPatrimoniais.length === 0 &&
-                      !loadingContasPatrimoniais && (
-                        <p className="text-sm text-red-500">
-                          Nenhuma conta Patrimonial marcada como Contas a Receber
-                          no Plano de Contas.
-                        </p>
-                      )}
-                  </FormItem>
-                )}
-              />
-
-              {isAdmin && (
-                <div className="space-y-2 pt-2 border-t">
-                  <FormField
-                    control={form.control}
-                    name="historico_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || "0"}
-                          disabled={loadingHistoricos}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  loadingHistoricos
-                                    ? "Carregando Históricos..."
-                                    : "Selecione o histórico"
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="0">Nenhum</SelectItem>
-                            {historicos.map((h) => (
-                              <SelectItem key={h.id} value={String(h.id)}>
-                                {h.codigo && (
-                                  <span className="font-mono text-xs mr-2">
-                                    [{h.codigo}]
-                                  </span>
-                                )}
-                                {h.descricao}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="salvar_como_padrao"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={!form.watch("historico_id")}
-                          />
-                        </FormControl>
-
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>
-                            Definir este Histórico como Padrão para Recebimentos
-                          </FormLabel>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-              
-              <FormField
-                control={form.control}
-                name="observacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Observação (Opcional)</FormLabel>
+                    <FormLabel>Valor Recebido</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Detalhes adicionais" {...field} value={field.value ?? ''} rows={2} />
+                      <Input type="number" step="0.01" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {isPagamentoParcial && (
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="font-semibold text-destructive">
-                    Saldo restante:{" "}
-                    {new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(saldoRestante)}
-                  </h3>
+              <FormField
+                control={form.control}
+                name="data_pagamento"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yy", { locale: ptBR })
+                            ) : (
+                              <span>Data</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
 
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="taxa_bancaria"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Taxa Bancária</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                        value={field.value ?? 0}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormItem>
+                <FormLabel>Valor Líquido</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={valorLiquido.toFixed(2)}
+                    disabled
+                    className="disabled:opacity-100 disabled:cursor-default"
+                  />
+                </FormControl>
+              </FormItem>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="forma_pagamento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Forma de Pagamento</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a forma" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="Pix">Pix</SelectItem>
+                        <SelectItem value="Cartão">Cartão</SelectItem>
+                        <SelectItem value="Boleto">Boleto</SelectItem>
+                        <SelectItem value="Transferência">Transferência</SelectItem>
+                        <SelectItem value="Bens">Bens</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="codigo_transacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Código da Transação</FormLabel>
+                    <FormControl>
+                      <Input placeholder="ID da transação externa" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+              <FormField
+                control={form.control}
+                name="conta_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || "0"}
+                      disabled={loadingContas}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              loadingContas
+                                ? "Carregando Contas..."
+                                : "Selecione a conta"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+
+                      <SelectContent>
+                        <SelectItem value="0" disabled>
+                          Selecione a conta
+                        </SelectItem>
+
+                        {contasDestino.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome} ({c.tipo_saldo})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasDestino.length === 0 && !loadingContas &&(
+                      <p className="text-sm text-red-500">
+                        Nenhuma conta de saldo encontrada. Crie uma em{" "}
+                        <a href="/bancos" className="underline">
+                          Bancos / Caixas
+                        </a>
+                        .
+                      </p>
+                    )}
+                  </FormItem>
+                )}
+              />
+
+            <FormField
+              control={form.control}
+              name="conta_patrimonial_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || "0"}
+                    disabled={loadingContasPatrimoniais}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            loadingContasPatrimoniais
+                              ? "Carregando Contas..."
+                              : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
+                      {contasPatrimoniais.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.Conta} - {c.Descricao}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                  {contasPatrimoniais.length === 0 &&
+                    !loadingContasPatrimoniais && (
+                      <p className="text-sm text-red-500">
+                        Nenhuma conta Patrimonial marcada como Contas a Receber
+                        no Plano de Contas.
+                      </p>
+                    )}
+                </FormItem>
+              )}
+            />
+
+            {isAdmin && (
+              <div className="space-y-2 pt-2 border-t">
+                <FormField
+                  control={form.control}
+                  name="historico_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || "0"}
+                        disabled={loadingHistoricos}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                loadingHistoricos
+                                  ? "Carregando Históricos..."
+                                  : "Selecione o histórico"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="0">Nenhum</SelectItem>
+                          {historicos.map((h) => (
+                            <SelectItem key={h.id} value={String(h.id)}>
+                              {h.codigo && (
+                                <span className="font-mono text-xs mr-2">
+                                  [{h.codigo}]
+                                </span>
+                              )}
+                              {h.descricao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="salvar_como_padrao"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!form.watch("historico_id")}
+                        />
+                      </FormControl>
+
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Definir este Histórico como Padrão para Recebimentos
+                        </FormLabel>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+            
+            <FormField
+              control={form.control}
+              name="observacao"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Observação (Opcional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Detalhes adicionais" {...field} value={field.value ?? ''} rows={2} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {isPagamentoParcial && (
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-semibold text-destructive">
+                  Saldo restante:{" "}
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(saldoRestante)}
+                </h3>
+
+                <FormField
+                  control={form.control}
+                  name="acao_saldo_restante"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>O que fazer com o saldo restante?</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="space-y-2"
+                        >
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <RadioGroupItem value="desconto" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Conceder Desconto (Perdoar)
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <RadioGroupItem value="taxas_bancarias" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Taxas Bancárias (Despesa)
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <RadioGroupItem value="reprogramar" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Reprogramar Saldo
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <RadioGroupItem value="parcelar" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Parcelar Saldo
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {acaoSaldoRestante === "reprogramar" && (
                   <FormField
                     control={form.control}
-                    name="acao_saldo_restante"
+                    name="nova_data_vencimento"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>O que fazer com o saldo restante?</FormLabel>
-                        <FormControl>
-                          <RadioGroup
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            className="space-y-2"
-                          >
-                            <FormItem className="flex items-center space-x-2">
-                              <FormControl>
-                                <RadioGroupItem value="desconto" />
-                              </FormControl>
-                              <FormLabel className="font-normal">
-                                Conceder Desconto (Perdoar)
-                              </FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-2">
-                              <FormControl>
-                                <RadioGroupItem value="taxas_bancarias" />
-                              </FormControl>
-                              <FormLabel className="font-normal">
-                                Taxas Bancárias (Despesa)
-                              </FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-2">
-                              <FormControl>
-                                <RadioGroupItem value="reprogramar" />
-                              </FormControl>
-                              <FormLabel className="font-normal">
-                                Reprogramar Saldo
-                              </FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-2">
-                              <FormControl>
-                                <RadioGroupItem value="parcelar" />
-                              </FormControl>
-                              <FormLabel className="font-normal">
-                                Parcelar Saldo
-                              </FormLabel>
-                            </FormItem>
-                          </RadioGroup>
-                        </FormControl>
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Nova Data de Vencimento</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value ? (
+                                  format(field.value, "PPP", { locale: ptBR })
+                                ) : (
+                                  <span>Escolha a data</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              initialFocus
+                              locale={ptBR}
+                            />
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
 
-                  {acaoSaldoRestante === "reprogramar" && (
+                {acaoSaldoRestante === "parcelar" && (
+                  <div className="grid grid-cols-3 gap-4 items-end">
+                    <FormField
+                      control={form.control}
+                      name="numero_novas_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nº Parcelas</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="intervalo_dias_novas_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Intervalo</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     <FormField
                       control={form.control}
                       name="nova_data_vencimento"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Nova Data de Vencimento</FormLabel>
+                          <FormLabel>1º Venc.</FormLabel>
                           <Popover>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
                                   variant="outline"
                                   className={cn(
-                                    "w-full pl-3 text-left font-normal",
+                                    "w-full text-left font-normal",
                                     !field.value && "text-muted-foreground"
                                   )}
                                 >
                                   {field.value ? (
-                                    format(field.value, "PPP", { locale: ptBR })
+                                    format(field.value, "dd/MM/yy")
                                   ) : (
-                                    <span>Escolha a data</span>
+                                    <span>Data</span>
                                   )}
                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-
                             <PopoverContent className="w-auto p-0">
                               <Calendar
                                 mode="single"
@@ -1097,150 +1167,78 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                         </FormItem>
                       )}
                     />
-                  )}
-
-                  {acaoSaldoRestante === "parcelar" && (
-                    <div className="grid grid-cols-3 gap-4 items-end">
-                      <FormField
-                        control={form.control}
-                        name="numero_novas_parcelas"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nº Parcelas</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="intervalo_dias_novas_parcelas"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Intervalo</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="nova_data_vencimento"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>1º Venc.</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant="outline"
-                                    className={cn(
-                                      "w-full text-left font-normal",
-                                      !field.value && "text-muted-foreground"
-                                    )}
-                                  >
-                                    {field.value ? (
-                                      format(field.value, "dd/MM/yy")
-                                    ) : (
-                                      <span>Data</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
-                                  locale={ptBR}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isRecebimentoMaior && (
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="font-semibold text-green-600">
-                    Acréscimo (Receita adicional):{" "}
-                    {new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(valorAcrescimo)}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    O valor recebido é maior que o saldo devedor. Selecione a
-                    conta de receita para registrar o acréscimo.
-                  </p>
-
-                  <FormField
-                    control={form.control}
-                    name="conta_acrescimo_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Conta de Receita (Acréscimo) *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || "0"}
-                          disabled={loadingContasReceita}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  loadingContasReceita
-                                    ? "Carregando Contas..."
-                                    : "Selecione a conta de receita"
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {contasReceita.map((conta) => (
-                              <SelectItem key={conta.id} value={conta.id}>
-                                {conta.Conta} - {conta.Descricao}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading || form.formState.isSubmitting}
-              >
-                {!loading && !form.formState.isSubmitting ? (
-                  "Confirmar Recebimento"
-                ) : (
-                  <Loader2
-                    className="mr-2 h-4 w-4 animate-spin"
-                  />
+                  </div>
                 )}
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+              </div>
+            )}
+
+            {isRecebimentoMaior && (
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-semibold text-green-600">
+                  Acréscimo (Receita adicional):{" "}
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(valorAcrescimo)}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  O valor recebido é maior que o saldo devedor. Selecione a
+                  conta de receita para registrar o acréscimo.
+                </p>
+
+                <FormField
+                  control={form.control}
+                  name="conta_acrescimo_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Conta de Receita (Acréscimo) *</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || "0"}
+                        disabled={loadingContasReceita}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                loadingContasReceita
+                                  ? "Carregando Contas..."
+                                  : "Selecione a conta de receita"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {contasReceita.map((conta) => (
+                            <SelectItem key={conta.id} value={conta.id}>
+                              {conta.Conta} - {conta.Descricao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || form.formState.isSubmitting}
+            >
+              {!loading && !form.formState.isSubmitting ? (
+                "Confirmar Recebimento"
+              ) : (
+                <Loader2
+                  className="mr-2 h-4 w-4 animate-spin"
+                />
+              )}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
 
       {extratoManualDialog && pendingPaymentData && parcela && (
         <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
@@ -1310,7 +1308,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         </Dialog>
       )}
 
-      <Dialog open={showConfirmacaoCodigoDialog} onOpenChange={setShowConfirmacaoCodigoDialog}>
+      <AlertDialog open={showConfirmacaoCodigoDialog} onOpenChange={setShowConfirmacaoCodigoDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Código de Transação Não Informado</AlertDialogTitle>
@@ -1346,7 +1344,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           </div>
         </AlertDialogContent>
       </Dialog>
-    </>
+    </Dialog>
   );
 };
 
