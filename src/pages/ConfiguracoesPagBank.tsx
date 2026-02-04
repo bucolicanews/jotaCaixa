@@ -411,7 +411,7 @@ export default function ConfiguracoesPagBank() {
 
                         <div className="space-y-2">
                             <Label>Conta de Despesa (Taxas Bancárias)</Label>
-                            <Select value={config.conta_despesa_taxa || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa: v})}>
+                            <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
                                 <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                                 <SelectContent>
                                     {planoContas.filter(c => c.Conta.startsWith('5.')).map(c => (

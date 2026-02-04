@@ -102,7 +102,18 @@ export async function saveRecebimentoAndLancamentos({
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
     const contaDesconto = configMap['desconto_concedido'];
-    const contaTaxasBancarias = configMap['taxas_bancarias'];
+    
+    // Busca a configuração de taxa do PagBank
+    const { data: pagbankConfig, error: pagbankConfigError } = await supabase
+        .from('configuracoes_pagbank')
+        .select('conta_despesa_taxa_id, historico_taxa_id')
+        .eq('proprietario_id', proprietarioDaSessao)
+        .maybeSingle();
+        
+    if (pagbankConfigError) console.warn('Aviso: Erro ao buscar configuração PagBank:', pagbankConfigError);
+    
+    const contaDespesaTaxa = pagbankConfig?.conta_despesa_taxa_id;
+    const historicoTaxa = pagbankConfig?.historico_taxa_id;
     
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
@@ -362,42 +373,42 @@ export async function saveRecebimentoAndLancamentos({
 
     // Lançamento da Taxa Bancária como Despesa
     if (taxaBancaria > 0) {
-        if (!contaTaxasBancarias) {
-            throw new Error('Conta de Taxas Bancárias não configurada.');
+        if (!contaDespesaTaxa) {
+            throw new Error('Conta de Despesa (Taxas Bancárias) não configurada nas Configurações PagBank.');
         }
 
         const idTaxaDespesa = crypto.randomUUID();
-        const idTaxaPatrimonial = crypto.randomUUID();
+        const idTaxaCredito = crypto.randomUUID();
 
+        // DÉBITO: Despesa (Taxa Bancária)
         lancamentosPayload.push({
             id: idTaxaDespesa,
             proprietario_id: proprietarioDaSessao,
             data_movimentacao: dataPagamentoISO,
             descricao: `Taxa Bancária Recebimento: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
             valor: taxaBancaria,
-            tipo: 'Entrada' as const,
+            tipo: 'Entrada' as const, // DÉBITO
             conta_bancaria_id: null,
-            conta_contabil_id: contaTaxasBancarias,
+            conta_contabil_id: contaDespesaTaxa, // CONTA DE DESPESA (D)
             origem: 'recebimento_manual',
-            historico_id: values.historico_id,
-            conta_resultado_id: idTaxaPatrimonial,
+            historico_id: historicoTaxa || values.historico_id, // Usar histórico da taxa se existir
+            conta_resultado_id: idTaxaCredito,
         });
 
-        if (values.conta_patrimonial_id) {
-            lancamentosPayload.push({
-                id: idTaxaPatrimonial,
-                proprietario_id: proprietarioDaSessao,
-                data_movimentacao: dataPagamentoISO,
-                descricao: `Estorno Patrimonial (Taxa) CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-                valor: taxaBancaria,
-                tipo: 'Saida' as const,
-                conta_bancaria_id: null,
-                conta_contabil_id: values.conta_patrimonial_id,
-                historico_id: values.historico_id,
-                origem: 'recebimento_manual',
-                conta_resultado_id: idTaxaDespesa,
-            });
-        }
+        // CRÉDITO: Banco/Caixa (Saída de Ativo)
+        lancamentosPayload.push({
+            id: idTaxaCredito,
+            proprietario_id: proprietarioDaSessao,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Crédito Taxa Bancária (Saída do Banco): ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: taxaBancaria,
+            tipo: 'Saida' as const, // CRÉDITO
+            conta_bancaria_id: values.conta_id, // Conta de Banco/Caixa
+            conta_contabil_id: contaContabilCaixaBanco, // Conta Contábil do Banco/Caixa (C)
+            historico_id: historicoTaxa || values.historico_id, // Usar histórico da taxa se existir
+            origem: 'recebimento_manual',
+            conta_resultado_id: idTaxaDespesa,
+        });
     }
     
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
