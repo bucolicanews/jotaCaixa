@@ -5,14 +5,11 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Save, Eye, Tag, Copy, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, BlocoSocietario } from '@/types/documentos-societarios';
-import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Separator } from '@/components/ui/separator';
 import DocumentoPreviewDialog from '../documentos-societarios/DocumentoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
@@ -44,7 +41,6 @@ interface FormDocumentoSocietarioModeloProps {
 
 const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps> = ({ modeloInicial, onSaveComplete, ownerId }) => {
   const isEditing = !!modeloInicial;
-  const { role, perfil, usuario } = useSessao();
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -54,7 +50,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [loadingTags, setLoadingTags] = useState(false);
   
-  // Garantimos que o ID do proprietário seja usado corretamente em todos os fetches
   const targetOwnerId = ownerId;
 
   const fetchBlocos = useCallback(async () => {
@@ -105,7 +100,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       titulo: modeloInicial?.titulo || '',
       conteudo_template: modeloInicial?.conteudo_template || '', 
       tipo_documento: modeloInicial?.tipo_documento || '',
-      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // Default to HTML
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html',
     },
   });
   
@@ -149,7 +144,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const handlePreview = () => {
       const template = form.getValues('conteudo_template');
       
-      // Substituição básica para a prévia (apenas tags padrão)
       let previewContent = template;
       allTags.forEach(tag => {
           const regex = new RegExp(tag.nome_tag, 'g');
@@ -178,8 +172,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       navigator.clipboard.writeText(tagsString);
       showSuccess('Todas as tags copiadas para a área de transferência!');
   };
-  
-  // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
   
   const handleInsertText = useCallback((textToInsert: string, isHtml = false) => {
     const editor = quillRef.current?.getEditor()?.getEditor();
@@ -244,8 +236,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
           handleInsertText(text, isHtml);
       }
   };
-  
-  // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
 
   return (
     <>
@@ -258,9 +248,56 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                   Salvar Modelo
               </Button>
           </div>
+          
+          <Card>
+              <CardHeader><CardTitle className="text-xl">Configuração do Documento</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                      control={form.control}
+                      name="titulo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Título do Modelo</FormLabel>
+                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="tipo_documento"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="tipo_conteudo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Formato do Conteúdo</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                      <SelectItem value="texto">Texto Simples</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+              </CardContent>
+          </Card>
             
           <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-4 flex-1 overflow-hidden">
-            <div className="lg:col-span-3 space-y-4 flex flex-col h-full">
+            <div className="space-y-4 flex flex-col h-full">
                 <Card className={cn("h-full flex flex-col transition-all", isDraggingOver && "ring-2 ring-primary-foreground")}>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
@@ -297,7 +334,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                 </Card>
             </div>
             
-            <div className="lg:col-span-1 space-y-4 flex flex-col">
+            <div className="space-y-4 flex flex-col">
                 <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
@@ -370,59 +407,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                 </Card>
             </div>
           </div>
-          
-          <Card>
-              <CardHeader><CardTitle className="text-xl">Configuração do Documento</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                  <FormField
-                      control={form.control}
-                      name="titulo"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Título do Modelo</FormLabel>
-                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-                  <FormField
-                      control={form.control}
-                      name="tipo_documento"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
-                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-                  <FormField
-                      control={form.control}
-                      name="tipo_conteudo"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Formato do Conteúdo</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                  <FormControl>
-                                      <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      <SelectItem value="html">HTML (Editor Visual)</SelectItem>
-                                      <SelectItem value="texto">Texto Simples</SelectItem>
-                                  </SelectContent>
-                              </Select>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-              </CardContent>
-          </Card>
-
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Save className="mr-2 h-4 w-4" />
-            Salvar Modelo
-          </Button>
         </form>
       </Form>
       
