@@ -409,5 +409,18 @@ export const TAGS_FINANCEIRAS_OBRIGATORIAS: ContratoTag[] = [
   },
 ];
 
+/**
+ * Tags de Lógica/Cláusulas Computadas
+ */
+export const TAGS_LOGICA_COMPUTADA: ContratoTag[] = [
+  {
+    id: 'sys-clausula-financeira',
+    nome_tag: '{{CLAUSULA_FINANCEIRA_MENSALIDADES}}',
+    descricao: 'Cláusula de pagamento completa, gerada dinamicamente com base no tipo de lançamento (Único, Parcelar, Fixo, Semanal).',
+    origem_dado: 'Lógica de Sistema',
+    criado_em: new Date().toISOString(),
+  },
+];
+
 // TAGS_PADRAO agora é a combinação de todas as tags de sistema e financeiras
-export const TAGS_PADRAO: ContratoTag[] = [...TAGS_SISTEMA, ...TAGS_FINANCEIRAS_OBRIGATORIAS];
+export const TAGS_PADRAO: ContratoTag[] = [...TAGS_SISTEMA, ...TAGS_FINANCEIRAS_OBRIGATORIAS, ...TAGS_LOGICA_COMPUTADA];

@@ -16,6 +16,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao'; // NOVO IMPORT
+import { cn } from '@/lib/utils'; // NOVO IMPORT
 
 const GerenciarTags = () => {
   const { role, perfil,usuario, carregando: carregandoSessao } = useSessao();
@@ -24,6 +26,9 @@ const GerenciarTags = () => {
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // Tags de sistema que não podem ser editadas/excluídas
+  const tagsSistema = TAGS_PADRAO;
   
   // NOVO ESTADO: Seleção em massa
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -65,10 +70,23 @@ const GerenciarTags = () => {
       showError('Erro ao carregar tags: ' + error.message);
       setTags([]);
     } else {
-      setTags(data as ContratoTag[]);
+      // Combina tags do banco de dados com tags de sistema
+      const tagsDoBanco = data as ContratoTag[];
+      const tagsCombinadas = [...tagsSistema, ...tagsDoBanco];
+      
+      // Filtra as tags combinadas pelo texto de busca (já que a busca no banco só pega as do banco)
+      const tagsFiltradas = tagsCombinadas.filter(tag => 
+          tag.nome_tag.toLowerCase().includes(filtroTextoDebounced.toLowerCase()) ||
+          tag.descricao.toLowerCase().includes(filtroTextoDebounced.toLowerCase())
+      );
+      
+      // Remove duplicatas (se houver sobreposição de IDs)
+      const uniqueTags = Array.from(new Map(tagsFiltradas.map(item => [item.nome_tag, item])).values());
+      
+      setTags(uniqueTags);
     }
     setCarregandoTags(false);
-  }, [role, isCliente, isAdmin, proprietarioId, filtroTextoDebounced, perfil]);
+  }, [role, isCliente, isAdmin, proprietarioId, filtroTextoDebounced, perfil, tagsSistema]);
 
   useEffect(() => {
     if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && proprietarioId))) {
@@ -90,11 +108,25 @@ const GerenciarTags = () => {
   };
 
   const handleEdit = (tag: ContratoTag) => {
+    // Tags de sistema não podem ser editadas
+    if (tagsSistema.some(t => t.nome_tag === tag.nome_tag)) {
+        showError('Tags de sistema não podem ser editadas.');
+        return;
+    }
     setTagSelecionada(tag);
     setDialogAberto(true);
   };
 
   const handleDelete = async (id: string) => {
+    const tagToDelete = tags.find(t => t.id === id);
+    if (!tagToDelete) return;
+    
+    // Tags de sistema não podem ser excluídas
+    if (tagsSistema.some(t => t.nome_tag === tagToDelete.nome_tag)) {
+        showError('Tags de sistema não podem ser excluídas.');
+        return;
+    }
+    
     if (!window.confirm('Tem certeza que deseja excluir esta tag? Isso pode quebrar modelos de contrato existentes.')) return;
 
     const { error } = await supabase
@@ -112,6 +144,10 @@ const GerenciarTags = () => {
   
   // --- Lógica de Seleção em Massa ---
   const handleToggleSelect = (id: string, checked: boolean) => {
+      const tag = tags.find(t => t.id === id);
+      // Não permite selecionar tags de sistema
+      if (tag && tagsSistema.some(t => t.nome_tag === tag.nome_tag)) return;
+      
       setSelectedIds(prev => 
           checked ? [...prev, id] : prev.filter(prevId => prevId !== id)
       );
@@ -119,15 +155,22 @@ const GerenciarTags = () => {
   
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedIds(tags.map(h => h.id));
+          // Seleciona apenas tags que não são de sistema
+          const nonSystemTags = tags.filter(tag => !tagsSistema.some(t => t.nome_tag === tag.nome_tag));
+          setSelectedIds(nonSystemTags.map(h => h.id));
       } else {
           setSelectedIds([]);
       }
   };
   
   const handleDeleteSelected = async () => {
-      if (selectedIds.length === 0) {
-          showError('Nenhuma tag selecionada.');
+      const tagsParaExcluir = selectedIds.filter(id => {
+          const tag = tags.find(t => t.id === id);
+          return tag && !tagsSistema.some(t => t.nome_tag === tag.nome_tag);
+      });
+      
+      if (tagsParaExcluir.length === 0) {
+          showError('Nenhuma tag de usuário selecionada para exclusão.');
           return;
       }
       
@@ -145,12 +188,12 @@ const GerenciarTags = () => {
           const { error } = await supabase
               .from('contrato_tags')
               .delete()
-              .in('id', selectedIds)
+              .in('id', tagsParaExcluir)
               .eq('empresa_id', proprietarioId); 
               
           if (error) throw error;
           
-          showSuccess(`${selectedIds.length} tags excluídas com sucesso.`);
+          showSuccess(`${tagsParaExcluir.length} tags excluídas com sucesso.`);
           setSelectedIds([]);
           buscarTags();
       } catch (error: any) {
@@ -275,12 +318,15 @@ const GerenciarTags = () => {
                 ) : (
                   tags.map((tag) => {
                     const isSelected = selectedIds.includes(tag.id);
+                    const isSystemTag = tagsSistema.some(t => t.nome_tag === tag.nome_tag);
+                    
                     return (
-                      <TableRow key={tag.id} className={isSelected ? 'bg-secondary/50' : ''}>
+                      <TableRow key={tag.id} className={cn(isSelected ? 'bg-secondary/50' : '', isSystemTag ? 'bg-gray-50/50 text-muted-foreground' : '')}>
                         <TableCell className="text-center">
                             <Checkbox 
                                 checked={isSelected}
                                 onCheckedChange={(checked) => handleToggleSelect(tag.id, !!checked)}
+                                disabled={isSystemTag}
                             />
                         </TableCell>
                         <TableCell className="font-mono text-sm font-semibold text-primary">{tag.nome_tag}</TableCell>
@@ -288,10 +334,10 @@ const GerenciarTags = () => {
                         <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{tag.origem_dado || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(tag)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(tag)} disabled={isSystemTag}>
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(tag.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(tag.id)} disabled={isSystemTag}>
                               <Trash2 className="w-4 h-4 text-red-500" />
                             </Button>
                           </div>
