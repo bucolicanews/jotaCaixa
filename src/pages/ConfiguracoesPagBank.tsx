@@ -10,12 +10,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, Globe, Info, MessageSquare, Percent, Landmark } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { BASE_URL } from '@/config/app-config';
 import type { PagBankConfig } from '@/types/pagbank';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator'; // Importação corrigida
+import { Separator } from '@/components/ui/separator';
 
 interface PlanoContas {
   id: string;
@@ -99,7 +99,7 @@ export default function ConfiguracoesPagBank() {
       if (histRes.data) setHistoricos(histRes.data as Historico[]);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
-      toast.error('Erro ao carregar configurações');
+      showError('Erro ao carregar configurações');
     } finally {
       setLoading(false);
     }
@@ -110,28 +110,41 @@ export default function ConfiguracoesPagBank() {
   }, [carregarDados]);
 
   const handleSave = async () => {
+    if (!ownerId) {
+        showError('Dono não identificado.');
+        return;
+    }
+
     if (!config.token_producao && config.ambiente === 'producao') {
-        toast.error('O token de produção é obrigatório para o ambiente de Produção.');
+        showError('O token de produção é obrigatório para o ambiente de Produção.');
         return;
     }
 
     try {
       setSaving(true);
+      
+      // HIGIENIZAÇÃO DO PAYLOAD: Removemos metadados automáticos para evitar conflitos (409)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, created_at, updated_at, proprietario_id, ...cleanData } = config as any;
+
+      const payload = {
+        proprietario_id: ownerId,
+        ...cleanData,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error } = await supabase
         .from('configuracoes_pagbank')
-        .upsert({
-          proprietario_id: ownerId,
-          ...config,
-          updated_at: new Date().toISOString(),
-        }, {
+        .upsert(payload, {
           onConflict: 'proprietario_id',
         });
 
       if (error) throw error;
-      toast.success('Configurações salvas com sucesso!');
-    } catch (error) {
+      showSuccess('Configurações salvas com sucesso!');
+      await carregarDados(); // Recarrega para ter os IDs atualizados
+    } catch (error: any) {
       console.error('Erro ao salvar:', error);
-      toast.error('Erro ao salvar configurações');
+      showError('Erro ao salvar configurações: ' + (error.message || 'Verifique os dados.'));
     } finally {
       setSaving(false);
     }
