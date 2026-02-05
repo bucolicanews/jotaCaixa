@@ -237,7 +237,9 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 </Button>
                                             </TableCell>
                                             <TableCell>
-                                                {(p.pagbank_charge_id || p.pagbank_checkout_id) ? (
+                                                {p.pagbank_status === 'PAID' ? (
+                                                    <PagBankPaymentStatus status={p.pagbank_status as any} />
+                                                ) : (p.pagbank_charge_id || p.pagbank_checkout_id) ? (
                                                     <div className="space-y-1 text-center">
                                                         {isLinkExpirado(p) ? (
                                                             <Badge variant="destructive" className="w-fit text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Expirado</Badge>
@@ -327,23 +329,27 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                         {(p.pagbank_charge_id || p.pagbank_checkout_id) && (
                                             <div className="pt-3 border-t">
                                                 <div className="text-xs font-medium text-muted-foreground mb-2">Status PagBank</div>
-                                                <div className="space-y-2">
-                                                    {isLinkExpirado(p) ? (
-                                                        <Badge variant="destructive" className="w-fit text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Link Expirado</Badge>
-                                                    ) : (
-                                                        <div className="flex items-center justify-between">
-                                                            <Badge variant="default" className="text-xs bg-green-600"><Check className="h-3 w-3 mr-1" />Link Ativo</Badge>
-                                                        </div>
-                                                    )}
+                                                {p.pagbank_status === 'PAID' ? (
                                                     <PagBankPaymentStatus status={p.pagbank_status as any} />
-                                                    <Button size="sm" variant="outline" onClick={() => onVisualizarLinkPagBank?.(p)} className="w-full"><Eye className="h-3 w-3 mr-2" />Ver Link PagBank</Button>
-                                                    {!isPaga && (
-                                                        <Button size="sm" variant="secondary" onClick={() => onSyncStatus?.(p.id)} className="w-full"><RefreshCw className="h-3 w-3 mr-2" />Sincronizar Status</Button>
-                                                    )}
-                                                    {isLinkExpirado(p) && !isPaga && (
-                                                        <Button size="sm" variant="outline" onClick={() => onRegerarLinkPagBank?.(p)} className="w-full text-orange-600 border-orange-600 hover:bg-orange-50"><RefreshCw className="h-3 w-3 mr-2" />Regerar Link</Button>
-                                                    )}
-                                                </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {isLinkExpirado(p) ? (
+                                                            <Badge variant="destructive" className="w-fit text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Link Expirado</Badge>
+                                                        ) : (
+                                                            <div className="flex items-center justify-between">
+                                                                <Badge variant="default" className="text-xs bg-green-600"><Check className="h-3 w-3 mr-1" />Link Ativo</Badge>
+                                                            </div>
+                                                        )}
+                                                        <PagBankPaymentStatus status={p.pagbank_status as any} />
+                                                        <Button size="sm" variant="outline" onClick={() => onVisualizarLinkPagBank?.(p)} className="w-full"><Eye className="h-3 w-3 mr-2" />Ver Link PagBank</Button>
+                                                        {!isPaga && (
+                                                            <Button size="sm" variant="secondary" onClick={() => onSyncStatus?.(p.id)} className="w-full"><RefreshCw className="h-3 w-3 mr-2" />Sincronizar Status</Button>
+                                                        )}
+                                                        {isLinkExpirado(p) && !isPaga && (
+                                                            <Button size="sm" variant="outline" onClick={() => onRegerarLinkPagBank?.(p)} className="w-full text-orange-600 border-orange-600 hover:bg-orange-50"><RefreshCw className="h-3 w-3 mr-2" />Regerar Link</Button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         <Button variant="ghost" size="sm" onClick={() => toggleCardExpansion(p.id)} className="w-full mt-3 text-xs">{isExpanded ? 'Ocultar detalhes' : 'Ver mais detalhes'}</Button>
