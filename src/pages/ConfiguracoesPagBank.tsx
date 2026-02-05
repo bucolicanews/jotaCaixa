@@ -16,17 +16,12 @@ import { BASE_URL } from '@/config/app-config';
 import type { PagBankConfig } from '@/types/pagbank';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 interface PlanoContas {
   id: string;
   Conta: string;
   Descricao: string;
-}
-
-interface SaldoConta {
-  id: string;
-  nome: string;
-  conta_contabil_id: string | null;
 }
 
 interface Historico {
@@ -37,6 +32,7 @@ interface Historico {
 
 export default function ConfiguracoesPagBank() {
   const { ownerId } = useSessao();
+  const { configMap } = useContabilConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<Partial<PagBankConfig>>({
@@ -51,7 +47,6 @@ export default function ConfiguracoesPagBank() {
   });
   
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
-  const [saldoContas, setSaldoContas] = useState<SaldoConta[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
 
   const carregarDados = useCallback(async () => {
@@ -60,7 +55,7 @@ export default function ConfiguracoesPagBank() {
     try {
       setLoading(true);
 
-      const [configRes, planoRes, saldoRes, histRes] = await Promise.all([
+      const [configRes, planoRes, histRes] = await Promise.all([
         supabase
           .from('configuracoes_pagbank')
           .select('*')
@@ -72,11 +67,6 @@ export default function ConfiguracoesPagBank() {
           .eq('proprietario_id', ownerId)
           .eq('Analitica', 'Sim')
           .order('Conta'),
-        supabase
-          .from('saldo_contas')
-          .select('id, nome, conta_contabil_id')
-          .eq('proprietario_id', ownerId)
-          .order('nome'),
         supabase
           .from('historicos')
           .select('id, codigo, descricao')
@@ -95,7 +85,6 @@ export default function ConfiguracoesPagBank() {
       }
 
       if (planoRes.data) setPlanoContas(planoRes.data);
-      if (saldoRes.data) setSaldoContas(saldoRes.data);
       if (histRes.data) setHistoricos(histRes.data as Historico[]);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
@@ -124,7 +113,7 @@ export default function ConfiguracoesPagBank() {
       setSaving(true);
       
       // HIGIENIZAÇÃO DO PAYLOAD: Removemos metadados automáticos para evitar conflitos (409)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // Mantemos conta_id como o ID do Plano de Contas
       const { id, created_at, updated_at, proprietario_id, ...cleanData } = config as any;
 
       const payload = {
@@ -141,7 +130,7 @@ export default function ConfiguracoesPagBank() {
 
       if (error) throw error;
       showSuccess('Configurações salvas com sucesso!');
-      await carregarDados(); // Recarrega para ter os IDs atualizados
+      await carregarDados(); 
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
       showError('Erro ao salvar configurações: ' + (error.message || 'Verifique os dados.'));
@@ -159,6 +148,11 @@ export default function ConfiguracoesPagBank() {
       </LayoutPrincipal>
     );
   }
+
+  const ativoCode = configMap.Ativo || '1';
+  const receitaCode = configMap.Receita || '4';
+  const despesaCode = configMap.Despesa || '5';
+  const custoCode = configMap.Custo || '6';
 
   return (
     <LayoutPrincipal>
@@ -234,25 +228,20 @@ export default function ConfiguracoesPagBank() {
                             <div className="space-y-2">
                                 <Label className="text-blue-600 font-bold">Conta PagBank (Ativo) *</Label>
                                 <Select value={config.conta_id || ''} onValueChange={(v) => setConfig({...config, conta_id: v})}>
-                                    <SelectTrigger className="border-blue-300"><SelectValue placeholder="Selecione a conta bancária" /></SelectTrigger>
+                                    <SelectTrigger className="border-blue-300"><SelectValue placeholder="Selecione a conta do Ativo" /></SelectTrigger>
                                     <SelectContent>
-                                        {saldoContas.length === 0 ? (
-                                            <SelectItem value="none" disabled>Nenhuma conta cadastrada em Bancos/Caixas</SelectItem>
-                                        ) : (
-                                            saldoContas.map(c => (
-                                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                                            ))
-                                        )}
+                                        {planoContas.filter(c => c.Conta.startsWith(ativoCode)).map(c => (
+                                            <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
-                                <p className="text-[10px] text-muted-foreground italic">Selecione o registro criado na tela "Bancos / Caixas".</p>
                             </div>
                             <div className="space-y-2">
                                 <Label>Conta de Receita (DRE)</Label>
                                 <Select value={config.id_conta_resultado || ''} onValueChange={(v) => setConfig({...config, id_conta_resultado: v})}>
                                     <SelectTrigger><SelectValue placeholder="Selecione a conta de resultado" /></SelectTrigger>
                                     <SelectContent>
-                                        {planoContas.filter(c => c.Conta.startsWith('4.')).map(c => (
+                                        {planoContas.filter(c => c.Conta.startsWith(receitaCode)).map(c => (
                                             <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
                                         ))}
                                     </SelectContent>
@@ -265,7 +254,7 @@ export default function ConfiguracoesPagBank() {
                             <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
                                 <SelectTrigger><SelectValue placeholder="Selecione a conta de despesa" /></SelectTrigger>
                                 <SelectContent>
-                                    {planoContas.filter(c => c.Conta.startsWith('5.') || c.Conta.startsWith('6.')).map(c => (
+                                    {planoContas.filter(c => c.Conta.startsWith(despesaCode) || c.Conta.startsWith(custoCode)).map(c => (
                                         <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
                                     ))}
                                 </SelectContent>
