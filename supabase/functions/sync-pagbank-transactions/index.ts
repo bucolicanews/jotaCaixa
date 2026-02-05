@@ -1,144 +1,193 @@
-import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  // 1. Trata Pre-flight (CORS)
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders })
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    )
 
-    const body = await req.json();
-    let { parcelaId, manualOrderId } = body;
-    
-    if (!parcelaId) throw new Error('ID da parcela não informado.');
+    const { parcelaId, manualOrderId } = await req.json()
 
-    // 1. Buscar a parcela
-    const { data: parcela, error: pError } = await supabaseAdmin
-      .from('admin_parcelas_receber')
-      .select('*')
-      .eq('id', parcelaId)
-      .single();
-
-    if (pError || !parcela) throw new Error('Parcela não encontrada no banco.');
-
-    // 2. Buscar configuração PagBank
-    const { data: config, error: configError } = await supabaseAdmin
-      .from('configuracoes_pagbank')
-      .select('*')
-      .eq('proprietario_id', parcela.admin_id)
-      .single();
-
-    if (configError || !config) throw new Error('Configuração PagBank não encontrada.');
-
-    const token = (config.ambiente === 'producao' ? config.token_producao : config.token_sandbox)?.trim();
-    const baseUrl = config.ambiente === 'producao' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
-    
-    if (!token) throw new Error('Token do PagBank não configurado.');
-
-    let apiStatus = 'UNKNOWN';
-    let paymentConfirmed = false;
-    let chargeData = null;
-    let rawData = null;
-
-    // --- LÓGICA DE BUSCA FLEXÍVEL ---
-    
-    let resourceId = manualOrderId || parcela.pagbank_checkout_id || parcela.pagbank_charge_id;
-    if (!resourceId) throw new Error('Nenhum ID de transação (manual ou automático) encontrado para esta parcela.');
-
-    // Normalização do ID
-    resourceId = resourceId.trim();
-    if (!resourceId.startsWith('ORDE_') && !resourceId.startsWith('CHAR_') && !resourceId.startsWith('CHEC_')) {
-        resourceId = `ORDE_${resourceId}`;
+    if (!parcelaId) {
+      throw new Error("parcelaId não informado")
     }
 
-    const isCheckout = resourceId.startsWith('CHEC_');
-    const endpoint = isCheckout ? `${baseUrl}/checkouts/${resourceId}` : `${baseUrl}/orders/${resourceId}`;
+    // 2. Busca a parcela
+    const { data: parcela, error } = await supabase
+      .from("admin_parcelas_receber")
+      .select("*, admin_contas_receber(admin_id, cliente_id)")
+      .eq("id", parcelaId)
+      .single()
+
+    if (error || !parcela) {
+      throw new Error("Parcela não encontrada")
+    }
+
+    const ownerId = parcela.admin_contas_receber.admin_id
     
-    const response = await fetch(endpoint, {
-        headers: { 
-            'Authorization': `Bearer ${token}`, 
-            'Accept': 'application/json' 
+    // 3. Define qual ID usar (Manual, Order/Checkout ou Charge)
+    const transactionId = manualOrderId || parcela.pagbank_checkout_id || parcela.pagbank_charge_id
+
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "Parcela sem ID de transação (Order/Charge) e nenhum código manual informado." 
+        }),
+        { 
+          status: 200, // Retorna 200 para o frontend tratar a mensagem
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
-    });
+      )
+    }
+
+    // 4. Busca Configuração
+    const { data: config } = await supabase
+      .from("configuracoes_pagbank")
+      .select("*")
+      .eq("proprietario_id", ownerId)
+      .single()
+
+    if (!config) throw new Error("Configuração PagBank não encontrada")
+
+    const token = (config.ambiente === "producao" ? config.token_producao : config.token_sandbox)?.trim()
+    
+    // URL DEFINITIVA: api.pagseguro.com (NUNCA api.pagbank.com.br)
+    const baseUrl = config.ambiente === "producao" 
+      ? "https://api.pagseguro.com" 
+      : "https://sandbox.api.pagseguro.com"
+
+    // Detecta se é Order (ORD_) ou Charge (CHAR_)
+    const isOrder = transactionId.startsWith("ORD") || transactionId.includes("-"); // Checkout geralmente gera UUIDs ou ORDs
+    const endpoint = isOrder ? `/orders/${transactionId}` : `/charges/${transactionId}`
+    const fullUrl = `${baseUrl}${endpoint}`
+
+    console.log(`[sync-pagbank] Requesting: ${fullUrl}`)
+
+    // 5. Chamada à API PagBank
+    const response = await fetch(fullUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "x-api-version": "4.0" // OBRIGATÓRIO PARA EVITAR 406
+      },
+    })
 
     if (!response.ok) {
-        const errStatus = response.status;
-        const errText = await response.text();
-        console.error(`[Sync] Erro PagBank (${errStatus}):`, errText);
-        
-        if (errStatus === 401) throw new Error('Token Inválido ou Sem Permissão.');
-        if (errStatus === 404) throw new Error(`Transação ${resourceId} não encontrada no ambiente ${config.ambiente}.`);
-        throw new Error(`Erro na API PagBank: ${errStatus}`);
+      const rawText = await response.text()
+      let errorMsg = `PagBank ${response.status}`
+      try {
+        const jsonErr = JSON.parse(rawText)
+        errorMsg = jsonErr.error_messages?.[0]?.description || jsonErr.message || errorMsg
+      } catch {
+        errorMsg += `: ${rawText}`
+      }
+      throw new Error(errorMsg)
     }
+
+    const pbData = await response.json()
     
-    rawData = await response.json();
+    // 6. Normaliza dados de retorno
+    let status = pbData.status
+    let paidAt = pbData.paid_at
+    let grossAmount = 0
+    let fees = 0
+    let chargeIdFound = isOrder ? null : transactionId
 
-    // --- EXTRAÇÃO DE STATUS CORRIGIDA ---
-    if (isCheckout) {
-        // Para checkouts, o status PAGO está dentro do array 'orders'
-        const paidOrder = rawData.orders?.find((o: any) => ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(o.status));
-        if (paidOrder) {
-            paymentConfirmed = true;
-            chargeData = paidOrder;
-            apiStatus = paidOrder.status;
-        } else {
-            apiStatus = rawData.status || 'UNKNOWN';
-        }
+    if (pbData.charges && pbData.charges.length > 0) {
+      // Se for Order, pega a charge paga ou a mais recente
+      const charge = pbData.charges.find((c: any) => c.status === "PAID") || pbData.charges[0]
+      status = charge.status
+      paidAt = charge.paid_at
+      grossAmount = charge.amount?.value || 0
+      fees = charge.amount?.summary?.total_fee || 0
+      chargeIdFound = charge.id
     } else {
-        // Para orders/charges, o status está na raiz
-        const chargeDetail = rawData.charges?.[0] || rawData;
-        apiStatus = chargeDetail.status || rawData.status || 'UNKNOWN';
-        paymentConfirmed = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(apiStatus);
-        chargeData = chargeDetail;
-    }
-    // --- FIM DA CORREÇÃO ---
-
-    // --- EXECUÇÃO DA BAIXA ---
-    if (paymentConfirmed && parcela.status !== 'paga') {
-        const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/pagbank-webhook`;
-        const webRes = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` 
-            },
-            body: JSON.stringify({
-                reference_id: `PARCELA_${parcela.id}`,
-                status: 'PAID',
-                id: chargeData?.id || manualOrderId,
-                amount: { value: Math.round(parcela.valor_parcela * 100) },
-                paid_at: chargeData?.paid_at || new Date().toISOString(),
-                charges: chargeData?.charges || []
-            })
-        });
-        
-        if (!webRes.ok) throw new Error('Pagamento confirmado, mas a baixa interna falhou.');
-    } else {
-        await supabaseAdmin.from('admin_parcelas_receber').update({ 
-            pagbank_status: apiStatus,
-            pagbank_updated_at: new Date().toISOString()
-        }).eq('id', parcela.id);
+      // Se for Charge direto
+      grossAmount = pbData.amount?.value || 0
+      fees = pbData.amount?.summary?.total_fee || 0
     }
 
-    return new Response(JSON.stringify({ success: true, status: apiStatus, isPaid: paymentConfirmed, rawResponse: rawData }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
-    });
+    const isPaid = status === "PAID"
 
-  } catch (error: any) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
+    // 7. Processa Baixa se Pago
+    if (isPaid && parcela.status !== "paga") {
+      const { data: saldoConta } = await supabase
+        .from("saldo_contas")
+        .select("id")
+        .eq("proprietario_id", ownerId)
+        .eq("conta_contabil_id", config.conta_id)
+        .maybeSingle()
+
+      if (!saldoConta) throw new Error("Conta bancária não encontrada no sistema.")
+
+      const valorBruto = grossAmount / 100
+      const valorTaxa = fees / 100
+      const valorLiquido = valorBruto - valorTaxa
+
+      // Atualiza parcela
+      await supabase.from("admin_parcelas_receber").update({
+        status: "paga",
+        valor_pago: valorBruto,
+        data_pagamento: paidAt || new Date().toISOString(),
+        pagbank_status: "PAID",
+        pagbank_charge_id: chargeIdFound,
+        pagbank_updated_at: new Date().toISOString()
+      }).eq("id", parcelaId)
+
+      // Cria recebimento
+      await supabase.from("admin_recebimentos").insert({
+        parcela_id: parcelaId,
+        admin_id: ownerId,
+        cliente_id: parcela.admin_contas_receber.cliente_id,
+        valor_recebido: valorBruto,
+        data_recebimento: paidAt || new Date().toISOString(),
+        forma_pagamento: "PagBank",
+        conta_id: saldoConta.id,
+        id_conta_contabil: config.conta_sintetica_id,
+        historico_id: config.historico_padrao_id,
+        pagbank_charge_id: chargeIdFound,
+        pagbank_taxa_valor: valorTaxa,
+        pagbank_valor_liquido: valorLiquido
+      })
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        isPaid: true, 
+        status: "PAID" 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      })
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      isPaid: false, 
+      status: status 
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    })
+
+  } catch (err: any) {
+    console.error("[sync-pagbank] Error:", err)
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 200, // Retorna 200 com success:false para o frontend ler o erro
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    })
   }
-});
+})

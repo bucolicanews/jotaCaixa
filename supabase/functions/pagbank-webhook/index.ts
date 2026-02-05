@@ -20,7 +20,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 1. Captura o corpo bruto para evitar erro de SyntaxError no req.json()
     const rawBody = await req.text();
     let payload: any;
 
@@ -40,10 +39,7 @@ serve(async (req) => {
 
     console.log(`[pagbank-webhook:${requestId}] Payload recebido com sucesso.`);
 
-    // 2. No Webhook V4, os dados da transação ficam dentro de 'data' ou na raiz
     const charge = payload.data || payload;
-    
-    // Normalização do Status: Tenta pegar da raiz ou da primeira charge
     const chargeDetail = charge.charges?.[0] || charge;
     const currentStatus = chargeDetail.status || charge.status;
     const referenceId = chargeDetail.reference_id || charge.reference_id || "";
@@ -57,10 +53,8 @@ serve(async (req) => {
       });
     }
 
-    // Extrair ID removendo prefixo e possível timestamp (compatibilidade com formato antigo)
     let parcelaId = referenceId.replace('PARCELA_', '');
     if (parcelaId.includes('_')) {
-      // Formato antigo: PARCELA_{id}_{timestamp}
       const originalId = parcelaId;
       parcelaId = parcelaId.split('_')[0];
       console.log(`[pagbank-webhook:${requestId}] ⚠️ Formato antigo detectado. ID original: ${originalId}, ID extraído: ${parcelaId}`);
@@ -75,13 +69,13 @@ serve(async (req) => {
       .single();
 
     if (pError || !parcela) {
-      console.error(`[pagbank-webhook:${requestId}] Parcela não encontrada:`, parcelaId);
-      return new Response(JSON.stringify({ error: 'Parcela não encontrada' }), { status: 404 });
+      console.error(`[pagbank-webhook:${requestId}] Parcela não encontrada:`, parcelaId, pError);
+      return new Response(JSON.stringify({ error: 'Parcela não encontrada' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (parcela.status === 'paga' && parcela.webhook_processed_at) {
       console.log(`[pagbank-webhook:${requestId}] Já processado.`);
-      return new Response(JSON.stringify({ success: true, message: 'Já processado' }), { status: 200 });
+      return new Response(JSON.stringify({ success: true, message: 'Já processado' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     await supabaseAdmin.from('pagbank_transaction_logs').insert({
@@ -100,16 +94,14 @@ serve(async (req) => {
         pagbank_status: currentStatus,
         pagbank_updated_at: new Date().toISOString() 
       }).eq('id', parcelaId);
-      return new Response(JSON.stringify({ success: true, message: 'Status atualizado' }), { status: 200 });
+      return new Response(JSON.stringify({ success: true, message: 'Status atualizado' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     console.log(`[pagbank-webhook:${requestId}] Status confirmado: PAID. Iniciando baixa...`);
 
     const dataPagamento = (chargeDetail.paid_at || charge.paid_at || new Date().toISOString()).split('T')[0];
     const valorBruto = (chargeDetail.amount?.value || charge.amount?.value || 0) / 100;
-    
-    // Busca taxa de forma segura (fees pode estar em lugares diferentes dependendo do método)
-    const taxa = (chargeDetail.amount?.fees?.value || chargeDetail.payment_method?.fees?.total || charge.fees?.total || 0) / 100;
+    const taxa = (chargeDetail.amount?.fees?.value || 0) / 100;
     const valorLiquido = valorBruto - taxa;
 
     const { data: config, error: configError } = await supabaseAdmin
@@ -118,9 +110,7 @@ serve(async (req) => {
       .eq('proprietario_id', parcela.admin_id)
       .single();
 
-    if (configError || !config) throw new Error("Configuração PagBank não encontrada.");
-
-    // 3. Saldo calculado dinamicamente pelos lançamentos contábeis (não precisa mais atualizar saldo_contas)
+    if (configError || !config) throw new Error("Configuração PagBank não encontrada para o admin: " + parcela.admin_id);
 
     await supabaseAdmin.from('admin_parcelas_receber').update({
       status: 'paga',
@@ -141,6 +131,7 @@ serve(async (req) => {
       data_recebimento: dataPagamento,
       tipo_recebimento: 'total',
       forma_pagamento: 'PagBank',
+      conta_id: config.conta_id,
       id_conta_contabil: config.conta_sintetica_id,
       id_conta_resultado: config.id_conta_resultado,
       pagbank_charge_id: charge.id,
@@ -151,92 +142,82 @@ serve(async (req) => {
     if (config.conta_sintetica_id && parcela.admin_contas_receber.id_conta_patrimonial) {
       const lancamentosPayload = [];
       
+      // --- PARTE 1: Lançamento do Recebimento Bruto ---
+      const idRecebimentoAtivo = crypto.randomUUID();
+      const idRecebimentoPatrimonial = crypto.randomUUID();
+      
+      // D: Ativo (Banco/PagBank) - ENTRADA
+      lancamentosPayload.push({
+        id: idRecebimentoAtivo,
+        proprietario_id: parcela.admin_id,
+        data_movimentacao: dataPagamento,
+        descricao: `Recebimento PagBank (Bruto): ${parcela.admin_contas_receber.descricao}`,
+        valor: valorBruto,
+        tipo: 'Entrada',
+        conta_contabil_id: config.conta_sintetica_id,
+        origem: 'recebimento_pagbank',
+        conciliado: true,
+        historico_id: config.historico_padrao_id || null,
+        conta_resultado_id: idRecebimentoPatrimonial,
+        conta_bancaria_id: config.conta_id || null,
+      });
+      
+      // C: Clientes a Receber (Ativo) - SAÍDA
+      lancamentosPayload.push({
+        id: idRecebimentoPatrimonial,
+        proprietario_id: parcela.admin_id,
+        data_movimentacao: dataPagamento,
+        descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`,
+        valor: valorBruto,
+        tipo: 'Saida',
+        conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial,
+        origem: 'recebimento_pagbank',
+        conciliado: true,
+        historico_id: config.historico_padrao_id || null,
+        conta_resultado_id: idRecebimentoAtivo,
+        conta_bancaria_id: null,
+      });
+      
+      console.log(`[pagbank-webhook:${requestId}] Lançamento Recebimento: D/C de R$ ${valorBruto.toFixed(2)}`);
+
+      // --- PARTE 2: Lançamento da Taxa (se houver) ---
       if (taxa > 0 && config.conta_despesa_taxa_id) {
-        const idPagBank = crypto.randomUUID();
-        const idTaxa = crypto.randomUUID();
-        const idPatrimonial = crypto.randomUUID();
+        const idTaxaDespesa = crypto.randomUUID();
+        const idTaxaAtivo = crypto.randomUUID();
         
+        // D: Despesa com Taxa (Resultado) - ENTRADA
         lancamentosPayload.push({
-          id: idPagBank,
-          proprietario_id: parcela.admin_id,
-          data_movimentacao: dataPagamento,
-          descricao: `Recebimento PagBank: ${parcela.admin_contas_receber.descricao}`,
-          valor: valorLiquido,
-          tipo: 'Entrada',
-          conta_contabil_id: config.conta_sintetica_id,
-          origem: 'recebimento_pagbank',
-          conciliado: true,
-          historico_id: config.historico_padrao_id || null,
-          conta_resultado_id: idPatrimonial,
-          conta_bancaria_id: null
-        });
-        
-        lancamentosPayload.push({
-          id: idTaxa,
+          id: idTaxaDespesa,
           proprietario_id: parcela.admin_id,
           data_movimentacao: dataPagamento,
           descricao: `Taxa PagBank: ${parcela.admin_contas_receber.descricao}`,
           valor: taxa,
           tipo: 'Entrada',
           conta_contabil_id: config.conta_despesa_taxa_id,
-          origem: 'recebimento_pagbank',
+          origem: 'taxa_pagbank',
           conciliado: true,
           historico_id: config.historico_taxa_id || config.historico_padrao_id || null,
-          conta_resultado_id: idPatrimonial,
-          conta_bancaria_id: null
+          conta_resultado_id: idTaxaAtivo,
+          conta_bancaria_id: null,
         });
         
+        // C: Ativo (Banco/PagBank) - SAÍDA
         lancamentosPayload.push({
-          id: idPatrimonial,
+          id: idTaxaAtivo,
           proprietario_id: parcela.admin_id,
           data_movimentacao: dataPagamento,
-          descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`,
-          valor: valorBruto,
+          descricao: `Pagamento Taxa PagBank: ${parcela.admin_contas_receber.descricao}`,
+          valor: taxa,
           tipo: 'Saida',
-          conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial,
-          origem: 'recebimento_pagbank',
-          conciliado: true,
-          historico_id: config.historico_padrao_id || null,
-          conta_resultado_id: idPagBank,
-          conta_bancaria_id: null
-        });
-        
-        console.log(`[pagbank-webhook:${requestId}] Lançamento com taxa: PagBank R$ ${valorLiquido.toFixed(2)} + Taxa R$ ${taxa.toFixed(2)} = Baixa R$ ${valorBruto.toFixed(2)}`);
-      } else {
-        const idAtivo = crypto.randomUUID();
-        const idPatrimonial = crypto.randomUUID();
-        
-        lancamentosPayload.push({
-          id: idAtivo,
-          proprietario_id: parcela.admin_id,
-          data_movimentacao: dataPagamento,
-          descricao: `Recebimento PagBank: ${parcela.admin_contas_receber.descricao}`,
-          valor: valorBruto,
-          tipo: 'Entrada',
           conta_contabil_id: config.conta_sintetica_id,
-          origem: 'recebimento_pagbank',
+          origem: 'taxa_pagbank',
           conciliado: true,
-          historico_id: config.historico_padrao_id || null,
-          conta_resultado_id: idPatrimonial,
-          conta_bancaria_id: null
+          historico_id: config.historico_taxa_id || config.historico_padrao_id || null,
+          conta_resultado_id: idTaxaDespesa,
+          conta_bancaria_id: config.conta_id || null,
         });
         
-        lancamentosPayload.push({
-          id: idPatrimonial,
-          proprietario_id: parcela.admin_id,
-          data_movimentacao: dataPagamento,
-          descricao: `Baixa Direito CR: ${parcela.admin_contas_receber.descricao}`,
-          valor: valorBruto,
-          tipo: 'Saida',
-          conta_contabil_id: parcela.admin_contas_receber.id_conta_patrimonial,
-          origem: 'recebimento_pagbank',
-          conciliado: true,
-          historico_id: config.historico_padrao_id || null,
-          conta_resultado_id: idAtivo,
-          conta_bancaria_id: null
-        });
-        
-        console.log(`[pagbank-webhook:${requestId}] Lançamento sem taxa: Valor total R$ ${valorBruto.toFixed(2)}`);
+        console.log(`[pagbank-webhook:${requestId}] Lançamento Taxa: D/C de R$ ${taxa.toFixed(2)}`);
       }
       
       const { error: lancError } = await supabaseAdmin.from('lancamentos').insert(lancamentosPayload);
@@ -256,6 +237,16 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error(`[pagbank-webhook:${requestId}] Erro Fatal:`, error.message);
+    // Log do erro no banco para auditoria
+    await supabaseAdmin.from('pagbank_transaction_logs').insert({
+      proprietario_id: parcela?.admin_id || null,
+      transaction_type: 'webhook',
+      pagbank_id: payload?.data?.id || payload?.id || null,
+      reference_id: String(payload?.data?.reference_id || payload?.reference_id || ""),
+      status: 'ERROR',
+      response_payload: payload,
+      error_message: error.message,
+    });
     return new Response(JSON.stringify({ error: error.message }), { 
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
