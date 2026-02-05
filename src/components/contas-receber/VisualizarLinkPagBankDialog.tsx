@@ -92,114 +92,40 @@ export function VisualizarLinkPagBankDialog({
   const handleSyncStatus = async (forceId?: string) => {
     if (!parcelaId) return;
     
+    setSyncing(true);
+    const toastId = toast.loading('Sincronizando com PagBank...');
+
     try {
-      setSyncing(true);
-      
-      if (forceId) {
-        const { data, error: invokeError } = await supabase.functions.invoke('forcar-baixa-pagbank', {
-          body: { 
-            parcela_id: parcelaId,
-            codigo_transacao: forceId.trim(),
-            force: false
-          }
-        });
-
-        if (invokeError) {
-          let errorMsg = 'Falha na comunicação com o servidor.';
-          try {
-            const errorContext = await invokeError.context?.json();
-            errorMsg = errorContext?.error || invokeError.message;
-          } catch (e) {
-            errorMsg = invokeError.message;
-          }
-          throw new Error(errorMsg);
-        }
-
-        if (data?.not_found) {
-          const taxaEstimada = valorParcela * 0.0099;
-          const valorLiquidoEstimado = valorParcela - taxaEstimada;
-          
-          setConfirmForceDialog({
-            open: true,
-            status: 'PAID',
-            valorBruto: valorParcela,
-            valorLiquido: parseFloat(valorLiquidoEstimado.toFixed(2)),
-            taxa: parseFloat(taxaEstimada.toFixed(2)),
-            codigoTransacao: forceId.trim(),
-            manualInput: true
-          });
-          return;
-        }
-
-        if (data?.not_paid) {
-          const valorBrutoFinal = data.valor_bruto > 0 ? data.valor_bruto : valorParcela;
-          const taxaEstimada = valorBrutoFinal * 0.0099;
-          const valorLiquidoFinal = data.valor_liquido > 0 ? data.valor_liquido : (valorBrutoFinal - taxaEstimada);
-          const taxaFinal = data.taxa > 0 ? data.taxa : (valorBrutoFinal - valorLiquidoFinal);
-          
-          setConfirmForceDialog({
-            open: true,
-            status: data.status,
-            valorBruto: valorBrutoFinal,
-            valorLiquido: parseFloat(valorLiquidoFinal.toFixed(2)),
-            taxa: parseFloat(taxaFinal.toFixed(2)),
-            codigoTransacao: forceId.trim(),
-            manualInput: true
-          });
-          return;
-        }
-
-        if (data?.success) {
-          toast.success(data.message || 'Baixa realizada com sucesso!');
-          setTimeout(() => onOpenChange(false), 2000);
-          return;
-        }
-
-        throw new Error(data?.error || 'Erro ao forçar baixa');
-      }
-
-      const { data, error: invokeError } = await supabase.functions.invoke('sync-pagbank-transactions', {
+      // Chama a função atualizada sync-pagbank-transactions
+      const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
         body: { 
             parcelaId,
             manualOrderId: forceId || null
         }
       });
 
-      if (invokeError) {
-          let errorMsg = 'Falha na comunicação com o servidor.';
-          try {
-              const errorContext = await invokeError.context?.json();
-              errorMsg = errorContext?.error || invokeError.message;
-          } catch (e) {
-              errorMsg = invokeError.message;
-          }
-          throw new Error(errorMsg);
+      if (error) {
+        throw new Error(error.message || 'Erro de comunicação com o servidor.');
       }
-      
-      if (!data.success) throw new Error(data.error || 'Erro ao sincronizar');
-      
-      console.log('%c=== 🔍 INVESTIGAÇÃO DE SINCRONIZAÇÃO ===', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
-      console.log('ID Parcela:', parcelaId);
-      console.log('Status do Link:', data.status);
-      console.log('Pagamento Confirmado?', data.isPaid);
-      console.log('Resposta Bruta:', data.rawResponse);
-      console.log('%c====================================', 'background: #f59e0b; color: #000; font-weight: bold; padding: 4px;');
+
+      if (!data.success) {
+        throw new Error(data.error || 'Erro desconhecido na sincronização.');
+      }
+
+      toast.dismiss(toastId);
 
       if (data.isPaid) {
-          toast.success('Pagamento detectado! A parcela foi baixada com sucesso.');
-          setTimeout(() => onOpenChange(false), 2000);
-      } else if (forceId) {
-          toast.warning(`A transação ${forceId} foi encontrada, mas o status é "${data.status}" (não pago).`);
+          toast.success('Pagamento confirmado! A parcela foi baixada.');
+          setTimeout(() => onOpenChange(false), 1500);
       } else {
-          toast.info(`Status atual: ${data.status}. Nenhum pagamento confirmado encontrado.`);
+          const statusMsg = data.status ? `Status atual: ${data.status}` : 'Pagamento ainda não confirmado.';
+          toast.info(statusMsg);
       }
       
     } catch (error: any) {
+      toast.dismiss(toastId);
       console.error('Erro ao sincronizar:', error);
-      toast.error(error.message, {
-          icon: <AlertTriangle className="text-red-500" />,
-          duration: 5000
-      });
+      toast.error('Falha na sincronização: ' + error.message);
     } finally {
       setSyncing(false);
     }
@@ -229,16 +155,7 @@ export function VisualizarLinkPagBankDialog({
       
       setConfirmForceDialog(null);
       
-      if (invokeError) {
-        let errorMsg = 'Falha na comunicação com o servidor.';
-        try {
-          const errorContext = await invokeError.context?.json();
-          errorMsg = errorContext?.error || invokeError.message;
-        } catch (e) {
-          errorMsg = invokeError.message;
-        }
-        throw new Error(errorMsg);
-      }
+      if (invokeError) throw new Error(invokeError.message);
 
       if (data?.success) {
         toast.success(data.message || 'Baixa forçada realizada com sucesso!');
@@ -375,7 +292,7 @@ export function VisualizarLinkPagBankDialog({
               </div>
             </div>
 
-            {/* NOVO: Busca Manual via ID */}
+            {/* Busca Manual via ID */}
             {status !== 'PAID' && (
                 <div className="space-y-2 p-3 border border-amber-200 rounded-lg bg-amber-50/50">
                     <Label className="text-xs font-bold text-amber-800 flex items-center gap-1">
@@ -403,11 +320,11 @@ export function VisualizarLinkPagBankDialog({
                     ) : (
                         <>
                             <p className="text-[10px] text-amber-700 leading-tight mb-2">
-                                Se o cliente pagou mas o status não mudou, cole o <b>Código da Transação</b> que aparece no painel do PagBank (ex: 858BDE28-AB82-4599-9536-A1FCAF31C841):
+                                Se o cliente pagou, cole o <b>Código da Transação</b> (ex: 858BDE28...) para forçar a baixa:
                             </p>
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <Input 
-                                  placeholder="Código da Transação (ex: 858BDE28-AB82...)" 
+                                  placeholder="Código da Transação" 
                                   value={manualOrderId}
                                   onChange={(e) => setManualOrderId(e.target.value)}
                                   className="h-8 text-xs border-amber-300"
@@ -427,6 +344,7 @@ export function VisualizarLinkPagBankDialog({
                 </div>
             )}
 
+            {/* Links e QR Code */}
             {qrCode && (
               <div className="flex flex-col items-center space-y-2 py-2">
                 <img src={qrCode} alt="QR Code PIX" className="w-32 h-32 sm:w-40 sm:h-40 border rounded-lg bg-white p-2" />
@@ -462,54 +380,15 @@ export function VisualizarLinkPagBankDialog({
                 </div>
               </div>
             )}
-
-            {/* Rodapé de Envio */}
-            <div className="border-t pt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <Button variant="outline" onClick={() => {
-                      const telefone = clienteTelefone?.replace(/\D/g, '');
-                      const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorParcela);
-                      
-                      // Se tem QR Code (PIX), usa a URL da página como prioridade
-                      const conteudoPrincipal = (qrCode && paymentLink) ? paymentLink : (checkoutLink || qrCodeText || '');
-
-                      // Usa o template de PIX se tiver QR Code, senão usa template de link
-                      const templateParaUsar = qrCode ? whatsappTemplatePix : whatsappTemplateLink;
-                      
-                      const msg = templateParaUsar
-                          .replace(/{nome}/g, clienteNome || 'Cliente')
-                          .replace(/{valor}/g, valorFormatado)
-                          .replace(/{descricao}/g, descricao)
-                          .replace(/{codigo_pix}/g, conteudoPrincipal)
-                          .replace(/{link}/g, conteudoPrincipal)
-                          .replace(/{vencimento}/g, linkExpiraEm ? new Date(linkExpiraEm).toLocaleDateString('pt-BR') : '')
-                          .replace(/{expiracao}/g, linkExpiraEm ? new Date(linkExpiraEm).toLocaleString('pt-BR') : '')
-                          .replace(/\n/g, '%0A');
-                      
-                      window.open(`https://wa.me/55${telefone}?text=${msg}`, '_blank');
-                  }} disabled={!clienteTelefone} className="text-xs sm:text-sm">
-                    <Send className="h-4 w-4 mr-2" /> WhatsApp
-                  </Button>
-                  <Button variant="outline" onClick={async () => {
-                      setSendingEmail(true);
-                      try {
-                          const { data } = await supabase.functions.invoke('send-payment-email', { body: { parcela_id: parcelaId, admin_id: ownerId } });
-                          if (data.success) toast.success('E-mail enviado!');
-                      } catch (e) { toast.error('Falha ao enviar e-mail'); }
-                      finally { setSendingEmail(false); }
-                  }} disabled={sendingEmail || !clienteEmail} className="text-xs sm:text-sm">
-                    {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />} Email
-                  </Button>
-                </div>
-            </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-4 border-t">
             <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      
+      {/* Dialog de Confirmação para Forçar Baixa */}
       <AlertDialog open={confirmForceDialog?.open || false} onOpenChange={() => setConfirmForceDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -533,13 +412,13 @@ export function VisualizarLinkPagBankDialog({
                           onChange={(e) => setConfirmForceDialog(prev => prev ? {
                             ...prev,
                             valorBruto: parseFloat(e.target.value) || 0,
-                            taxa: (prev.valorBruto || 0) - (prev.valorLiquido || 0)
+                            taxa: (parseFloat(e.target.value) || 0) - (prev.valorLiquido || 0)
                           } : null)}
                           className="h-9 text-sm mt-1"
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Valor Líquido / Total (R$)</Label>
+                        <Label className="text-xs">Valor Líquido (R$)</Label>
                         <Input 
                           type="number" 
                           step="0.01"
@@ -565,41 +444,11 @@ export function VisualizarLinkPagBankDialog({
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <p className="mb-4">
-                      A transação foi encontrada no PagBank, mas o status atual é:
-                      <strong className="text-yellow-600"> {confirmForceDialog?.status}</strong>
-                    </p>
-                    
-                    <div className="mt-4 space-y-2 border-t pt-4">
-                      <div className="flex justify-between">
-                        <span>Valor Bruto:</span>
-                        <span className="font-semibold">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-                            .format(confirmForceDialog?.valorBruto || 0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Taxa PagBank:</span>
-                        <span className="font-semibold text-red-600">
-                          - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-                            .format(confirmForceDialog?.taxa || 0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-t pt-2">
-                        <span>Valor Líquido:</span>
-                        <span className="font-bold text-green-600">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-                            .format(confirmForceDialog?.valorLiquido || 0)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="mt-4 text-sm">
+                    Status Atual: <strong className="text-yellow-600">{confirmForceDialog?.status}</strong>. 
+                    Deseja forçar a baixa desta parcela mesmo assim?
+                  </p>
                 )}
-                
-                <p className="mt-4 text-sm">
-                  Deseja forçar a baixa desta parcela? Os lançamentos contábeis serão realizados normalmente.
-                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
