@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
@@ -22,7 +24,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { formatarData } from '@/utils/formatters';
 import SetupBlocker from '@/components/SetupBlocker';
 import { useSessao } from '@/hooks/use-sessao';
-import { useOwner } from '@/hooks/use-owner'; // NOVO IMPORT
+import { useOwner } from '@/hooks/use-owner';
 import { GerarLinkPagBankDialog } from '@/components/contas-receber/GerarLinkPagBankDialog';
 import { GerarPixDialog } from '@/components/contas-receber/GerarPixDialog';
 import { VisualizarLinkPagBankDialog } from '@/components/contas-receber/VisualizarLinkPagBankDialog';
@@ -61,7 +63,7 @@ interface ParcelaParaPagamento {
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao, setupStatus } = useSessao();
-  const { ownerId, ownerType } = useOwner(); // USANDO useOwner
+  const { ownerId, ownerType } = useOwner();
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -72,13 +74,13 @@ const ContasReceber = () => {
   const [parcelasDialogOpen, setParcelasDialogOpen] = useState(false);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
   const [parcelaParaPagamento, setParcelaParaPagamento] = useState<any>(null);
-  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined); // ALTERADO: Removido o período inicial
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos');
-  const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
-  const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [pagbankDialogOpen, setPagbankDialogOpen] = useState(false);
   const [pixDialogOpen, setPixDialogOpen] = useState(false);
   const [visualizarPagbankDialogOpen, setVisualizarPagbankDialogOpen] = useState(false);
@@ -94,7 +96,7 @@ const ContasReceber = () => {
 
   const isAdmin = role === 'Admin';
   
-  const proprietarioId = ownerId; // USANDO ownerId
+  const proprietarioId = ownerId;
   const isClientUser =
     role === 'Usuario' &&
     perfil &&
@@ -113,20 +115,17 @@ const ContasReceber = () => {
     
     setCarregandoDados(true);
     
-    // Determina a tabela e a chave de filtro
     const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
     const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
     const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
-    // --- 1. Buscar Contas Sintéticas ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
         .select(`*`)
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true });
         
-    // Aplica filtros de período
     if (filtroPeriodo?.from) {
         contasQuery = contasQuery.gte('data_vencimento', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
@@ -136,8 +135,6 @@ const ContasReceber = () => {
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
-      
-      // --- 2. Buscar Parcelas (Analítico) - Sem JOIN automático de clientes ---
       supabase
         .from(tabelaParcelasReceber)
         .select(`
@@ -162,7 +159,6 @@ const ContasReceber = () => {
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true }),
         
-      // --- 3. Buscar Recebimentos (Histórico) ---
       (ownerType === 'Admin' || ownerType === 'AdminUsuario') ? supabase
         .from('admin_recebimentos')
         .select(`
@@ -194,7 +190,6 @@ const ContasReceber = () => {
     let fetchedContas = contasRes.data as ContaReceberComProgresso[];
     let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
         
-        // --- Buscar nomes dos clientes da tabela correta ---
         const clienteIds = [...new Set([
             ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
             ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
@@ -213,7 +208,6 @@ const ContasReceber = () => {
                     return acc;
                 }, {} as Record<string, { nome: string; razao_social?: string | null; telefone?: string; email?: string }>);
                 
-                // Merge dos nomes dos clientes nas contas
                 fetchedContas = fetchedContas.map(conta => ({
                     ...conta,
                     clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
@@ -221,7 +215,6 @@ const ContasReceber = () => {
                         : conta.clientes
                 }));
                 
-                // Merge dos nomes dos clientes nas parcelas
                 fetchedParcelas = fetchedParcelas.map(parcela => ({
                     ...parcela,
                     contas_receber: parcela.contas_receber ? {
@@ -234,7 +227,6 @@ const ContasReceber = () => {
             }
         }
         
-        // --- Lógica para calcular progresso de pagamento ---
         const parcelasPorConta = fetchedParcelas.reduce((acc, p) => {
             acc[p.conta_receber_id] = acc[p.conta_receber_id] || [];
             acc[p.conta_receber_id].push(p);
@@ -257,10 +249,8 @@ const ContasReceber = () => {
     if ((ownerType === 'Admin' || ownerType === 'AdminUsuario') && recebimentosRes.data) {
         setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
         
-        // Atualiza o mapa de nomes de clientes para recebimentos
         const clienteIdsRecebimentos = recebimentosRes.data.map(r => r.cliente_id);
         
-        // 1. Buscar nomes dos clientes (tbl_clientes)
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
@@ -290,14 +280,12 @@ const ContasReceber = () => {
     buscarDados();
   };
   
-  const handlePagamentoCompleto = () => {
+  const handlePagamentoComplete = () => {
     setPagamentoDialogOpen(false);
     buscarDados();
   };
 
-  // CORREÇÃO: Implementação da função handleEdit
   const handleEdit = (conta: ContaReceberComProgresso) => {
-    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
     const baseConta: ContaReceber = {
         id: conta.id,
         empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
@@ -313,7 +301,7 @@ const ContasReceber = () => {
         created_at: conta.created_at,
         updated_at: conta.updated_at,
         historico_id: conta.historico_id,
-        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
+        id_conta_patrimonial: conta.id_conta_patrimonial,
     };
     setContaSelecionada(baseConta);
     setDialogAberto(true);
@@ -325,7 +313,6 @@ const ContasReceber = () => {
     const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     try {
-      // 1. Verificar se existem parcelas vinculadas
       const { count: parcelasCount, error: countError } = await supabase
           .from(tabelaParcelasReceber)
           .select('*', { count: 'exact', head: true })
@@ -339,11 +326,9 @@ const ContasReceber = () => {
         return;
       }
       
-      // 2. Buscar a descrição da conta sintética antes de deletar
       const contaToDelete = contas.find(c => c.id === contaId);
       const descricaoBusca = contaToDelete?.descricao || '';
       
-      // 3. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
       if (descricaoBusca) {
           const { error: deleteLancamentosError } = await supabase
               .from('lancamentos')
@@ -354,7 +339,6 @@ const ContasReceber = () => {
           if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
       }
       
-      // 4. Deletar a conta sintética
       const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
       
       if (error) throw error;
@@ -367,9 +351,7 @@ const ContasReceber = () => {
     }
   };
   
-  // CORREÇÃO: Atualiza handleOpenParcelas para aceitar ContaReceberComProgresso
   const handleOpenParcelas = (conta: ContaReceberComProgresso) => {
-    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
     const baseConta: ContaReceber = {
         id: conta.id,
         empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
@@ -385,7 +367,7 @@ const ContasReceber = () => {
         created_at: conta.created_at,
         updated_at: conta.updated_at,
         historico_id: conta.historico_id,
-        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
+        id_conta_patrimonial: conta.id_conta_patrimonial,
     };
     setContaSelecionada(baseConta);
     setParcelasDialogOpen(true);
@@ -427,7 +409,7 @@ const ContasReceber = () => {
           cliente_nome: clienteNome,
           tipo: 'CR'
         },
-        ownerId
+        ownerId!
       );
       setTransacoesExtratoDisponiveis(transacoes);
     } catch (error) {
@@ -446,7 +428,7 @@ const ContasReceber = () => {
       transacaoId,
       'CR',
       role === 'Admin',
-      ownerId
+      ownerId!
     );
 
     if (result.success) {
@@ -466,20 +448,36 @@ const ContasReceber = () => {
         body: { parcelaId }
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Erro desconhecido na sincronização.');
+      if (error) {
+        // Se a função retornou erro, extraímos a mensagem
+        throw error;
+      }
+      
+      if (!data?.success) {
+          throw new Error(data?.error || 'Erro desconhecido na sincronização.');
+      }
 
       toast.dismiss(toastId);
       if (data.isPaid) {
         toast.success('Pagamento confirmado! A parcela foi baixada.');
-        buscarDados(); // Recarrega os dados para refletir a baixa
+        buscarDados();
       } else {
-        toast.info(`Status atualizado: ${data.status}. Nenhum pagamento confirmado.`);
+        toast.info(`Status no PagBank: ${data.status}. Nenhum pagamento confirmado detectado.`);
       }
     } catch (error: any) {
       toast.dismiss(toastId);
       console.error('Erro ao sincronizar:', error);
-      toast.error('Falha na sincronização: ' + error.message);
+      
+      // Tentativa de extrair mensagem de erro amigável da Edge Function
+      let msg = error.message;
+      if (error.context) {
+          try {
+              const body = await error.context.json();
+              msg = body.error || msg;
+          } catch(e) {}
+      }
+      
+      showError('Falha na sincronização: ' + msg);
     }
   }, [buscarDados]);
 
@@ -521,7 +519,7 @@ const ContasReceber = () => {
     } finally {
       setGerandoBoleto(false);
     }
-  }, [buscarDados]);
+  }, [buscarDados, proprietarioId]);
 
   const handleGerarLinkPagBank = (parcela: any, paymentType?: 'pix' | 'checkout') => {
     setSelectedParcela(parcela);
@@ -534,11 +532,10 @@ const ContasReceber = () => {
     }
   };
 
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const formatDate = (dateString: string) => formatarData(dateString);
+  const formatCurrencyLocal = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDateLocal = (dateString: string) => formatarData(dateString);
   
-  // Função para formatar timestamp completo (ISO string)
-  const formatTimestamp = (dateString: string) => {
+  const formatTimestampLocal = (dateString: string) => {
     try {
         const date = parseISO(dateString);
         return format(date, 'dd/MM/yyyy HH:mm:ss');
@@ -547,7 +544,6 @@ const ContasReceber = () => {
     }
   };
   
-  // --- Filtros de Dados (Mantidos) ---
   const filterData = (data: any[], dateKey: string) => {
     if (!filtroPeriodo?.from) return data;
     
@@ -631,7 +627,6 @@ const ContasReceber = () => {
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
     
-    // Filtro de texto para parcelas (busca por ID da conta sintética, descrição ou cliente)
     let filteredByText = dateFiltered;
     if (filtroTextoDebounced) {
         const termo = filtroTextoDebounced.toLowerCase();
@@ -655,7 +650,6 @@ const ContasReceber = () => {
   const recebimentosFiltrados = useMemo(() => {
     let filtered = filterData(recebimentos, 'data_recebimento');
     
-    // Filtro de texto para recebimentos (busca por ID da conta sintética, descrição ou cliente)
     if (filtroTextoDebounced) {
         const termo = filtroTextoDebounced.toLowerCase();
         filtered = filtered.filter(r => {
@@ -728,8 +722,8 @@ const ContasReceber = () => {
         setFiltroStatus={setFiltroStatus}
         filtroOrigem={filtroOrigem}
         setFiltroOrigem={setFiltroOrigem}
-        filtroTexto={filtroTexto} // NOVO PROP
-        setFiltroTexto={setFiltroTexto} // NOVO PROP
+        filtroTexto={filtroTexto}
+        setFiltroTexto={setFiltroTexto}
       />
       
       <ContasReceberResumo
@@ -746,25 +740,23 @@ const ContasReceber = () => {
           <TabsTrigger value="recebimentos" className="flex-1 sm:flex-auto">Recebimentos (Histórico)</TabsTrigger>
         </TabsList>
         
-        {/* ABA 1: RESUMO (SINTÉTICO) */}
         <TabsContent value="parcela_sintetica" className="mt-4">
           <TabelaSintetica
             contasFiltradas={contasFiltradas}
             handleOpenParcelas={handleOpenParcelas}
             handleEdit={handleEdit}
             handleDelete={handleDelete}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
+            formatCurrency={formatCurrencyLocal}
+            formatDate={formatDateLocal}
           />
         </TabsContent>
         
-        {/* ABA 2: PARCELAS (ANALÍTICO) */}
         <TabsContent value="parcelas" className="mt-4">
           <TabelaParcelas
             parcelasFiltradas={parcelasFiltradas}
             handleOpenPagamento={handleOpenPagamento}
-            formatCurrency={formatCurrency}
-            formatDate={formatDate}
+            formatCurrency={formatCurrencyLocal}
+            formatDate={formatDateLocal}
             getBadgeVariant={getBadgeVariant}
             onGerarLinkPagBank={handleGerarLinkPagBank}
             onVisualizarLinkPagBank={(parcela) => {
@@ -776,7 +768,6 @@ const ContasReceber = () => {
                 return;
               }
               try {
-                // Limpar link antigo
                 const { error } = await supabase
                   .from('admin_parcelas_receber')
                   .update({
@@ -791,7 +782,6 @@ const ContasReceber = () => {
 
                 toast.success('Link anterior removido. Gerando novo link...');
                 
-                // Abrir modal para gerar novo link
                 setSelectedParcela(parcela);
                 setPagbankDialogOpen(true);
                 
@@ -807,13 +797,12 @@ const ContasReceber = () => {
           />
         </TabsContent>
         
-        {/* ABA 3: RECEBIMENTOS (HISTÓRICO) */}
         <TabsContent value="recebimentos" className="mt-4">
           <TabelaRecebimentos
             recebimentosFiltrados={recebimentosFiltrados}
             clienteNomeMap={clienteNomeMap}
-            formatCurrency={formatCurrency}
-            formatTimestamp={formatTimestamp}
+            formatCurrency={formatCurrencyLocal}
+            formatTimestamp={formatTimestampLocal}
           />
         </TabsContent>
       </Tabs>
@@ -829,7 +818,7 @@ const ContasReceber = () => {
         parcela={parcelaParaPagamento}
         open={pagamentoDialogOpen}
         onOpenChange={setPagamentoDialogOpen}
-        onSaveComplete={handlePagamentoCompleto}
+        onSaveComplete={handlePagamentoComplete}
       />
       
       {selectedParcela && (
@@ -837,7 +826,7 @@ const ContasReceber = () => {
           open={pagbankDialogOpen}
           onOpenChange={(open) => {
             setPagbankDialogOpen(open);
-            if (!open) setSelectedPaymentType(null); // Limpa ao fechar
+            if (!open) setSelectedPaymentType(null);
           }}
           parcelaId={selectedParcela.id}
           valorParcela={selectedParcela.valor_parcela}
@@ -858,8 +847,7 @@ const ContasReceber = () => {
           valorParcela={selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
           onSuccess={() => {
-            buscarDados(); // Atualiza a lista em background
-            // NÃO fecha o modal para o usuário poder ver o resultado
+            buscarDados();
           }}
         />
       )}
@@ -879,7 +867,7 @@ const ContasReceber = () => {
           clienteNome={selectedParcela.contas_receber?.clientes?.nome}
           clienteTelefone={selectedParcela.contas_receber?.clientes?.telefone}
           clienteEmail={selectedParcela.contas_receber?.clientes?.email}
-          linkExpiraEm={selectedParcela.pagbank_link_expira_em}
+          linkExpira_em={selectedParcela.pagbank_link_expira_em}
           pagbankTransactionId={selectedParcela.pagbank_transaction_id}
         />
       )}
