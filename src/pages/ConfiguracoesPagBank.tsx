@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare, Percent } from 'lucide-react';
+import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare, Percent, Landmark } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
@@ -20,6 +20,12 @@ interface PlanoContas {
   id: string;
   Conta: string;
   Descricao: string;
+}
+
+interface SaldoConta {
+  id: string;
+  nome: string;
+  conta_contabil_id: string | null;
 }
 
 interface Historico {
@@ -42,7 +48,9 @@ export default function ConfiguracoesPagBank() {
     percentual_multa: 2.0,
     percentual_juros_mes: 1.0,
   });
+  
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
+  const [saldoContas, setSaldoContas] = useState<SaldoConta[]>([]); // NOVO ESTADO
   const [historicos, setHistoricos] = useState<Historico[]>([]);
 
   const carregarDados = useCallback(async () => {
@@ -51,7 +59,7 @@ export default function ConfiguracoesPagBank() {
     try {
       setLoading(true);
 
-      const [configRes, planoRes, histRes] = await Promise.all([
+      const [configRes, planoRes, saldoRes, histRes] = await Promise.all([
         supabase
           .from('configuracoes_pagbank')
           .select('*')
@@ -63,6 +71,11 @@ export default function ConfiguracoesPagBank() {
           .eq('proprietario_id', ownerId)
           .eq('Analitica', 'Sim')
           .order('Conta'),
+        supabase // BUSCANDO CONTAS BANCÁRIAS REAIS
+          .from('saldo_contas')
+          .select('id, nome, conta_contabil_id')
+          .eq('proprietario_id', ownerId)
+          .order('nome'),
         supabase
           .from('historicos')
           .select('id, codigo, descricao')
@@ -71,7 +84,6 @@ export default function ConfiguracoesPagBank() {
       ]);
 
       if (configRes.data) {
-        // Se já existe no banco, usa o que está lá, mas garante que a URL está correta
         setConfig({
             ...configRes.data,
             webhook_url: configRes.data.webhook_url || `${BASE_URL}/api/pagbank-webhook`,
@@ -79,17 +91,10 @@ export default function ConfiguracoesPagBank() {
             whatsapp_template_pix: configRes.data.whatsapp_template_pix || 'Olá {nome}!\n\n📱 Clique no link abaixo para pagar via PIX:\n\n{codigo_pix}\n\n💰 Valor: {valor}\n📅 Vencimento: {vencimento}\n⏰ Válido até: {expiracao}',
             whatsapp_template_link: configRes.data.whatsapp_template_link || 'Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}',
         });
-      } else {
-        setConfig(prev => ({
-            ...prev,
-            webhook_url: `${BASE_URL}/api/pagbank-webhook`,
-            whatsapp_template: 'Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}',
-            whatsapp_template_pix: 'Olá {nome}!\n\n📱 Clique no link abaixo para pagar via PIX:\n\n{codigo_pix}\n\n💰 Valor: {valor}\n📅 Vencimento: {vencimento}\n⏰ Válido até: {expiracao}',
-            whatsapp_template_link: 'Olá {nome}!\n\nSegue o link para pagamento:\n💰 Valor: {valor}\n\n🔗 {link}',
-        }));
       }
 
       if (planoRes.data) setPlanoContas(planoRes.data);
+      if (saldoRes.data) setSaldoContas(saldoRes.data);
       if (histRes.data) setHistoricos(histRes.data as Historico[]);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
@@ -156,16 +161,6 @@ export default function ConfiguracoesPagBank() {
             </Badge>
         </div>
 
-        {config.ambiente === 'producao' && (
-            <Alert className="bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800">
-                <ShieldCheck className="h-5 w-5 text-green-600" />
-                <AlertTitle className="text-green-800 dark:text-green-400 font-bold">Ambiente de Produção Ativo</AlertTitle>
-                <AlertDescription className="text-green-700 dark:text-green-500">
-                    O sistema está operando com transações reais. Certifique-se de que todos os mapeamentos contábeis abaixo estão corretos.
-                </AlertDescription>
-            </Alert>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
                 <Card>
@@ -186,25 +181,6 @@ export default function ConfiguracoesPagBank() {
                                 checked={config.ambiente === 'producao'}
                                 onCheckedChange={(checked) => setConfig({ ...config, ambiente: checked ? 'producao' : 'sandbox' })}
                             />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="diasExpiracao">
-                                Dias para Expiração do Link de Pagamento
-                                <span className="text-xs text-muted-foreground ml-2">(Padrão: 7 dias)</span>
-                            </Label>
-                            <Input
-                                id="diasExpiracao"
-                                type="number"
-                                min="1"
-                                max="90"
-                                value={config.dias_expiracao_link || 7}
-                                onChange={(e) => setConfig({ ...config, dias_expiracao_link: parseInt(e.target.value) || 7 })}
-                                placeholder="7"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Tempo que o link de pagamento permanecerá válido após ser gerado
-                            </p>
                         </div>
 
                         <div className="grid gap-4">
@@ -235,171 +211,32 @@ export default function ConfiguracoesPagBank() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-primary" /> Templates WhatsApp
-                        </CardTitle>
-                        <CardDescription>
-                            Personalize as mensagens enviadas aos clientes para PIX e Link de pagamento.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="whatsappTemplatePix">Template PIX</Label>
-                            <Textarea
-                                id="whatsappTemplatePix"
-                                rows={6}
-                                value={config.whatsapp_template_pix || ''}
-                                onChange={(e) => setConfig({ ...config, whatsapp_template_pix: e.target.value })}
-                                placeholder="Olá {nome}!&#10;&#10;Segue o PIX para pagamento:&#10;💰 Valor: {valor}&#10;&#10;📱 Código PIX (Copie e Cole no seu banco):&#10;{codigo_pix}"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                <strong>Tags disponíveis:</strong> <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{codigo_pix}'}</code> (link clicável no celular), <code>{'{vencimento}'}</code>, <code>{'{expiracao}'}</code>
-                            </p>
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <Label htmlFor="whatsappTemplateLink">Template Link de Pagamento</Label>
-                            <Textarea
-                                id="whatsappTemplateLink"
-                                rows={5}
-                                value={config.whatsapp_template_link || ''}
-                                onChange={(e) => setConfig({ ...config, whatsapp_template_link: e.target.value })}
-                                placeholder="Olá {nome}!&#10;&#10;Segue o link para pagamento:&#10;💰 Valor: {valor}&#10;&#10;🔗 {link}"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                <strong>Tags disponíveis:</strong> <code>{'{nome}'}</code>, <code>{'{valor}'}</code>, <code>{'{descricao}'}</code>, <code>{'{link}'}</code>, <code>{'{expiracao}'}</code>
-                            </p>
-                        </div>
-                        
-                        <Alert className="bg-blue-50 dark:bg-blue-950/20 border-blue-200">
-                            <Info className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-xs text-blue-700 dark:text-blue-500">
-                                O template antigo (<code>whatsapp_template</code>) ainda está disponível para compatibilidade, mas recomendamos usar os templates específicos para PIX e Link.
-                            </AlertDescription>
-                        </Alert>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-primary" /> Template WhatsApp (Legado)
-                        </CardTitle>
-                        <CardDescription>
-                            Template genérico mantido para compatibilidade. Use os templates específicos acima.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Textarea
-                            rows={4}
-                            value={config.whatsapp_template || ''}
-                            onChange={(e) => setConfig({ ...config, whatsapp_template: e.target.value })}
-                            placeholder="Olá {nome}! Segue o link para pagamento de R$ {valor} referente a {descricao}: {link}"
-                        />
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Percent className="w-5 h-5 text-primary" /> Juros e Multa Automáticos
-                        </CardTitle>
-                        <CardDescription>
-                            Configure o cálculo automático de juros e multa para parcelas vencidas.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                            <div className="space-y-0.5">
-                                <Label className="text-base">Aplicar Juros e Multa</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Calcula automaticamente ao gerar link/boleto de parcela vencida.
-                                </p>
-                            </div>
-                            <Switch
-                                checked={config.aplica_juros_multa || false}
-                                onCheckedChange={(checked) => setConfig({ ...config, aplica_juros_multa: checked })}
-                            />
-                        </div>
-                        
-                        {config.aplica_juros_multa && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="percentualMulta">
-                                        Multa (%) - Aplicada no 1º dia de atraso
-                                    </Label>
-                                    <Input
-                                        id="percentualMulta"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        max="10"
-                                        value={config.percentual_multa || 2.0}
-                                        onChange={(e) => setConfig({ ...config, percentual_multa: parseFloat(e.target.value) || 2.0 })}
-                                        placeholder="2.00"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Padrão: 2% conforme legislação brasileira
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="percentualJuros">
-                                        Juros ao Mês (%) - Pro-rata por dia
-                                    </Label>
-                                    <Input
-                                        id="percentualJuros"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        max="2"
-                                        value={config.percentual_juros_mes || 1.0}
-                                        onChange={(e) => setConfig({ ...config, percentual_juros_mes: parseFloat(e.target.value) || 1.0 })}
-                                        placeholder="1.00"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Padrão: 1% ao mês (0,033% ao dia)
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                        
-                        <Alert className="bg-amber-50 dark:bg-amber-950/20 border-amber-200">
-                            <Info className="h-4 w-4 text-amber-600" />
-                            <AlertDescription className="text-xs text-amber-700 dark:text-amber-500">
-                                <strong>Como funciona:</strong> Quando uma parcela vencida tem link ou boleto gerado, o sistema calcula automaticamente:
-                                <ul className="list-disc list-inside mt-1 space-y-0.5">
-                                    <li>Multa aplicada no 1º dia de atraso</li>
-                                    <li>Juros proporcionais aos dias de atraso</li>
-                                    <li>Valores salvos separadamente para auditoria</li>
-                                </ul>
-                            </AlertDescription>
-                        </Alert>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
                             <Save className="w-5 h-5 text-primary" /> Mapeamento Contábil
                         </CardTitle>
-                        <CardDescription>Indispensável para que a baixa automática funcione.</CardDescription>
+                        <CardDescription>Configure onde os valores recebidos e as taxas serão registrados no seu financeiro e contabilidade.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Conta PagBank (Ativo)</Label>
+                                <Label className="text-blue-600 font-bold">Conta PagBank (Ativo) *</Label>
                                 <Select value={config.conta_id || ''} onValueChange={(v) => setConfig({...config, conta_id: v})}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                                    <SelectTrigger className="border-blue-300"><SelectValue placeholder="Selecione a conta bancária" /></SelectTrigger>
                                     <SelectContent>
-                                        {planoContas.filter(c => c.Conta.startsWith('1.')).map(c => (
-                                            <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
-                                        ))}
+                                        {saldoContas.length === 0 ? (
+                                            <SelectItem value="none" disabled>Nenhuma conta cadastrada em Bancos/Caixas</SelectItem>
+                                        ) : (
+                                            saldoContas.map(c => (
+                                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                            ))
+                                        )}
                                     </SelectContent>
                                 </Select>
+                                <p className="text-[10px] text-muted-foreground italic">Selecione o registro criado na tela "Bancos / Caixas".</p>
                             </div>
                             <div className="space-y-2">
                                 <Label>Conta de Receita (DRE)</Label>
                                 <Select value={config.id_conta_resultado || ''} onValueChange={(v) => setConfig({...config, id_conta_resultado: v})}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a conta de resultado" /></SelectTrigger>
                                     <SelectContent>
                                         {planoContas.filter(c => c.Conta.startsWith('4.')).map(c => (
                                             <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
@@ -412,9 +249,9 @@ export default function ConfiguracoesPagBank() {
                         <div className="space-y-2">
                             <Label>Conta de Despesa (Taxas Bancárias)</Label>
                             <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
-                                <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Selecione a conta de despesa" /></SelectTrigger>
                                 <SelectContent>
-                                    {planoContas.filter(c => c.Conta.startsWith('5.')).map(c => (
+                                    {planoContas.filter(c => c.Conta.startsWith('5.') || c.Conta.startsWith('6.')).map(c => (
                                         <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -428,7 +265,7 @@ export default function ConfiguracoesPagBank() {
                                     <SelectTrigger><SelectValue placeholder="Selecione o histórico" /></SelectTrigger>
                                     <SelectContent>
                                         {historicos.map(h => (
-                                            <SelectItem key={h.id} value={h.id}>{h.codigo} - {h.descricao}</SelectItem>
+                                            <SelectItem key={h.id} value={h.id}>{h.codigo ? `[${h.codigo}] ` : ''}{h.descricao}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -439,7 +276,7 @@ export default function ConfiguracoesPagBank() {
                                     <SelectTrigger><SelectValue placeholder="Selecione o histórico" /></SelectTrigger>
                                     <SelectContent>
                                         {historicos.map(h => (
-                                            <SelectItem key={h.id} value={h.id}>{h.codigo} - {h.descricao}</SelectItem>
+                                            <SelectItem key={h.id} value={h.id}>{h.codigo ? `[${h.codigo}] ` : ''}{h.descricao}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -447,30 +284,57 @@ export default function ConfiguracoesPagBank() {
                         </div>
                     </CardContent>
                 </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Percent className="w-5 h-5 text-primary" /> Juros e Multa Automáticos
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                            <div className="space-y-0.5">
+                                <Label className="text-base">Aplicar Juros e Multa</Label>
+                                <p className="text-sm text-muted-foreground">Calcula automaticamente ao gerar cobranças de parcelas vencidas.</p>
+                            </div>
+                            <Switch
+                                checked={config.aplica_juros_multa || false}
+                                onCheckedChange={(checked) => setConfig({ ...config, aplica_juros_multa: checked })}
+                            />
+                        </div>
+                        
+                        {config.aplica_juros_multa && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Multa (%)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={config.percentual_multa || 2.0}
+                                        onChange={(e) => setConfig({ ...config, percentual_multa: parseFloat(e.target.value) || 0 })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Juros ao Mês (%)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={config.percentual_juros_mes || 1.0}
+                                        onChange={(e) => setConfig({ ...config, percentual_juros_mes: parseFloat(e.target.value) || 0 })}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-lg">Webhook</CardTitle>
+                        <CardTitle className="text-lg">Configurações de Envio</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>URL do Webhook</Label>
-                            <Input readOnly value={config.webhook_url} className="bg-muted font-mono text-xs" />
-                            <p className="text-[10px] text-muted-foreground">
-                                Cole esta URL no Portal PagBank (Vendas {" > "} Integrações)
-                            </p>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Secret do Webhook (Opcional)</Label>
-                            <Input 
-                                type="password" 
-                                value={config.webhook_secret || ''} 
-                                onChange={(e) => setConfig({...config, webhook_secret: e.target.value})}
-                                placeholder="Secret para validação HMAC"
-                            />
-                        </div>
                         <div className="space-y-2">
                             <Label>Email Remetente (Resend)</Label>
                             <Input 
@@ -489,27 +353,17 @@ export default function ConfiguracoesPagBank() {
                                 placeholder="re_..."
                             />
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-blue-50 dark:bg-blue-900/10 border-blue-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><Info className="w-4 h-4" /> Homologação</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-xs space-y-2 text-blue-800 dark:text-blue-300">
-                        <p>Para finalizar a homologação:</p>
-                        <ol className="list-decimal list-inside space-y-1">
-                            <li>Ative o <strong>Modo Produção</strong></li>
-                            <li>Gere uma cobrança PIX real</li>
-                            <li>Abra o Console (F12) e copie os logs</li>
-                            <li>Envie para o suporte do PagBank</li>
-                        </ol>
+                        <Separator />
+                        <div className="space-y-2">
+                            <Label>URL do Webhook</Label>
+                            <Input readOnly value={config.webhook_url} className="bg-muted font-mono text-[10px]" />
+                        </div>
                     </CardContent>
                 </Card>
 
                 <Button onClick={handleSave} disabled={saving} className="w-full h-12 shadow-md">
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Salvar Todas as Configurações
+                    Salvar Configurações
                 </Button>
             </div>
         </div>
