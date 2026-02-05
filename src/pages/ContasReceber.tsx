@@ -458,6 +458,30 @@ const ContasReceber = () => {
       showError(result.error || 'Erro ao vincular parcela com extrato');
     }
   }, [parcelaParaMapear, ownerId, role, buscarDados]);
+  
+  const handleSyncStatus = useCallback(async (parcelaId: string) => {
+    const toastId = toast.loading('Sincronizando status com PagBank...');
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
+        body: { parcelaId }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro desconhecido na sincronização.');
+
+      toast.dismiss(toastId);
+      if (data.isPaid) {
+        toast.success('Pagamento confirmado! A parcela foi baixada.');
+        buscarDados(); // Recarrega os dados para refletir a baixa
+      } else {
+        toast.info(`Status atualizado: ${data.status}. Nenhum pagamento confirmado.`);
+      }
+    } catch (error: any) {
+      toast.dismiss(toastId);
+      console.error('Erro ao sincronizar:', error);
+      toast.error('Falha na sincronização: ' + error.message);
+    }
+  }, [buscarDados]);
 
   const handleGerarBoleto = useCallback(async (parcela: ExtendedParcelaDetalhada) => {
     setGerandoBoleto(true);
@@ -779,6 +803,7 @@ const ContasReceber = () => {
             onMapearComExtrato={handleMapearComExtrato}
             onGerarBoleto={handleGerarBoleto}
             onRefreshData={buscarDados}
+            onSyncStatus={handleSyncStatus}
           />
         </TabsContent>
         
