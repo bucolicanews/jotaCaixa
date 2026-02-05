@@ -155,8 +155,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
-      return Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => combined.find(t => t.nome_tag === tagKey))
+      return Array.from(new Map(combined.map(t => [t.nome_tag, t])).values())
           .filter((t): t is any => !!t)
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);

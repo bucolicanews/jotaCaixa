@@ -193,7 +193,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       editor.setSelection(range.index + textToInsert.length, 0, 'silent');
     } else {
       const current = form.getValues("conteudo_template") || "";
-      const textarea = document.getElementById("conteudo-bloco-textarea") as HTMLTextAreaElement;
+      const textarea = document.getElementById("conteudo-template-textarea") as HTMLTextAreaElement;
       
       if (textarea) {
           const start = textarea.selectionStart;
