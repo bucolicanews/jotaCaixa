@@ -1,7 +1,7 @@
 # Jota App - Sistema de Gestão Financeira, Contábil ,  RHh e Pagbank, NF-e controle n8n/
 
 ![Version](https://img.shields.io/badge/version-2.5-blue)
-![Status](https://img.shields.io/badge/status-production-brightgreen)//
+![Status](https://img.shields.io/badge/status-production-brightgreen)///
 
 O **Jota App** é uma plataforma ERP multi-tenant completa, projetada para unificar a gestão financeira, contábil e de recursos humanos em um único painel. O sistema utiliza uma arquitetura robusta no Supabase com Row Level Security (RLS) para garantir o isolamento total de dados entre empresas.
 
