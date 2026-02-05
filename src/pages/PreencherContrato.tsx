@@ -326,21 +326,33 @@ const PreencherContrato: React.FC = () => {
           valorParcelaFinal = valorTotal;
           dataPrimeiroVenc = dataVencimentoUnico ? format(dataVencimentoUnico, 'dd/MM/yyyy') : '';
           clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, a ser pago em uma única parcela de ${formatCurrency(valorParcelaFinal)}.`;
-      } else if (tipoLancamento === 'parcelar') {
-          valorFinalContrato = valorTotal;
-          valorParcelaFinal = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
+      } else if (tipoLancamento === 'parcelar' || tipoLancamento === 'repetir') {
+          valorFinalContrato = tipoLancamento === 'parcelar' ? valorTotal : valorTotal * numeroParcelas;
+          valorParcelaFinal = numeroParcelas > 0 ? valorTotal / (tipoLancamento === 'parcelar' ? numeroParcelas : 1) : 0;
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
-          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, dividido em ${numeroParcelas} parcelas mensais de ${formatCurrency(valorParcelaFinal)}.`;
-      } else if (tipoLancamento === 'repetir') {
-          valorFinalContrato = valorTotal * numeroParcelas;
-          valorParcelaFinal = valorTotal;
-          dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
-          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} mensalidades de ${formatCurrency(valorParcelaFinal)}.`;
+
+          let recorrenciaTexto = '';
+          if (modoVencimento === 'fixo') {
+              recorrenciaTexto = `com vencimento todo dia ${diaFixo}`;
+          } else {
+              recorrenciaTexto = `com intervalo de ${intervaloDias} dias`;
+          }
+
+          const baseText = tipoLancamento === 'parcelar'
+              ? `O valor total do contrato é de ${formatCurrency(valorTotal)}, dividido em ${numeroParcelas} parcelas mensais de ${formatCurrency(valorParcelaFinal)}`
+              : `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} mensalidades de ${formatCurrency(valorParcelaFinal)}`;
+
+          clausulaMensalidades = `${baseText} ${recorrenciaTexto} a iniciar da data ${dataPrimeiroVenc}.`;
+
       } else if (tipoLancamento === 'semanal') {
           valorFinalContrato = valorTotal * numeroParcelas; // Valor Mensal * Meses
           valorParcelaFinal = 0; // Variável
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
-          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} meses de serviço. O pagamento será realizado semanalmente, sendo o valor mensal de ${formatCurrency(valorTotal)} dividido pelo número de semanas do mês, resultando em parcelas semanais variáveis.`;
+          
+          const diasSemanaNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+          const diaSemanaNome = diasSemanaNomes[parseInt(diaSemana)];
+
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} meses de serviço. O pagamento será realizado semanalmente, sendo o valor mensal de ${formatCurrency(valorTotal)} dividido pelo número de semanas do mês, resultando em parcelas semanais variáveis, cobradas toda ${diaSemanaNome}, a iniciar da data ${dataPrimeiroVenc}.`;
       }
 
       newTags['{{VALOR_TOTAL_CONTRATO}}'] = formatCurrency(valorFinalContrato);
