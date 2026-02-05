@@ -315,26 +315,32 @@ const PreencherContrato: React.FC = () => {
           newTags['{{EMPRESA_CPF}}'] = dadosContratada.cpf || '';
       }
 
+      // 3. Dados Financeiros
       let valorFinalContrato = 0;
       let valorParcelaFinal = 0;
       let dataPrimeiroVenc = '';
+      let clausulaMensalidades = ''; // NOVA VARIÁVEL
 
       if (tipoLancamento === 'unico') {
           valorFinalContrato = valorTotal;
           valorParcelaFinal = valorTotal;
           dataPrimeiroVenc = dataVencimentoUnico ? format(dataVencimentoUnico, 'dd/MM/yyyy') : '';
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, a ser pago em uma única parcela de ${formatCurrency(valorParcelaFinal)}.`;
       } else if (tipoLancamento === 'parcelar') {
           valorFinalContrato = valorTotal;
           valorParcelaFinal = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, dividido em ${numeroParcelas} parcelas mensais de ${formatCurrency(valorParcelaFinal)}.`;
       } else if (tipoLancamento === 'repetir') {
           valorFinalContrato = valorTotal * numeroParcelas;
           valorParcelaFinal = valorTotal;
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} mensalidades de ${formatCurrency(valorParcelaFinal)}.`;
       } else if (tipoLancamento === 'semanal') {
           valorFinalContrato = valorTotal * numeroParcelas; // Valor Mensal * Meses
-          valorParcelaFinal = 0; // Variável dependendo da semana, exibir 0 ou texto "Variável"
+          valorParcelaFinal = 0; // Variável
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} meses de serviço. O pagamento será realizado semanalmente, sendo o valor mensal de ${formatCurrency(valorTotal)} dividido pelo número de semanas do mês, resultando em parcelas semanais variáveis.`;
       }
 
       newTags['{{VALOR_TOTAL_CONTRATO}}'] = formatCurrency(valorFinalContrato);
@@ -342,6 +348,9 @@ const PreencherContrato: React.FC = () => {
       newTags['{{NUMERO_PARCELAS}}'] = tipoLancamento === 'semanal' ? `${numeroParcelas} meses` : numeroParcelas.toString();
       newTags['{{PRIMEIRO_VENCIMENTO}}'] = dataPrimeiroVenc;
       newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
+      
+      // NOVA TAG PARA O TEXTO DINÂMICO
+      newTags['{{CLAUSULA_FINANCEIRA_MENSALIDADES}}'] = clausulaMensalidades;
       
       setValoresTags(newTags);
 
@@ -362,7 +371,7 @@ const PreencherContrato: React.FC = () => {
         .filter(tag => 
             !tag.nome_tag.startsWith('{{CLIENTE_') && 
             !tag.nome_tag.startsWith('{{EMPRESA_') &&
-            !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}'].includes(tag.nome_tag)
+            !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}', '{{CLAUSULA_FINANCEIRA_MENSALIDADES}}'].includes(tag.nome_tag)
         )
         .map(t => t.nome_tag);
   }, [tagsCustomizadas]);
