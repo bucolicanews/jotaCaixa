@@ -217,7 +217,7 @@ const GerenciarModelos: React.FC = () => {
               <Plus className="w-4 h-4 mr-2" /> Novo Modelo
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-full sm:max-w-7xl max-h-[95vh] overflow-y-auto">
+          <DialogContent className="w-full sm:max-w-[95vw] max-w-7xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
             </DialogHeader>
@@ -250,7 +250,7 @@ const GerenciarModelos: React.FC = () => {
         {isSupervisao && (
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mb-4">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
-                    <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Modelos de clientes não podem ser editados ou excluídos diretamente.
+                    <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Modelos de clientes são apenas para visualização.
                 </p>
             </div>
         )}
