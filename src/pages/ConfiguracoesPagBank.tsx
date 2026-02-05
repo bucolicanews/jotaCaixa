@@ -8,13 +8,14 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, Globe, ShieldCheck, Info, MessageSquare, Percent, Landmark } from 'lucide-react';
+import { Loader2, Save, Globe, Info, MessageSquare, Percent, Landmark } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
 import { BASE_URL } from '@/config/app-config';
 import type { PagBankConfig } from '@/types/pagbank';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator'; // Importação corrigida
 
 interface PlanoContas {
   id: string;
@@ -50,7 +51,7 @@ export default function ConfiguracoesPagBank() {
   });
   
   const [planoContas, setPlanoContas] = useState<PlanoContas[]>([]);
-  const [saldoContas, setSaldoContas] = useState<SaldoConta[]>([]); // NOVO ESTADO
+  const [saldoContas, setSaldoContas] = useState<SaldoConta[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
 
   const carregarDados = useCallback(async () => {
@@ -71,7 +72,7 @@ export default function ConfiguracoesPagBank() {
           .eq('proprietario_id', ownerId)
           .eq('Analitica', 'Sim')
           .order('Conta'),
-        supabase // BUSCANDO CONTAS BANCÁRIAS REAIS
+        supabase
           .from('saldo_contas')
           .select('id, nome, conta_contabil_id')
           .eq('proprietario_id', ownerId)
