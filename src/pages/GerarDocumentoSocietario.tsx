@@ -10,7 +10,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DocumentoPreviewDialog from '@/components/documentos-societarios/DocumentoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
@@ -85,7 +84,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [previewTitle, setPreviewTitle] = useState('');
   
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [dadosEmpresaProprietaria, setDadosEmpresaProprietaria] = useState<any>(null);
+  const [dadosContratada, setDadosContratada] = useState<any>(null);
   
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam;
@@ -133,16 +132,16 @@ const GerarDocumentoSocietario: React.FC = () => {
           .select('*')
           .eq('id', id)
           .single();
-          
+
       if (data && !error) {
-          setDadosEmpresaProprietaria(data);
+          setDadosContratada(data);
       } else {
           const { data: clientData } = await supabase
               .from('tbl_clientes')
               .select('*')
               .eq('id', id)
               .single();
-          setDadosEmpresaProprietaria(clientData || null);
+          setDadosContratada(clientData || null);
       }
   }, []);
 
@@ -334,15 +333,14 @@ const GerarDocumentoSocietario: React.FC = () => {
     setModelo(currentModelo);
     
     if (isAdmin || isAdminUsuario) {
-        const { data: clientsData } = await supabase
+        const { data } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
             .eq('admin_id', ownerIdLogado)
-            .eq('aprovado', true)
-            .order('nome');
+            .eq('aprovado', true);
             
         const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Minha Empresa (Admin)' };
-        setEmpresasContrato([adminOption, ...(clientsData || [])]);
+        setEmpresasContrato([adminOption, ...(data || [])]);
     }
     
     await fetchDependentData(initialProprietarioId || ownerIdLogado);
@@ -351,7 +349,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
         cliente_id: initialClienteId,
         proprietario_documento_id: initialProprietarioId || '',
-        tipo_conteudo: 'html',
+        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
         valores_tags: initialValoresTags,
         conteudo_principal_manual: initialConteudoPrincipal,
     });
@@ -366,10 +364,16 @@ const GerarDocumentoSocietario: React.FC = () => {
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
   useEffect(() => {
-      if (clienteSelecionadoId && modelo && !carregandoDados) {
-          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosEmpresaProprietaria);
+      if (proprietarioDocumentoId && !carregandoDados) {
+          fetchDependentData(proprietarioDocumentoId);
       }
-  }, [clienteSelecionadoId, proprietarioDocumentoId, modelo, carregandoDados, clienteSelecionado, dadosEmpresaProprietaria, applyTagsToForm, getValues]);
+  }, [proprietarioDocumentoId, fetchDependentData, carregandoDados]);
+
+  useEffect(() => {
+      if (clienteSelecionadoId && modelo && !carregandoDados) {
+          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, dadosContratada);
+      }
+  }, [clienteSelecionadoId, proprietarioDocumentoId, modelo, carregandoDados, clienteSelecionado, dadosContratada, applyTagsToForm, getValues]);
 
 
   const handleTagChange = (tag: string, value: string) => {
@@ -469,7 +473,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               <Card className="lg:col-span-1 h-fit">
-                  <CardHeader><CardTitle className="text-xl">Configurações e Dados</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>1. Configurações e Dados</CardTitle></CardHeader>
                   <CardContent className="space-y-6">
                       {isAdmin || isAdminUsuario ? (
                           <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
