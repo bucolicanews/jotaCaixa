@@ -249,16 +249,28 @@ export default function ConfiguracoesPagBank() {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Conta de Despesa (Taxas Bancárias)</Label>
-                            <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
-                                <SelectTrigger><SelectValue placeholder="Selecione a conta de despesa" /></SelectTrigger>
-                                <SelectContent>
-                                    {planoContas.filter(c => c.Conta.startsWith(despesaCode) || c.Conta.startsWith(custoCode)).map(c => (
-                                        <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Conta de Despesa (Taxas Bancárias)</Label>
+                                <Select value={config.conta_despesa_taxa_id || ''} onValueChange={(v) => setConfig({...config, conta_despesa_taxa_id: v})}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a conta de despesa" /></SelectTrigger>
+                                    <SelectContent>
+                                        {planoContas.filter(c => c.Conta.startsWith(despesaCode) || c.Conta.startsWith(custoCode)).map(c => (
+                                            <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Percentual Taxas Bancárias (%)</Label>
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={config.percentual_taxas_bancarias || ''}
+                                    onChange={(e) => setConfig({ ...config, percentual_taxas_bancarias: parseFloat(e.target.value) || null })}
+                                    placeholder="Ex: 2.99"
+                                />
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
