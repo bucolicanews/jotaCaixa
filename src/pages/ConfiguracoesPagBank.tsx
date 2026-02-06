@@ -112,8 +112,6 @@ export default function ConfiguracoesPagBank() {
     try {
       setSaving(true);
       
-      // HIGIENIZAÇÃO DO PAYLOAD: Removemos metadados automáticos para evitar conflitos (409)
-      // Mantemos conta_id como o ID do Plano de Contas
       const { id, created_at, updated_at, proprietario_id, ...cleanData } = config as any;
 
       const payload = {
