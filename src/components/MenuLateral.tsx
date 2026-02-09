@@ -48,8 +48,15 @@ const SECOES_MENU: MenuSection[] = [
         itens: [
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Emissão NF', caminho: '/emissao-notas', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' }, // PERMISSÃO ATUALIZADA
             { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+        ]
+    },
+    {
+        titulo: 'Fiscal',
+        perfis: ['Admin', 'Cliente', 'Usuario'],
+        itens: [
+            { nome: 'Emissão NF', caminho: '/emissao-notas', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' },
+            { nome: 'Configuração NF', caminho: '/configuracao-nf', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' },
         ]
     },
     {
@@ -125,7 +132,6 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
             { nome: 'PagBank', caminho: '/configuracoes-pagbank', icone: CreditCard, perfis: ['Admin'], permissionKey: 'configuracoes' },
-            { nome: 'Configuração NF', caminho: '/configuracao-nf', icone: Receipt, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'emissao_nf' }, // PERMISSÃO ATUALIZADA
         ]
     },
     {
