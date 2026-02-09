@@ -320,7 +320,24 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         
         try {
             const fileContent = await file.text();
-            const contentHash = calculateContentHash(fileContent);
+            
+            // Pré-processamento do conteúdo do CSV para remover linhas indesejadas
+            const lines = fileContent.split('\n');
+            const headerRow = lines.find(line => line.trim().toLowerCase().startsWith('data;'));
+            if (!headerRow) {
+                throw new Error("Cabeçalho do CSV (iniciando com 'Data;') não encontrado.");
+            }
+            const cleanedLines = [headerRow.trim()]; // Começa com o cabeçalho limpo
+            lines.slice(1).forEach(line => {
+                const trimmedLine = line.trim();
+                // Mantém apenas linhas que começam com um formato de data (dd/mm/yyyy)
+                if (/^\d{2}\/\d{2}\/\d{4}/.test(trimmedLine)) {
+                    cleanedLines.push(trimmedLine);
+                }
+            });
+            const cleanedCsvContent = cleanedLines.join('\n');
+
+            const contentHash = calculateContentHash(cleanedCsvContent);
             
             if (!contentHash) {
                 showError('O arquivo está vazio ou não contém dados válidos.');
@@ -344,17 +361,17 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
 
             const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
             
-            Papa.parse(file, {
+            Papa.parse(cleanedCsvContent, {
                 header: true,
                 skipEmptyLines: 'greedy',
-                comments: ';',
+                delimiter: ";",
                 complete: (results: ParseResult<any>) => {
                     try {
                         const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
                             const dataOriginal = row[config.mapeamento.data];
                             const descricaoOriginal = row[config.mapeamento.descricao];
 
-                            if (!dataOriginal || !descricaoOriginal || String(descricaoOriginal).trim().toLowerCase() === 'saldo anterior' || String(dataOriginal).trim().toLowerCase() === 'total') {
+                            if (!dataOriginal || !descricaoOriginal || String(descricaoOriginal).trim().toLowerCase() === 'saldo anterior') {
                                 return null;
                             }
 
@@ -363,15 +380,15 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             const hasCreditoDebito = config.mapeamento.credito && config.mapeamento.debito;
 
                             if (hasCreditoDebito) {
-                                const creditoStr = String(row[config.mapeamento.credito!] ?? '0').replace(/\s+/g, '').replace('.', '').replace(',', '.');
-                                const debitoStr = String(row[config.mapeamento.debito!] ?? '0').replace(/\s+/g, '').replace('.', '').replace(',', '.');
+                                const creditoStr = String(row[config.mapeamento.credito!] ?? '0').replace(/\s+/g, '').replace(/\./g, '').replace(',', '.');
+                                const debitoStr = String(row[config.mapeamento.debito!] ?? '0').replace(/\s+/g, '').replace(/\./g, '').replace(',', '.');
                                 const creditoVal = parseFloat(creditoStr);
                                 const debitoVal = parseFloat(debitoStr);
 
-                                if (!isNaN(creditoVal) && creditoVal > 0) {
-                                    valor = creditoVal;
+                                if (!isNaN(creditoVal) && creditoVal !== 0) {
+                                    valor = Math.abs(creditoVal);
                                     tipo = 'Entrada';
-                                } else if (!isNaN(debitoVal) && debitoVal > 0) {
+                                } else if (!isNaN(debitoVal) && debitoVal !== 0) {
                                     valor = -Math.abs(debitoVal);
                                     tipo = 'Saida';
                                 } else {
