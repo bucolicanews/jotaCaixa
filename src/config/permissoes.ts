@@ -2,7 +2,7 @@ export interface Permissao {
   key: string;
   label: string;
   path: string;
-  grupo: 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral';
+  grupo: 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'emissao_nf';
 }
 
 export interface GrupoPermissao {
@@ -16,7 +16,7 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'contratos', label: 'Contratos', path: '/contratos', grupo: 'financeiro' },
   { key: 'contas_pagar', label: 'Contas a Pagar', path: '/contas-pagar', grupo: 'financeiro' },
   { key: 'contas_receber', label: 'Contas a Receber', path: '/contas-receber', grupo: 'financeiro' },
-  { key: 'emissao_nf', label: 'Emissão NF', path: '/emissao-notas', grupo: 'financeiro' }, // NOVO
+  { key: 'emissao_nf', label: 'Emissão NF', path: '/emissao-notas', grupo: 'emissao_nf' }, // NOVO
   { key: 'bancos', label: 'Fluxo de Caixa / Bancos', path: '/bancos', grupo: 'financeiro' },
   { key: 'conciliacao', label: 'Conciliacao', path: '/conciliacao', grupo: 'financeiro' },
   { key: 'extratos', label: 'Extratos', path: '/extratos', grupo: 'financeiro' },
@@ -55,6 +55,11 @@ export const GRUPOS_PERMISSOES: GrupoPermissao[] = [
     key: 'financeiro',
     label: 'Financeiro',
     permissoes: PERMISSOES_DISPONIVEIS.filter(p => p.grupo === 'financeiro'),
+  },
+  {
+    key: 'emissao_nf',
+    label: 'Emissão NF',
+    permissoes: PERMISSOES_DISPONIVEIS.filter(p => p.grupo === 'emissao_nf'),
   },
   {
     key: 'contabilidade',
