@@ -364,7 +364,13 @@ export function useNotasFiscais(
             showSuccess('Nota Fiscal anexada e status atualizado para "Nota Emitida"!');
             
             if (configNF?.webhook_n8n_url) {
-                await handleSendNF(notaSalva as NotaFiscal, 'webhook');
+                // **A CORREÇÃO:** Em vez de passar o `notaSalva` que pode estar obsoleto,
+                // criamos um novo objeto com a URL garantidamente correta.
+                const notaParaEnvio: NotaFiscal = {
+                    ...(notaSalva as NotaFiscal),
+                    anexo_url: finalAnexoUrl,
+                };
+                await handleSendNF(notaParaEnvio, 'webhook');
             }
             
             refetch();
