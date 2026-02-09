@@ -6,7 +6,7 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { NotaFiscal, NFConfig, ParcelaNF } from '@/types/nota-fiscal';
 import { v4 as uuidv4 } from 'uuid';
-import { formatCurrency } from '@/utils/formatters'; // Importação adicionada
+import { formatCurrency } from '@/utils/formatters';
 
 interface NotasFiscaisHook {
     parcelasParaNF: ParcelaNF[];
@@ -15,7 +15,7 @@ interface NotasFiscaisHook {
     carregando: boolean;
     loadingConfig: boolean;
     refetch: () => void;
-    handleUploadNF: (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => Promise<void>;
+    handleUploadNF: (parcela: ParcelaNF, file: File | undefined, numeroNota: string, dataEmissao: Date) => Promise<void>;
     handleSendNF: (nota: NotaFiscal, tipo: 'whatsapp' | 'email' | 'webhook') => Promise<void>;
 }
 
@@ -322,7 +322,7 @@ export function useNotasFiscais(
 
         setCarregando(true);
         try {
-            let publicUrl = notasFiscais[parcela.id]?.anexo_url || null;
+            let finalAnexoUrl = notasFiscais[parcela.id]?.anexo_url || null;
             
             if (file) {
                 const fileExt = file.name.split('.').pop();
@@ -335,14 +335,12 @@ export function useNotasFiscais(
                 if (uploadError) throw uploadError;
 
                 const { data: { publicUrl: newUrl } } = supabase.storage.from(NF_BUCKET).getPublicUrl(filePath);
-                publicUrl = newUrl;
+                finalAnexoUrl = `${newUrl}?t=${Date.now()}`;
             }
 
-            if (!publicUrl) {
+            if (!finalAnexoUrl) {
                 throw new Error('Nenhum arquivo anexado e nenhuma URL anterior encontrada.');
             }
-
-            const notaExistente = notasFiscais[parcela.id];
             
             const dataToSave: Partial<NotaFiscal> = {
                 proprietario_id: ownerId,
@@ -351,10 +349,8 @@ export function useNotasFiscais(
                 numero_nota: numeroNota,
                 valor: parcela.valor_parcela,
                 data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
-                anexo_url: publicUrl,
-                enviado_whatsapp: notaExistente?.enviado_whatsapp || false,
-                enviado_email: notaExistente?.enviado_email || false,
-                editada: !!notaExistente,
+                anexo_url: finalAnexoUrl,
+                editada: !!notasFiscais[parcela.id],
             };
 
             const { data: notaSalva, error: dbError } = await supabase
@@ -362,32 +358,15 @@ export function useNotasFiscais(
                 .upsert(dataToSave, { onConflict: 'parcela_id' })
                 .select()
                 .single();
-
+            
             if (dbError) throw dbError;
 
             showSuccess('Nota Fiscal anexada e status atualizado para "Nota Emitida"!');
             
             if (configNF?.webhook_n8n_url) {
-                const notaCompleta: NotaFiscal = {
-                    ...notaSalva,
-                    proprietario_id: ownerId,
-                    parcela_id: parcela.id,
-                    status: 'Nota Emitida',
-                    numero_nota: numeroNota,
-                    valor: parcela.valor_parcela,
-                    data_emissao: format(dataEmissao, 'yyyy-MM-dd'),
-                    anexo_url: publicUrl,
-                    enviado_whatsapp: notaSalva.enviado_whatsapp,
-                    enviado_email: notaSalva.enviado_email,
-                    editada: notaSalva.editada,
-                    created_at: notaSalva.created_at,
-                    updated_at: notaSalva.updated_at,
-                    id: notaSalva.id,
-                };
-                
-                await handleSendNF(notaCompleta, 'webhook');
+                await handleSendNF(notaSalva as NotaFiscal, 'webhook');
             }
-
+            
             refetch();
         } catch (error: any) {
             showError('Falha ao anexar NF: ' + error.message);
