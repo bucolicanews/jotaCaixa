@@ -113,7 +113,7 @@ const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
             <CardTitle className="text-sm font-medium flex items-center">
               <Receipt className="w-4 h-4 mr-2" /> Total Recebido (Histórico)
             </CardTitle>
-          </Header>
+          </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{formatCurrency(totalRecebimentos)}</div>
             <p className="text-xs text-muted-foreground mt-1">
