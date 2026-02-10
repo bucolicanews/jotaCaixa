@@ -4,11 +4,11 @@ import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usu
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle, Building2 } from 'lucide-react';
+import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle, Building2, Receipt, CheckSquare } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 import React from 'react';
 import SetupBlocker from '@/components/SetupBlocker';
-import FormCapitalSocial from '@/components/formularios/FormCapitalSocial'; // NOVO IMPORT
+import FormCapitalSocial from '@/components/formularios/FormCapitalSocial';
 
 type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
@@ -19,33 +19,21 @@ const Painel = () => {
   const isAdmin = role === 'Admin';
   const isUsuario = role === 'Usuario';
 
-  const isUsuarioDoAdmin = 
-    isUsuario && 
-    perfil && 
-    ('admin_id' in perfil) && 
-    (perfil as AdminUsuarioProfile).admin_id !== null;
-
   const getPermissoes = (): Record<string, boolean> => {
     if (isAdmin) return {};
-    
-    // Se for funcionário (Usuario), as permissões estão no perfil
-    if (isUsuario) {
-      return (perfil as any)?.permissoes || {};
-    }
-    
-    if (isClient) {
-      return (perfil as ClienteProfile)?.permissoes || {};
-    }
-    
+    if (isUsuario) return (perfil as any)?.permissoes || {};
+    if (isClient) return (perfil as ClienteProfile)?.permissoes || {};
     return {};
   };
 
   const permissoes = getPermissoes();
 
-  const hasFinanceiroPermission =
-    permissoes.contas_pagar === true ||
-    permissoes.contas_receber === true ||
-    permissoes.emissao_nf === true;
+  // Dashboard Financeiro (KPIs e Saldos) apenas para quem tem acesso às contas
+  const hasFinanceiroDashboard = 
+    isAdmin || 
+    isClient || 
+    permissoes.contas_pagar === true || 
+    permissoes.contas_receber === true;
 
   const hasContabilidadePermission =
     permissoes.lancamentos === true ||
@@ -70,9 +58,11 @@ const Painel = () => {
     permissoes.folha_ponto === true;
 
   const hasGeralPermission =
+    permissoes.emissao_nf === true ||
     permissoes.documentos_societarios === true ||
     permissoes.gestao_suporte === true ||
-    permissoes.gerenciar_clientes === true;
+    permissoes.gerenciar_clientes === true ||
+    permissoes.protocolos === true;
 
   const getDashboardType = (): DashboardType => {
     if (isAdmin) return 'financeiro';
@@ -83,37 +73,24 @@ const Painel = () => {
       return 'financeiro';
     }
     
-    if (hasFinanceiroPermission) return 'financeiro';
-    if (hasContabilidadePermission) return 'contabilidade';
-    if (hasRHPermission) return 'rh';
-    if (hasFolhaPermission) return 'folha';
-    if (hasGeralPermission) return 'geral';
+    // Se o funcionário tem acesso a contas, mostra o dashboard financeiro completo
+    if (hasFinanceiroDashboard) return 'financeiro';
+    
+    // Caso contrário, se tiver qualquer outra permissão, mostra o painel de cards (geral)
+    if (hasGeralPermission || hasContabilidadePermission || hasRHPermission || hasFolhaPermission) return 'geral';
     
     return 'restrito';
   };
 
   const dashboardType = getDashboardType();
 
-  console.log('DEBUG PAINEL:', {
-    role,
-    isAdmin,
-    isUsuarioDoAdmin,
-    permissoes,
-    hasFinanceiroPermission,
-    hasContabilidadePermission,
-    hasFolhaPermission,
-    hasRHPermission,
-    hasGeralPermission,
-    dashboardType,
-  });
-
   const getWelcomeMessage = (): string => {
     switch (dashboardType) {
       case 'financeiro': return 'Painel Financeiro';
-      case 'contabilidade': return 'Painel Contabil';
+      case 'contabilidade': return 'Painel Contábil';
       case 'folha': return 'Meu Ponto';
-      case 'rh': return 'Gestao de RH';
-      case 'geral': return 'Painel Geral';
+      case 'rh': return 'Gestão de RH';
+      case 'geral': return 'Painel de Módulos';
       default: return 'Painel de Controle';
     }
   };
@@ -124,14 +101,12 @@ const Painel = () => {
     'cliente_id' in perfil &&
     Boolean((perfil as UsuarioProfile)?.cliente_id);
     
-  // Só bloqueia o setup se o usuário NÃO tiver permissão fiscal (que é independente do financeiro/contábil)
   const shouldBlockSetup =
     (isClient || isClientUser) &&
     setupStatus &&
     !setupStatus.isComplete &&
     permissoes.emissao_nf !== true;
     
-  // NOVO BLOQUEIO: Se o setup estiver completo, mas o primeiro lançamento não foi feito
   const shouldBlockFirstLaunch =
     (isClient || isClientUser) &&
     setupStatus &&
@@ -172,169 +147,94 @@ const Painel = () => {
       case 'financeiro':
         return <DashboardFinanceiro />;
         
-      case 'contabilidade':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Link to="/relatorios/balanco">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Scale className="w-5 h-5 mr-2" />
-                    Balanco Patrimonial
-                  </CardTitle>
-                  <CardDescription>Visualize a posicao patrimonial</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/relatorios/dre">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Scale className="w-5 h-5 mr-2" />
-                    DRE
-                  </CardTitle>
-                  <CardDescription>Demonstracao do Resultado</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/relatorios/balancete">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-purple-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Balancete
-                  </CardTitle>
-                  <CardDescription>Balancete de verificacao</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/relatorios/razao">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Razao
-                  </CardTitle>
-                  <CardDescription>Livro Razao por conta</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/lancamentos">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-teal-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <PlusCircle className="w-5 h-5 mr-2" />
-                    Novo Lancamento
-                  </CardTitle>
-                  <CardDescription>Registrar lancamento manual</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          </div>
-        );
-        
-      case 'folha':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {permissoes.ponto_eletronico && (
-              <Link to="/ponto-eletronico">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Clock className="w-5 h-5 mr-2" />
-                      Bater Ponto
-                    </CardTitle>
-                    <CardDescription>Registre sua entrada e saida</CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            )}
-            {permissoes.visualizar_proprio_ponto && (
-              <Link to="/folha-ponto?mode=self">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Clock className="w-5 h-5 mr-2" />
-                      Acompanhar Meu Ponto
-                    </CardTitle>
-                    <CardDescription>Visualize seus registros de ponto</CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            )}
-          </div>
-        );
-        
-      case 'rh':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {permissoes.folha_ponto && (
-              <Link to="/folha-ponto">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Clock className="w-5 h-5 mr-2" />
-                      Acompanhar Ponto (Gestor)
-                    </CardTitle>
-                    <CardDescription>Gerencie o ponto dos funcionarios</CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            )}
-            {permissoes.cadastrar_usuarios && (
-              <Link to="/gerenciar-usuarios">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-purple-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Users className="w-5 h-5 mr-2" />
-                      Gerenciar Usuarios
-                    </CardTitle>
-                    <CardDescription>Cadastre e gerencie funcionarios</CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            )}
-          </div>
-        );
-        
       case 'geral':
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* CARD FISCAL */}
+            {permissoes.emissao_nf && (
+              <Link to="/emissao-notas">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-600">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Receipt className="w-5 h-5 mr-2 text-blue-600" />
+                      Emissão de Notas
+                    </CardTitle>
+                    <CardDescription>Gerencie e envie notas fiscais</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {/* CARD DOCUMENTOS */}
             {permissoes.documentos_societarios && (
               <Link to="/documentos-societarios">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-indigo-500">
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                      <FileText className="w-5 h-5 mr-2" />
-                      Documentos Societarios
+                      <FileText className="w-5 h-5 mr-2 text-indigo-500" />
+                      Documentos Societários
                     </CardTitle>
-                    <CardDescription>Gerencie seus documentos societarios</CardDescription>
+                    <CardDescription>Gerencie atas e contratos sociais</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
             )}
+
+            {/* CARD SUPORTE */}
             {permissoes.gestao_suporte && (
               <Link to="/admin/suporte">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                      <MessageSquare className="w-5 h-5 mr-2" />
-                      Gestao de Tickets
+                      <MessageSquare className="w-5 h-5 mr-2 text-orange-500" />
+                      Gestão de Tickets
                     </CardTitle>
-                    <CardDescription>Atenda os tickets de suporte</CardDescription>
+                    <CardDescription>Atenda chamados de suporte</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
             )}
+
+            {/* CARD CLIENTES */}
             {permissoes.gerenciar_clientes && (
               <Link to="/clientes">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                      <Building2 className="w-5 h-5 mr-2" />
+                      <Building2 className="w-5 h-5 mr-2 text-green-500" />
                       Gerenciar Clientes
                     </CardTitle>
-                    <CardDescription>Gerencie seus clientes</CardDescription>
+                    <CardDescription>Cadastro de empresas e contatos</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {/* CARD PROTOCOLOS */}
+            {permissoes.protocolos && (
+              <Link to="/protocolos">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-purple-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Package className="w-5 h-5 mr-2 text-purple-500" />
+                      Protocolos
+                    </CardTitle>
+                    <CardDescription>Controle de entregas e recebimentos</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {/* CARD PONTO (GESTOR) */}
+            {permissoes.folha_ponto && (
+              <Link to="/folha-ponto">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-cyan-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2 text-cyan-500" />
+                      Acompanhar Ponto
+                    </CardTitle>
+                    <CardDescription>Gestão de jornada dos funcionários</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
@@ -349,7 +249,7 @@ const Painel = () => {
               <CardTitle>Acesso Restrito</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Voce nao possui permissoes ativas. Entre em contato com o administrador.</p>
+              <p className="text-muted-foreground">Você não possui permissões ativas para visualizar módulos neste painel. Entre em contato com o administrador.</p>
             </CardContent>
           </Card>
         );
