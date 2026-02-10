@@ -113,7 +113,9 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                     const clienteNome = cliente?.nome || 'N/A';
                                     const razaoSocial = cliente?.razao_social;
                                     const descricao = p.contas_receber?.descricao || 'N/A';
-                                    const contaId = p.contas_receber?.id || 'N/A';
+                                    
+                                    // Lógica de Juros: Se o valor pago for maior que o valor da parcela, a diferença é juros
+                                    const jurosCalculados = p.valor_juros || (p.valor_pago > p.valor_parcela ? p.valor_pago - p.valor_parcela : 0);
 
                                     return (
                                         <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
@@ -203,12 +205,11 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
                                             </TableCell>
                                             
-                                            {/* NOVAS COLUNAS */}
                                             <TableCell className="text-sm">{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
                                             <TableCell className="text-sm">{p.forma_pagamento || '-'}</TableCell>
                                             <TableCell className="text-sm">{p.conta_nome || '-'}</TableCell>
-                                            <TableCell className="font-semibold text-green-600">{p.valor_recebido ? formatCurrency(p.valor_recebido) : '-'}</TableCell>
-                                            <TableCell className="text-sm text-red-600">{p.valor_juros ? formatCurrency(p.valor_juros) : '-'}</TableCell>
+                                            <TableCell className="font-semibold text-green-600">{p.valor_pago ? formatCurrency(p.valor_pago) : '-'}</TableCell>
+                                            <TableCell className="text-sm text-red-600">{jurosCalculados > 0 ? formatCurrency(jurosCalculados) : '-'}</TableCell>
                                             
                                             <TableCell>
                                                 {p.pagbank_status === 'PAID' ? (
@@ -258,6 +259,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                             const razaoSocial = cliente?.razao_social;
                             const descricao = p.contas_receber?.descricao || 'N/A';
                             const isExpanded = expandedCards.has(p.id);
+                            const jurosCalculados = p.valor_juros || (p.valor_pago > p.valor_parcela ? p.valor_pago - p.valor_parcela : 0);
 
                             return (
                                 <Card key={p.id} className={cn("shadow-sm", isPaga && 'bg-green-500/5 border-green-500/20')}>
@@ -287,8 +289,8 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 <div><span className="text-muted-foreground">Pagamento:</span> {formatDate(p.data_pagamento!)}</div>
                                                 <div><span className="text-muted-foreground">Método:</span> {p.forma_pagamento}</div>
                                                 <div className="col-span-2"><span className="text-muted-foreground">Conta:</span> {p.conta_nome}</div>
-                                                <div className="font-bold text-green-600">Recebido: {formatCurrency(p.valor_recebido || 0)}</div>
-                                                <div className="text-red-600">Juros: {formatCurrency(p.valor_juros || 0)}</div>
+                                                <div className="font-bold text-green-600">Recebido: {formatCurrency(p.valor_pago || 0)}</div>
+                                                <div className="text-red-600">Juros: {formatCurrency(jurosCalculados)}</div>
                                             </div>
                                         )}
 

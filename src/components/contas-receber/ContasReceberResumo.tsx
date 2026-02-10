@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { DollarSign, ListChecks, Receipt } from 'lucide-react';
+import { DollarSign, ListChecks, Receipt, TrendingUp, TrendingDown } from 'lucide-react';
 import { ContaReceberComProgresso, ExtendedParcelaDetalhada, AdminRecebimento } from '@/types/contas-receber';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/utils/formatters'; // Importando formatCurrency
+import { formatCurrency } from '@/utils/formatters';
 
 interface ContasReceberResumoProps {
   activeTab: string;
@@ -12,8 +12,6 @@ interface ContasReceberResumoProps {
   recebimentosFiltrados: AdminRecebimento[];
 }
 
-// Removido: const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
 const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
   activeTab,
   contasFiltradas,
@@ -21,20 +19,21 @@ const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
   recebimentosFiltrados,
 }) => {
 
-  const { totalSintetico, totalParcelas, totalPago, totalNaoPago, diferenca, totalRecebimentos } = useMemo(() => {
+  const { totalSintetico, totalParcelas, totalRecebido, saldoRestante, totalRecebimentos } = useMemo(() => {
     // --- 1. Resumo Sintético ---
     const totalSintetico = contasFiltradas.reduce((sum, conta) => sum + conta.valor_total, 0);
 
     // --- 2. Resumo Analítico (Parcelas) ---
     const totalParcelas = parcelasFiltradas.reduce((sum, p) => sum + p.valor_parcela, 0);
-    const totalPago = parcelasFiltradas.reduce((sum, p) => sum + (p.valor_pago || 0), 0);
-    const totalNaoPago = totalParcelas - totalPago;
-    const diferenca = totalParcelas - totalPago;
+    const totalRecebido = parcelasFiltradas.reduce((sum, p) => sum + (p.valor_pago || 0), 0);
+    
+    // Saldo Restante: Positivo significa que falta receber. Negativo significa que recebeu a mais.
+    const saldoRestante = totalParcelas - totalRecebido;
 
     // --- 3. Resumo Recebimentos ---
     const totalRecebimentos = recebimentosFiltrados.reduce((sum, r) => sum + Number(r.valor_recebido), 0);
 
-    return { totalSintetico, totalParcelas, totalPago, totalNaoPago, diferenca, totalRecebimentos };
+    return { totalSintetico, totalParcelas, totalRecebido, saldoRestante, totalRecebimentos };
   }, [contasFiltradas, parcelasFiltradas, recebimentosFiltrados]);
 
   const renderResumo = () => {
@@ -71,26 +70,36 @@ const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
           </Card>
           <Card className="border-l-4 border-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Valor Pago</CardTitle>
+              <CardTitle className="text-sm font-medium">Valor Recebido</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold text-green-600">{formatCurrency(totalPago)}</div>
+              <div className="text-xl font-bold text-green-600">{formatCurrency(totalRecebido)}</div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-red-500">
+          <Card className={cn("border-l-4", saldoRestante <= 0 ? "border-green-500" : "border-red-500")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Valor Não Pago</CardTitle>
+              <CardTitle className="text-sm font-medium flex items-center">
+                {saldoRestante < 0 ? (
+                    <><TrendingUp className="w-4 h-4 mr-2 text-blue-600" /> Valor Recebido a Maior</>
+                ) : (
+                    <><TrendingDown className="w-4 h-4 mr-2 text-red-600" /> Valor Recebido a Menor (Saldo)</>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold text-red-600">{formatCurrency(totalNaoPago)}</div>
+              <div className={cn("text-xl font-bold", saldoRestante < 0 ? "text-blue-600" : "text-red-600")}>
+                {formatCurrency(Math.abs(saldoRestante))}
+              </div>
             </CardContent>
           </Card>
-          <Card className={cn("border-l-4", diferenca >= 0 ? "border-green-500" : "border-red-500")}>
+          <Card className={cn("border-l-4", saldoRestante <= 0 ? "border-green-500" : "border-red-500")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Diferença (Saldo)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold">{formatCurrency(diferenca)}</div>
+              <div className={cn("text-xl font-bold", saldoRestante <= 0 ? "text-green-600" : "text-red-600")}>
+                {formatCurrency(saldoRestante)}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -104,7 +113,7 @@ const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
             <CardTitle className="text-sm font-medium flex items-center">
               <Receipt className="w-4 h-4 mr-2" /> Total Recebido (Histórico)
             </CardTitle>
-          </CardHeader>
+          </Header>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{formatCurrency(totalRecebimentos)}</div>
             <p className="text-xs text-muted-foreground mt-1">
