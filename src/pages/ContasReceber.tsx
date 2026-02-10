@@ -118,6 +118,7 @@ const ContasReceber = () => {
     const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
     const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
+    const tabelaRecebimentos = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_recebimentos' : 'recebimentos';
     const ownerKey = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_id' : 'empresa_id';
     
     let contasQuery = supabase
@@ -144,6 +145,11 @@ const ContasReceber = () => {
             descricao,
             cliente_id,
             origem
+          ),
+          recebimentos: ${tabelaRecebimentos} (
+            forma_pagamento,
+            valor_recebido,
+            saldo_contas ( nome )
           ),
           pagbank_charge_id,
           pagbank_payment_link,
@@ -188,7 +194,19 @@ const ContasReceber = () => {
     }
     
     let fetchedContas = contasRes.data as ContaReceberComProgresso[];
-    let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
+    let fetchedParcelas = (parcelasRes.data as any[]).map(p => {
+        // Pega o recebimento mais recente para exibir na tabela
+        const ultimoRecebimento = p.recebimentos && p.recebimentos.length > 0 
+            ? p.recebimentos[p.recebimentos.length - 1] 
+            : null;
+            
+        return {
+            ...p,
+            forma_pagamento: ultimoRecebimento?.forma_pagamento,
+            conta_nome: ultimoRecebimento?.saldo_contas?.nome,
+            valor_recebido: ultimoRecebimento?.valor_recebido,
+        };
+    }) as unknown as ExtendedParcelaDetalhada[];
         
         const clienteIds = [...new Set([
             ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
@@ -449,7 +467,6 @@ const ContasReceber = () => {
       });
 
       if (error) {
-        // Se a função retornou erro, extraímos a mensagem
         throw error;
       }
       
@@ -468,7 +485,6 @@ const ContasReceber = () => {
       toast.dismiss(toastId);
       console.error('Erro ao sincronizar:', error);
       
-      // Tentativa de extrair mensagem de erro amigável da Edge Function
       let msg = error.message;
       if (error.context) {
           try {

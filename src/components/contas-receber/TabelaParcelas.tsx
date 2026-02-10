@@ -9,36 +9,11 @@ import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPayment
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
 import ReciboRecebimentoDialog from './ReciboRecebimentoDialog';
 import EditarParcelaPagaDialog from './EditarParcelaPagaDialog';
+import { ExtendedParcelaDetalhada } from '@/types/contas-receber';
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
-
-interface ExtendedParcelaDetalhada {
-    id: string;
-    numero_parcela: number;
-    valor_parcela: number;
-    valor_pago: number;
-    data_vencimento: string;
-    data_pagamento?: string | null;
-    status: ParcelaStatus;
-    ciente_cliente?: boolean | null;
-    pagbank_charge_id?: string | null;
-    pagbank_payment_link?: string | null;
-    pagbank_checkout_id?: string | null;
-    pagbank_checkout_link?: string | null;
-    pagbank_link_expira_em?: string | null;
-    pagbank_status?: string | null;
-    pagbank_qr_code?: string | null;
-    pagbank_qr_code_text?: string | null;
-    pagbank_payment_method?: string | null;
-    pagbank_updated_at?: string | null;
-    contas_receber: {
-        id: string;
-        descricao: string;
-        clientes: { nome: string; razao_social?: string | null; telefone?: string; email?: string } | null;
-    } | null;
-}
 
 interface TabelaParcelasProps {
     parcelasFiltradas: ExtendedParcelaDetalhada[];
@@ -114,20 +89,22 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[120px]">Ações</TableHead>
-                                <TableHead className="w-[100px]">ID Parcela</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
-                                <TableHead>Nº</TableHead>
                                 <TableHead>Vencimento</TableHead>
                                 <TableHead>Valor</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>ID Conta</TableHead>
+                                <TableHead>Pagamento</TableHead>
+                                <TableHead>Método</TableHead>
+                                <TableHead>Conta/Caixa</TableHead>
+                                <TableHead>Vlr. Recebido</TableHead>
+                                <TableHead>Juros</TableHead>
                                 <TableHead>PagBank</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={12} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -215,27 +192,24 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
-                                                <Button variant="link" size="sm" className="p-0 h-auto font-mono text-xs" onClick={() => setCodigoParaVisualizar({ title: 'ID da Parcela', code: p.id })} title={`Visualizar ID da Parcela: ${p.id}`}>
-                                                    {p.id.substring(0, 8)}...
-                                                </Button>
-                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 {razaoSocial && <div className="font-bold text-foreground">{razaoSocial}</div>}
                                                 <div className={cn(razaoSocial && "text-xs text-muted-foreground")}>{clienteNome}</div>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
-                                            <TableCell className="text-center">{p.numero_parcela}</TableCell>
                                             <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                                             <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                                             <TableCell>
                                                 <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
                                             </TableCell>
-                                            <TableCell>
-                                                 <Button variant="link" size="sm" className="p-0 h-auto font-mono text-xs" onClick={() => setCodigoParaVisualizar({ title: 'ID da Conta', code: contaId })} title={`Visualizar ID da Conta: ${contaId}`}>
-                                                    {contaId.substring(0, 8)}...
-                                                </Button>
-                                            </TableCell>
+                                            
+                                            {/* NOVAS COLUNAS */}
+                                            <TableCell className="text-sm">{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
+                                            <TableCell className="text-sm">{p.forma_pagamento || '-'}</TableCell>
+                                            <TableCell className="text-sm">{p.conta_nome || '-'}</TableCell>
+                                            <TableCell className="font-semibold text-green-600">{p.valor_recebido ? formatCurrency(p.valor_recebido) : '-'}</TableCell>
+                                            <TableCell className="text-sm text-red-600">{p.valor_juros ? formatCurrency(p.valor_juros) : '-'}</TableCell>
+                                            
                                             <TableCell>
                                                 {p.pagbank_status === 'PAID' ? (
                                                     <PagBankPaymentStatus status={p.pagbank_status as any} />
@@ -283,7 +257,6 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                             const clienteNome = cliente?.nome || 'N/A';
                             const razaoSocial = cliente?.razao_social;
                             const descricao = p.contas_receber?.descricao || 'N/A';
-                            const contaId = p.contas_receber?.id || 'N/A';
                             const isExpanded = expandedCards.has(p.id);
 
                             return (
@@ -308,6 +281,17 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 <div className="text-xs text-muted-foreground">Parcela {p.numero_parcela}</div>
                                             </div>
                                         </div>
+                                        
+                                        {isPaga && (
+                                            <div className="grid grid-cols-2 gap-2 mb-3 text-xs bg-muted/30 p-2 rounded">
+                                                <div><span className="text-muted-foreground">Pagamento:</span> {formatDate(p.data_pagamento!)}</div>
+                                                <div><span className="text-muted-foreground">Método:</span> {p.forma_pagamento}</div>
+                                                <div className="col-span-2"><span className="text-muted-foreground">Conta:</span> {p.conta_nome}</div>
+                                                <div className="font-bold text-green-600">Recebido: {formatCurrency(p.valor_recebido || 0)}</div>
+                                                <div className="text-red-600">Juros: {formatCurrency(p.valor_juros || 0)}</div>
+                                            </div>
+                                        )}
+
                                         <div className="flex flex-col gap-2 mb-3">
                                             <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={isPaga || p.status === 'bloqueada' || p.status === 'cancelada'} className="w-full" title={isPaga ? 'Esta parcela já foi recebida' : (p.status === 'bloqueada' || p.status === 'cancelada' ? `Status: ${p.status}`: 'Registrar recebimento')}>
                                                 <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
@@ -322,49 +306,8 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     <Button variant="outline" size="sm" onClick={() => onGerarLinkPagBank?.(p, 'checkout')} className="w-full border-purple-500 text-purple-600 hover:bg-purple-50" title="Gerar Link de Pagamento"><ShoppingCart className="w-4 h-4 mr-2" /> Gerar Link Pagamento</Button>
                                                 </div>
                                             )}
-                                            {!isPaga && onMapearComExtrato && (
-                                                <Button variant="outline" size="sm" onClick={() => onMapearComExtrato(p)} className="w-full border-orange-500 text-orange-600 hover:bg-orange-50" title="Vincular parcela com transação do extrato bancário"><Link2 className="w-4 h-4 mr-2" /> Mapear com Extrato</Button>
-                                            )}
                                         </div>
-                                        {(p.pagbank_charge_id || p.pagbank_checkout_id) && (
-                                            <div className="pt-3 border-t">
-                                                <div className="text-xs font-medium text-muted-foreground mb-2">Status PagBank</div>
-                                                {p.pagbank_status === 'PAID' ? (
-                                                    <PagBankPaymentStatus status={p.pagbank_status as any} />
-                                                ) : (
-                                                    <div className="space-y-2">
-                                                        {isLinkExpirado(p) ? (
-                                                            <Badge variant="destructive" className="w-fit text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Link Expirado</Badge>
-                                                        ) : (
-                                                            <div className="flex items-center justify-between">
-                                                                <Badge variant="default" className="text-xs bg-green-600"><Check className="h-3 w-3 mr-1" />Link Ativo</Badge>
-                                                            </div>
-                                                        )}
-                                                        <PagBankPaymentStatus status={p.pagbank_status as any} />
-                                                        <Button size="sm" variant="outline" onClick={() => onVisualizarLinkPagBank?.(p)} className="w-full"><Eye className="h-3 w-3 mr-2" />Ver Link PagBank</Button>
-                                                        {!isPaga && (
-                                                            <Button size="sm" variant="secondary" onClick={() => onSyncStatus?.(p.id)} className="w-full"><RefreshCw className="h-3 w-3 mr-2" />Sincronizar Status</Button>
-                                                        )}
-                                                        {isLinkExpirado(p) && !isPaga && (
-                                                            <Button size="sm" variant="outline" onClick={() => onRegerarLinkPagBank?.(p)} className="w-full text-orange-600 border-orange-600 hover:bg-orange-50"><RefreshCw className="h-3 w-3 mr-2" />Regerar Link</Button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
                                         <Button variant="ghost" size="sm" onClick={() => toggleCardExpansion(p.id)} className="w-full mt-3 text-xs">{isExpanded ? 'Ocultar detalhes' : 'Ver mais detalhes'}</Button>
-                                        {isExpanded && (
-                                            <div className="mt-3 pt-3 border-t space-y-2 text-xs">
-                                                <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">ID Parcela:</span>
-                                                    <Button variant="link" size="sm" className="p-0 h-auto font-mono text-xs" onClick={() => setCodigoParaVisualizar({ title: 'ID da Parcela', code: p.id })}>{p.id.substring(0, 12)}...</Button>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">ID Conta:</span>
-                                                    <Button variant="link" size="sm" className="p-0 h-auto font-mono text-xs" onClick={() => setCodigoParaVisualizar({ title: 'ID da Conta', code: contaId })}>{contaId.substring(0, 12)}...</Button>
-                                                </div>
-                                            </div>
-                                        )}
                                     </CardContent>
                                 </Card>
                             );
