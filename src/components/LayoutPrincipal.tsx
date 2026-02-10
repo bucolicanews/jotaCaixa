@@ -36,13 +36,16 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const isAccessExpired = isClient && clienteProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
   const isAccessBlocked = isClient && clienteProfile?.aprovado && dataFimAcesso === null;
 
+  const perms = (perfil as any)?.permissoes || {};
+  const hasOnlyFiscal = perms.emissao_nf === true && perms.contas_receber !== true && perms.contas_pagar !== true && perms.plano_contas !== true;
+
   const shouldShowSetupBanner =
-    (isClient || isClientUser) && setupStatus && !setupStatus.isComplete;
+    (isClient || isClientUser) && setupStatus && !setupStatus.isComplete && !hasOnlyFiscal;
 
   const shouldShowFirstLaunchNotice =
     (isClient || isClientUser) &&
     Boolean(setupStatus?.isComplete) &&
-    !setupStatus?.firstLaunchCompleted;
+    !setupStatus?.firstLaunchCompleted && !hasOnlyFiscal;
 
   if (carregando) {
     return (

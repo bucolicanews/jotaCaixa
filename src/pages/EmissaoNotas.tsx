@@ -39,7 +39,7 @@ const EmissaoNotas: React.FC = () => {
         handleSendNF,
     } = useNotasFiscais(filtroPeriodo, filtroStatus, filtroTextoDebounced);
 
-    const canAccessPage = ['Admin', 'Cliente'].includes(role) || (perfil as any)?.permissoes?.emissao_nf === true;
+    const canAccessPage = role === 'Admin' || role === 'Cliente' || (perfil as any)?.permissoes?.emissao_nf === true;
 
     const totalPendente = useMemo(() => {
         return parcelasParaNF.reduce((sum, p) => sum + p.valor_parcela, 0);

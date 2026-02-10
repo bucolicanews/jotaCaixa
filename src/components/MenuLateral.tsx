@@ -224,13 +224,15 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
             return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
         }
         
+        const userPerms = userProfile.permissoes || {};
+        
         // NOVO: Verifica a permissão de gestão de suporte
         if (item.permissionKey === 'gestao_suporte') {
-            return userProfile.permissoes?.gestao_suporte === true;
+            return userPerms.gestao_suporte === true;
         }
         
         if (item.permissionKey) {
-            return userProfile.permissoes?.[item.permissionKey] === true;
+            return userPerms[item.permissionKey] === true;
         }
         return false;
     }

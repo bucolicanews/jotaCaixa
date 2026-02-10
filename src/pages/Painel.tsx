@@ -27,15 +27,16 @@ const Painel = () => {
 
   const getPermissoes = (): Record<string, boolean> => {
     if (isAdmin) return {};
-    if (isUsuarioDoAdmin) {
-      return (perfil as AdminUsuarioProfile)?.permissoes || {};
+    
+    // Se for funcionário (Usuario), as permissões estão no perfil
+    if (isUsuario) {
+      return (perfil as any)?.permissoes || {};
     }
+    
     if (isClient) {
       return (perfil as ClienteProfile)?.permissoes || {};
     }
-    if (isUsuario) {
-      return (perfil as UsuarioProfile)?.permissoes || {};
-    }
+    
     return {};
   };
 
@@ -122,17 +123,21 @@ const Painel = () => {
     perfil &&
     'cliente_id' in perfil &&
     Boolean((perfil as UsuarioProfile)?.cliente_id);
+    
+  // Só bloqueia o setup se o usuário NÃO tiver permissão fiscal (que é independente do financeiro/contábil)
   const shouldBlockSetup =
     (isClient || isClientUser) &&
     setupStatus &&
-    !setupStatus.isComplete;
+    !setupStatus.isComplete &&
+    permissoes.emissao_nf !== true;
     
   // NOVO BLOQUEIO: Se o setup estiver completo, mas o primeiro lançamento não foi feito
-  const shouldBlockFirstLaunch = 
+  const shouldBlockFirstLaunch =
     (isClient || isClientUser) &&
     setupStatus &&
     setupStatus.isComplete &&
-    !setupStatus.firstLaunchCompleted;
+    !setupStatus.firstLaunchCompleted &&
+    permissoes.emissao_nf !== true;
 
   if (carregando) {
     return (

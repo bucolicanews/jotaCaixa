@@ -279,6 +279,9 @@ const DashboardFinanceiro: React.FC = () => {
         }
     }, [ownerId, filtroContaId, fetchKPIs, fetchFluxoDataGeral, fetchContaMensalData]);
 
+    const { permissoes: userPerms } = useSessao();
+    const hasFinanceiro = userPerms?.contas_receber || userPerms?.contas_pagar || role === 'Admin' || role === 'Cliente';
+
     const loading = carregandoSessao || carregandoSaldos || loadingFluxo;
     const lucroPrejuizo = fluxoData.receber - fluxoData.pagar;
     const resultadoRealizado = totalEntradasRealizadas - totalSaidasRealizadas; // NEW CALCULATION
@@ -372,7 +375,7 @@ const DashboardFinanceiro: React.FC = () => {
                 {isContaFiltrada && contaMensalData ? (
                     // NOVO LAYOUT: 3 COLUNAS (Entradas, Saídas, Saldo Final)
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:col-span-4">
-                        <Card 
+                        <Card
                             className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
                             onClick={() => navigate('/relatorios/fluxo-caixa')}
                         >
@@ -385,7 +388,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card 
+                        <Card
                             className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
                             onClick={() => navigate('/relatorios/fluxo-caixa')}
                         >
@@ -398,7 +401,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card 
+                        <Card
                             className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", contaMensalData.saldoFinal >= 0 ? "border-blue-500" : "border-red-500")}
                             onClick={() => navigate('/bancos')}
                         >
@@ -415,7 +418,7 @@ const DashboardFinanceiro: React.FC = () => {
                 ) : (
                     // KPIs Gerais (Todas as Contas)
                     <>
-                        <Card 
+                        <Card
                             className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}
                             onClick={() => navigate('/bancos')}
                         >
@@ -428,7 +431,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card 
+                        <Card
                             className="border-l-4 border-blue-500 cursor-pointer hover:shadow-xl transition-shadow"
                             onClick={() => navigate('/contas-receber')}
                         >
@@ -441,7 +444,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card 
+                        <Card
                             className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
                             onClick={() => navigate('/contas-pagar')}
                         >
@@ -454,7 +457,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card 
+                        <Card
                             className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", lucroPrejuizo >= 0 ? "border-green-500" : "border-red-500")}
                             onClick={() => navigate('/relatorios/dre')}
                         >
@@ -470,7 +473,7 @@ const DashboardFinanceiro: React.FC = () => {
                         
                         {/* NOVO BLOCO DE KPIS REALIZADOS */}
                         <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <Card 
+                            <Card
                                 className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
                                 onClick={() => navigate('/relatorios/fluxo-caixa')}
                             >
@@ -483,7 +486,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     </div>
                                 </CardContent>
                             </Card>
-                            <Card 
+                            <Card
                                 className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
                                 onClick={() => navigate('/relatorios/fluxo-caixa')}
                             >
@@ -496,7 +499,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     </div>
                                 </CardContent>
                             </Card>
-                            <Card 
+                            <Card
                                 className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", resultadoRealizado >= 0 ? "border-blue-500" : "border-red-500")}
                                 onClick={() => navigate('/relatorios/fluxo-caixa')}
                             >
@@ -577,7 +580,7 @@ const DashboardFinanceiro: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Gráfico 1: Saldo por Conta */}
-                <Card 
+                <Card
                     className="lg:col-span-2 cursor-pointer hover:shadow-xl transition-shadow"
                     onClick={() => navigate('/bancos')}
                 >
@@ -589,7 +592,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
                                     <XAxis dataKey="name" stroke="hsl(var(--foreground))" tick={{ fontSize: 10 }} />
                                     <YAxis tickFormatter={formatCurrency} stroke="hsl(var(--foreground))" />
-                                    <Tooltip 
+                                    <Tooltip
                                         content={({ active, payload }) => {
                                             if (active && payload && payload.length) {
                                                 return (
@@ -612,45 +615,47 @@ const DashboardFinanceiro: React.FC = () => {
                 </Card>
                 
                 {/* Gráfico 2: Lucro/Prejuízo Mensal */}
-                <Card 
-                    className="lg:col-span-1 cursor-pointer hover:shadow-xl transition-shadow"
-                    onClick={() => navigate('/relatorios/dre')}
-                >
-                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado Mensal ({format(new Date(), 'MMM')})</CardTitle></CardHeader>
-                    <CardContent className="h-80 flex flex-col justify-center items-center">
-                        <ResponsiveContainer width="100%" height={150}>
-                            <BarChart data={lucroChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
-                                <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
-                                <YAxis tickFormatter={formatCurrency} stroke="hsl(var(--foreground))" />
-                                <Tooltip 
-                                    content={({ active, payload }) => {
-                                        if (active && payload && payload.length) {
-                                            return (
-                                                <div className="bg-card p-2 border rounded-md shadow-lg text-sm">
-                                                    <p className="font-bold">{payload[0].payload.name}</p>
-                                                    <p style={{ color: payload[0].payload.fill }}>{formatCurrency(payload[0].value as number)}</p>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    }}
-                                />
-                                <Bar dataKey="valor" fill={lucroPrejuizo >= 0 ? COLORS[1] : COLORS[3]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                        <div className="mt-4 text-center">
-                            <p className="text-sm text-muted-foreground">Lucro/Prejuízo (Contas a Pagar/Receber)</p>
-                            <p className={cn("text-3xl font-extrabold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
-                                {formatCurrency(lucroPrejuizo)}
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
+                {hasFinanceiro && (
+                    <Card
+                        className="lg:col-span-1 cursor-pointer hover:shadow-xl transition-shadow"
+                        onClick={() => navigate('/relatorios/dre')}
+                    >
+                        <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado Mensal ({format(new Date(), 'MMM')})</CardTitle></CardHeader>
+                        <CardContent className="h-80 flex flex-col justify-center items-center">
+                            <ResponsiveContainer width="100%" height={150}>
+                                <BarChart data={lucroChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
+                                    <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
+                                    <YAxis tickFormatter={formatCurrency} stroke="hsl(var(--foreground))" />
+                                    <Tooltip
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="bg-card p-2 border rounded-md shadow-lg text-sm">
+                                                        <p className="font-bold">{payload[0].payload.name}</p>
+                                                        <p style={{ color: payload[0].payload.fill }}>{formatCurrency(payload[0].value as number)}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Bar dataKey="valor" fill={lucroPrejuizo >= 0 ? COLORS[1] : COLORS[3]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                            <div className="mt-4 text-center">
+                                <p className="text-sm text-muted-foreground">Lucro/Prejuízo (Contas a Pagar/Receber)</p>
+                                <p className={cn("text-3xl font-extrabold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
+                                    {formatCurrency(lucroPrejuizo)}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
                 
                 {/* Gráfico 3: Receitas vs Despesas (Barra) */}
-                <Card 
-                    className="lg:col-span-3 cursor-pointer hover:shadow-xl transition-shadow"
+                <Card
+                    className={cn("cursor-pointer hover:shadow-xl transition-shadow", hasFinanceiro ? "lg:col-span-3" : "lg:col-span-1")}
                     onClick={() => navigate('/relatorios/fluxo-caixa')}
                 >
                     <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa ({fluxoData.isGeral ? 'A Receber vs A Pagar' : 'Entradas vs Saídas'} - Mês)</CardTitle></CardHeader>
@@ -660,7 +665,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
                                 <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
                                 <YAxis tickFormatter={formatCurrency} stroke="hsl(var(--foreground))" />
-                                <Tooltip 
+                                <Tooltip
                                     content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
                                             return (
