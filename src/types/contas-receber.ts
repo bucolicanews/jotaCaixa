@@ -75,6 +75,7 @@ export interface AdminRecebimento {
     id_conta_resultado?: string | null;
     admin_parcelas_receber: {
         numero_parcela: number;
+        valor_parcela: number; // ADICIONADO PARA CÁLCULO DE JUROS
         admin_contas_receber: {
             id: string;
             descricao: string;

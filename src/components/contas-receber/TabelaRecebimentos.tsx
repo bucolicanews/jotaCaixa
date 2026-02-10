@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AdminRecebimento } from '@/types/contas-receber';
+import { cn } from '@/lib/utils';
 
 interface TabelaRecebimentosProps {
     recebimentosFiltrados: AdminRecebimento[];
@@ -30,6 +31,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
                                 <TableHead>Valor Recebido</TableHead>
+                                <TableHead>Juros</TableHead> {/* NOVA COLUNA */}
                                 <TableHead>Forma Pagamento</TableHead>
                                 <TableHead>Conta/Caixa</TableHead>
                                 <TableHead>Origem</TableHead>
@@ -37,7 +39,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                         </TableHeader>
                         <TableBody>
                             {recebimentosFiltrados.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                             ) : (
                                 recebimentosFiltrados.map((r) => {
                                     const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
@@ -46,6 +48,10 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                     const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
                                     const contaDestino = r.saldo_contas?.nome || 'N/A';
                                     const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A';
+                                    
+                                    // Lógica de Juros: Diferença entre o recebido e o valor original da parcela
+                                    const valorParcela = r.admin_parcelas_receber?.valor_parcela || 0;
+                                    const juros = r.valor_recebido > valorParcela ? r.valor_recebido - valorParcela : 0;
 
                                     return (
                                         <TableRow key={r.id}>
@@ -54,6 +60,9 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                             <TableCell className="font-medium">{clienteNome}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                             <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
+                                            <TableCell className={cn("text-sm font-medium", juros > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                                {juros > 0 ? formatCurrency(juros) : '-'}
+                                            </TableCell>
                                             <TableCell>{r.forma_pagamento}</TableCell>
                                             <TableCell>{contaDestino}</TableCell>
                                             <TableCell><Badge variant="secondary">{origem}</Badge></TableCell>

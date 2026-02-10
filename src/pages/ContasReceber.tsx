@@ -172,6 +172,7 @@ const ContasReceber = () => {
           saldo_contas ( nome ),
           admin_parcelas_receber (
             numero_parcela,
+            valor_parcela,
             admin_contas_receber ( id, descricao, origem, cliente_id )
           )
         `)
