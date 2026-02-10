@@ -28,18 +28,18 @@ const EmissaoNotas: React.FC = () => {
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
     const [viewMode, setViewMode] = useState<'card' | 'list'>('list'); // ALTERADO: Padrão para 'list'
 
-    const { 
-        parcelasParaNF, 
-        notasFiscais, 
-        carregando, 
-        refetch, 
-        configNF, 
+    const {
+        parcelasParaNF,
+        notasFiscais,
+        carregando,
+        refetch,
+        configNF,
         loadingConfig,
         handleUploadNF,
         handleSendNF,
     } = useNotasFiscais(filtroPeriodo, filtroStatus, filtroTextoDebounced);
 
-    const canAccessPage = ['Admin', 'Cliente'].includes(role) || (perfil as any)?.permissoes?.contas_receber === true;
+    const canAccessPage = ['Admin', 'Cliente'].includes(role) || (perfil as any)?.permissoes?.emissao_nf === true;
 
     const totalPendente = useMemo(() => {
         return parcelasParaNF.reduce((sum, p) => sum + p.valor_parcela, 0);

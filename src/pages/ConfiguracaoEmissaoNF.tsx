@@ -52,7 +52,7 @@ const CONFIRMATION_JSON_EXAMPLE = `{
 
 const ConfiguracaoEmissaoNF: React.FC = () => {
     const { ownerId } = useOwner();
-    const { role } = useSessao();
+    const { role, perfil } = useSessao();
 
     const [config, setConfig] = useState<NFConfig>(DEFAULT_CONFIG);
     const [loading, setLoading] = useState(true);
@@ -120,7 +120,7 @@ const ConfiguracaoEmissaoNF: React.FC = () => {
         setTimeout(() => setCopiedUrl(false), 2000);
     };
 
-    const isReadOnly = !['Admin', 'Cliente'].includes(role);
+    const isReadOnly = !['Admin', 'Cliente'].includes(role) && (perfil as any)?.permissoes?.emissao_nf !== true;
 
     if (loading) {
         return (

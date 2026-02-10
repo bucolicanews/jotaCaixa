@@ -41,11 +41,12 @@ const Painel = () => {
 
   const permissoes = getPermissoes();
 
-  const hasFinanceiroPermission = 
-    permissoes.contas_pagar === true || 
-    permissoes.contas_receber === true;
+  const hasFinanceiroPermission =
+    permissoes.contas_pagar === true ||
+    permissoes.contas_receber === true ||
+    permissoes.emissao_nf === true;
 
-  const hasContabilidadePermission = 
+  const hasContabilidadePermission =
     permissoes.lancamentos === true ||
     permissoes.balanco === true || 
     permissoes.contas_patrimoniais === true || 
