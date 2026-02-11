@@ -27,7 +27,7 @@ import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { Plano } from '@/types/plano';
 import ProtocolosClienteDialog from '@/components/protocolos/ProtocolosClienteDialog';
 import { useDebounce } from '@/hooks/use-debounce';
-import { useSessao } from '@/hooks/use-sessao'; // IMPORT ADICIONADO
+import { useSessao } from '@/hooks/use-sessao';
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -175,7 +175,8 @@ const ClientesPage = () => {
         if (isAdmin) {
             const filteredEmpresas = systemClientsList.filter(e => 
                 e.nome.toLowerCase().includes(filtroNomeSistema.toLowerCase()) ||
-                e.email.toLowerCase().includes(filtroNomeSistema.toLowerCase())
+                e.email.toLowerCase().includes(filtroNomeSistema.toLowerCase()) ||
+                (e.razao_social?.toLowerCase() || '').includes(filtroNomeSistema.toLowerCase())
             );
             setEmpresasSistema(filteredEmpresas);
         }
@@ -708,7 +709,7 @@ const ClientesPage = () => {
             <TableHeader>
                 <TableRow>
                     <TableHead>Nome da Empresa</TableHead>
-                    <TableHead>Razão Social</TableHead> {/* COLUNA RESTAURADA */}
+                    <TableHead>Razão Social</TableHead>
                     <TableHead>Email (Login)</TableHead>
                     <TableHead>Plano</TableHead>
                     <TableHead>Acesso Expira</TableHead>
@@ -737,7 +738,7 @@ const ClientesPage = () => {
                         return (
                             <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlockedOrExpired && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
-                                <TableCell>{empresa.razao_social || '-'}</TableCell> {/* EXIBINDO RAZÃO SOCIAL */}
+                                <TableCell>{empresa.razao_social || '-'}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
                                 <TableCell>{dataExpiracaoDisplay}</TableCell>
@@ -810,7 +811,7 @@ const ClientesPage = () => {
         </div>
       </div>
       {isAdmin ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="clientes_cr" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Diretos/Contratos</TabsTrigger><TabsTrigger value="empresas_sistema" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Clientes Sistema</TabsTrigger></TabsList><TabsContent value="clientes_cr"><Card className="mt-4"><CardHeader className="pb-2"><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle></CardHeader><CardContent className="flex flex-col md:flex-row gap-4"><Input placeholder="Buscar por nome, documento ou razão social..." value={filtroNomeCR} onChange={(e) => setFiltroNomeCR(e.target.value)} className="w-full md:max-w-xs" /><Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}><SelectTrigger className="w-full md:w-[250px]"><Building2 className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder="Filtrar por Empresa do Sistema" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os Clientes CR</SelectItem>{empresasFiltro.map(e => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}</SelectContent></Select></CardContent></Card><Card className="mt-4"><CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({todosClientesCR.length})</CardTitle></CardHeader><CardContent>{renderClientesCRTable()}</CardContent></Card></TabsContent><TabsContent value="empresas_sistema"><Card className="mt-4"><CardHeader className="pb-2"><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtro</CardTitle></CardHeader><CardContent className="flex flex-col md:flex-row gap-4"><Input placeholder="Buscar por nome ou email da empresa..." value={filtroNomeSistema} onChange={(e) => setFiltroNomeSistema(e.target.value)} className="w-full md:max-w-xs" /></CardContent></Card><Card className="mt-4"><CardHeader><CardTitle className="text-xl">Empresas do Sistema Cadastradas ({todasEmpresasSistema.length})</CardTitle></CardHeader><CardContent>{renderEmpresasSistemaTable(todasEmpresasSistema)}</CardContent></Card></TabsContent></Tabs>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="clientes_cr" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Diretos/Contratos</TabsTrigger><TabsTrigger value="empresas_sistema" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Clientes Sistema</TabsTrigger></TabsList><TabsContent value="clientes_cr"><Card className="mt-4"><CardHeader className="pb-2"><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle></CardHeader><CardContent className="flex flex-col md:flex-row gap-4"><Input placeholder="Buscar por nome, documento ou razão social..." value={filtroNomeCR} onChange={(e) => setFiltroNomeCR(e.target.value)} className="w-full md:max-w-xs" /><Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}><SelectTrigger className="w-full md:w-[250px]"><Building2 className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder="Filtrar por Empresa do Sistema" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os Clientes CR</SelectItem>{empresasFiltro.map(e => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}</SelectContent></Select></CardContent></Card><Card className="mt-4"><CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({todosClientesCR.length})</CardTitle></CardHeader><CardContent>{renderClientesCRTable()}</CardContent></Card></TabsContent><TabsContent value="empresas_sistema"><Card className="mt-4"><CardHeader className="pb-2"><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtro</CardTitle></CardHeader><CardContent className="flex flex-col md:flex-row gap-4"><Input placeholder="Buscar por nome, email ou razão social..." value={filtroNomeSistema} onChange={(e) => setFiltroNomeSistema(e.target.value)} className="w-full md:max-w-xs" /></CardContent></Card><Card className="mt-4"><CardHeader><CardTitle className="text-xl">Empresas do Sistema Cadastradas ({todasEmpresasSistema.length})</CardTitle></CardHeader><CardContent>{renderEmpresasSistemaTable(todasEmpresasSistema)}</CardContent></Card></TabsContent></Tabs>
       ) : (
         <Card><CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({todosClientesCR.length})</CardTitle></CardHeader><CardContent>{renderClientesCRTable()}</CardContent></Card>
       )}
