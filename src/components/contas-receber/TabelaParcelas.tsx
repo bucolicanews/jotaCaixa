@@ -9,6 +9,7 @@ import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
 import ReciboRecebimentoDialog from './ReciboRecebimentoDialog';
 import EditarParcelaPagaDialog from './EditarParcelaPagaDialog';
 import { ExtendedParcelaDetalhada } from '@/types/contas-receber';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
