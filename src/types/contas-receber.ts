@@ -60,6 +60,11 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
         origem: ContaReceber['origem'];
         clientes: { nome: string; razao_social?: string | null; telefone?: string; email?: string; } | null;
         id_conta_patrimonial?: string | null;
+        id_conta_resultado?: string | null;
+        historico_id?: string | null;
+        plano_contas_patrimonial?: { Conta: string, Descricao: string } | null;
+        plano_contas_resultado?: { Conta: string, Descricao: string } | null;
+        historicos?: { codigo: string | null, descricao: string } | null;
     } | null;
 }
 

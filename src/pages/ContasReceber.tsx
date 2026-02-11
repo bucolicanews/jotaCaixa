@@ -144,7 +144,10 @@ const ContasReceber = () => {
             id,
             descricao,
             cliente_id,
-            origem
+            origem,
+            id_conta_patrimonial,
+            id_conta_resultado,
+            historico_id
           ),
           recebimentos: ${tabelaRecebimentos} (
             forma_pagamento,
@@ -194,9 +197,47 @@ const ContasReceber = () => {
         return;
     }
     
+    const parcelasBrutas = (parcelasRes.data || []) as any[];
+    const contasPatrimoniaisIds = [...new Set(parcelasBrutas.map(p => p.contas_receber?.id_conta_patrimonial).filter(Boolean))];
+    const contasResultadoIds = [...new Set(parcelasBrutas.map(p => p.contas_receber?.id_conta_resultado).filter(Boolean))];
+    const historicosIds = [...new Set(parcelasBrutas.map(p => p.contas_receber?.historico_id).filter(Boolean))];
+    const allPlanoContasIds = [...new Set([...contasPatrimoniaisIds, ...contasResultadoIds])];
+
+    const [planoContasRes, historicosRes] = await Promise.all([
+        allPlanoContasIds.length > 0 ? supabase.from('plano_contas').select('id, Conta, Descricao').in('id', allPlanoContasIds) : Promise.resolve({ data: [], error: null }),
+        historicosIds.length > 0 ? supabase.from('historicos').select('id, codigo, descricao').in('id', historicosIds) : Promise.resolve({ data: [], error: null })
+    ]);
+
+    if (planoContasRes.error) throw planoContasRes.error;
+    if (historicosRes.error) throw historicosRes.error;
+
+    const planoContasMap = (planoContasRes.data || []).reduce((acc, pc) => {
+        acc[pc.id] = pc;
+        return acc;
+    }, {} as Record<string, { Conta: string, Descricao: string }>);
+
+    const historicosMap = (historicosRes.data || []).reduce((acc, h) => {
+        acc[h.id] = h;
+        return acc;
+    }, {} as Record<string, { codigo: string | null, descricao: string }>);
+
+    const parcelasComDetalhes = parcelasBrutas.map(p => {
+        const contaReceber = p.contas_receber;
+        if (!contaReceber) return p;
+
+        return {
+            ...p,
+            contas_receber: {
+                ...contaReceber,
+                plano_contas_patrimonial: contaReceber.id_conta_patrimonial ? planoContasMap[contaReceber.id_conta_patrimonial] : null,
+                plano_contas_resultado: contaReceber.id_conta_resultado ? planoContasMap[contaReceber.id_conta_resultado] : null,
+                historicos: contaReceber.historico_id ? historicosMap[contaReceber.historico_id] : null,
+            }
+        };
+    });
+
     let fetchedContas = contasRes.data as ContaReceberComProgresso[];
-    let fetchedParcelas = (parcelasRes.data as any[]).map(p => {
-        // Pega o recebimento mais recente para exibir na tabela
+    let fetchedParcelas = (parcelasComDetalhes as any[]).map(p => {
         const ultimoRecebimento = p.recebimentos && p.recebimentos.length > 0 
             ? p.recebimentos[p.recebimentos.length - 1] 
             : null;
@@ -594,8 +635,8 @@ const ContasReceber = () => {
             
             if (isSynthetic) {
                 const conta = item as ContaReceberComProgresso;
-                const total = conta.parcelas_total ?? 0;
-                const pagas = conta.parcelas_pagas ?? 0;
+                const total = (conta.parcelas_total ?? 0);
+                const pagas = (conta.parcelas_pagas ?? 0);
                 isPaid = total > 0 && pagas === total;
             } else {
                 const parcela = item as ExtendedParcelaDetalhada;

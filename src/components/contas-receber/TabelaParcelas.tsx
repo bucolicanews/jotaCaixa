@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -89,6 +88,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[120px]">Ações</TableHead>
+                                <TableHead>ID Parcela</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
                                 <TableHead>Vencimento</TableHead>
@@ -99,12 +99,15 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 <TableHead>Conta/Caixa</TableHead>
                                 <TableHead>Vlr. Recebido</TableHead>
                                 <TableHead>Juros</TableHead>
+                                <TableHead>Conta Patrimonial</TableHead>
+                                <TableHead>Conta Resultado</TableHead>
+                                <TableHead>Histórico</TableHead>
                                 <TableHead>PagBank</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={12} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={16} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -113,8 +116,10 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                     const clienteNome = cliente?.nome || 'N/A';
                                     const razaoSocial = cliente?.razao_social;
                                     const descricao = p.contas_receber?.descricao || 'N/A';
+                                    const contaPatrimonial = p.contas_receber?.plano_contas_patrimonial;
+                                    const contaResultado = p.contas_receber?.plano_contas_resultado;
+                                    const historico = p.contas_receber?.historicos;
                                     
-                                    // Lógica de Juros: Se o valor pago for maior que o valor da parcela, a diferença é juros
                                     const jurosCalculados = p.valor_juros || (p.valor_pago > p.valor_parcela ? p.valor_pago - p.valor_parcela : 0);
 
                                     return (
@@ -194,6 +199,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     )}
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="font-mono text-xs">{p.id.substring(0, 8)}</TableCell>
                                             <TableCell className="font-medium">
                                                 {razaoSocial && <div className="font-bold text-foreground">{razaoSocial}</div>}
                                                 <div className={cn(razaoSocial && "text-xs text-muted-foreground")}>{clienteNome}</div>
@@ -210,6 +216,16 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             <TableCell className="text-sm">{p.conta_nome || '-'}</TableCell>
                                             <TableCell className="font-semibold text-green-600">{p.valor_pago ? formatCurrency(p.valor_pago) : '-'}</TableCell>
                                             <TableCell className="text-sm text-red-600">{jurosCalculados > 0 ? formatCurrency(jurosCalculados) : '-'}</TableCell>
+                                            
+                                            <TableCell className="text-xs text-muted-foreground" title={contaPatrimonial?.Descricao}>
+                                                {contaPatrimonial ? `${contaPatrimonial.Conta}` : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground" title={contaResultado?.Descricao}>
+                                                {contaResultado ? `${contaResultado.Conta}` : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground" title={historico?.descricao}>
+                                                {historico ? `${historico.codigo || ''}` : '-'}
+                                            </TableCell>
                                             
                                             <TableCell>
                                                 {p.pagbank_status === 'PAID' ? (
