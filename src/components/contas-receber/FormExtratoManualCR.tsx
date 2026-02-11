@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { ptBR } from 'date-fns/locale';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import { saveRecebimentoAndLancamentos } from './RegistrarPagamentoDialog';
+import { saveRecebimentoAndLancamentos } from './EditarParcelaPagaDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
