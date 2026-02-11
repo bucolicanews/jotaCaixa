@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ChevronLeft, Save, CalendarIcon, Eye, AlertTriangle } from 'lucide-react';
+import { Loader2, ChevronLeft, Save, Eye, Building2, Info, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
@@ -156,13 +156,13 @@ const PreencherContrato: React.FC = () => {
         .select('*')
         .eq('admin_id', targetId)
         .eq('aprovado', true)
-        .order('nome');
+        .order('razao_social', { ascending: true, nullsLast: true }).order('nome', { ascending: true });
     } else {
       clientesDataSource = supabase
         .from('clientes')
         .select('*')
         .eq('proprietario_id', targetId)
-        .order('nome');
+        .order('razao_social', { ascending: true, nullsLast: true }).order('nome', { ascending: true });
     }
     
     const { data: clientesData } = await clientesDataSource;
@@ -242,7 +242,7 @@ const PreencherContrato: React.FC = () => {
                 .single();
                 
             if (oldContaSintetica) {
-                const { data: existingParcelas } = await supabase
+                const { data: existingParcelas, error: parcelasError } = await supabase
                     .from(tabelaParcelasReceber)
                     .select('id, numero_parcela, valor_parcela, data_vencimento, status')
                     .eq('conta_receber_id', oldContaSintetica.id)
@@ -273,7 +273,6 @@ const PreencherContrato: React.FC = () => {
       }
   }, [proprietarioContratoId, fetchDependentData, carregandoDados]);
 
-  // --- LÓGICA DE PREENCHIMENTO AUTOMÁTICO DAS TAGS ---
   useEffect(() => {
       const newTags: Record<string, string> = { ...valoresTags };
       
@@ -397,6 +396,14 @@ const PreencherContrato: React.FC = () => {
     return html;
   }, [modelo, valoresTags]);
 
+  const handlePreview = () => {
+      const template = conteudoPrincipalManual || modelo?.conteudo_template || '';
+      const finalHtml = renderConteudo(template, valoresTags);
+      setConteudoPreview(finalHtml);
+      setPreviewTitle(tituloDocumento || modelo?.titulo || '');
+      setPreviewOpen(true);
+  };
+
   const handleSalvarContrato = async (status: string) => {
     if (!temCapitalSocial && status !== 'rascunho') {
         showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber.');
@@ -448,7 +455,7 @@ const PreencherContrato: React.FC = () => {
                 
                 const { data: existingParcelas, error: parcelasError } = await supabase
                     .from(tabelaParcelasReceber)
-                    .select('id, valor_parcela, status')
+                    .select('id, numero_parcela, valor_parcela, data_vencimento, status')
                     .eq('conta_receber_id', contaReceberId);
                     
                 if (parcelasError) throw parcelasError;
@@ -722,7 +729,7 @@ const PreencherContrato: React.FC = () => {
                   <SelectContent>
                     {clientesCR.map(c => (
                         <SelectItem key={c.id} value={c.id}>
-                            {c.nome} {c.documento ? `(${c.documento})` : ''}
+                            {c.razao_social || c.nome} {c.documento ? `(${c.documento})` : ''}
                         </SelectItem>
                     ))}
                   </SelectContent>
