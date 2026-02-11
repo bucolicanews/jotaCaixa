@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2, CalendarIcon, Upload, FileText, XCircle, CheckCircle2, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
+import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import useSaldoContaCalculado, { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
 import { Historico } from '@/types/historico';
@@ -21,7 +22,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
-import { Label } from '@/components/ui/label'; // Importação adicionada
+import { Label } from '@/components/ui/label';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ParcelaParaPagamento {
