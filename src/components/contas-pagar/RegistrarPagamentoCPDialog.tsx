@@ -61,8 +61,7 @@ interface RegistrarPagamentoCPDialogProps {
 }
 
 const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
-  const { ownerType } = useOwner();
-  const { session } = useSessao();
+  const { ownerId, ownerType } = useOwner();
   const { configMap } = useContabilConfig();
   
   const isAdminOrEmployee = ownerType === 'Admin' || ownerType === 'AdminUsuario';
@@ -80,18 +79,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
   const tabelaContasPagar = isAdminOrEmployee ? 'admin_contas_pagar' : 'contas_pagar';
   
-  const getProprietarioId = useCallback(() => {
-    const userMetadata = session?.user?.user_metadata;
-    if (userMetadata?.tipo_usuario === 'Admin') {
-      return session.user.id;
-    }
-    if (userMetadata?.tipo_usuario === 'AdminUsuario') {
-      return userMetadata.admin_id;
-    }
-    return parcela?.empresa_id;
-  }, [session, parcela]);
-
-  const proprietarioId = getProprietarioId();
+  const proprietarioId = ownerId;
 
   const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos', false);
 
