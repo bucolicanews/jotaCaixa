@@ -26,6 +26,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import FormExtratoManualCP from './FormExtratoManualCP';
 import { useSessao } from '@/hooks/use-sessao';
+import { formatCurrency } from '@/utils/formatters';
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
