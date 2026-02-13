@@ -504,8 +504,23 @@ const ContasReceber = () => {
   const handleSyncStatus = useCallback(async (parcelaId: string) => {
     const toastId = toast.loading('Sincronizando status com PagBank...');
     try {
+      // Buscar a configuração do PagBank para obter os históricos padrão
+      const { data: pagbankConfig, error: configError } = await supabase
+        .from('configuracoes_pagbank')
+        .select('historico_recebimento_id, historico_taxa_id')
+        .eq('proprietario_id', proprietarioId)
+        .single();
+
+      if (configError) {
+        throw new Error('Falha ao buscar configuração do PagBank: ' + configError.message);
+      }
+
       const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
-        body: { parcelaId }
+        body: {
+          parcelaId,
+          historico_recebimento_id: pagbankConfig?.historico_recebimento_id,
+          historico_taxa_id: pagbankConfig?.historico_taxa_id,
+        }
       });
 
       if (error) {
@@ -537,7 +552,7 @@ const ContasReceber = () => {
       
       showError('Falha na sincronização: ' + msg);
     }
-  }, [buscarDados]);
+  }, [buscarDados, proprietarioId]);
 
   const handleGerarBoleto = useCallback(async (parcela: ExtendedParcelaDetalhada) => {
     setGerandoBoleto(true);
