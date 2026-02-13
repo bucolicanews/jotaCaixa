@@ -119,7 +119,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                     const descricao = p.contas_receber?.descricao || 'N/A';
                                     const contaPatrimonial = p.contas_receber?.plano_contas_patrimonial;
                                     const contaResultado = p.contas_receber?.plano_contas_resultado;
-                                    const historico = p.contas_receber?.historicos;
+                                    const historicoRecebimento = p.recebimentos && p.recebimentos.length > 0 ? p.recebimentos[0].historicos : null;
                                     
                                     const jurosCalculados = p.valor_juros || (p.valor_pago > p.valor_parcela ? p.valor_pago - p.valor_parcela : 0);
 
@@ -224,8 +224,8 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             <TableCell className="text-xs text-muted-foreground" title={contaResultado?.Descricao}>
                                                 {contaResultado ? `${contaResultado.Conta}` : '-'}
                                             </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground" title={historico?.descricao}>
-                                                {historico ? `${historico.codigo || ''}` : '-'}
+                                            <TableCell className="text-xs text-muted-foreground" title={historicoRecebimento?.descricao}>
+                                                {historicoRecebimento ? `[${historicoRecebimento.codigo || ''}]` : '-'}
                                             </TableCell>
                                             
                                             <TableCell>

@@ -152,7 +152,8 @@ const ContasReceber = () => {
           recebimentos: ${tabelaRecebimentos} (
             forma_pagamento,
             valor_recebido,
-            saldo_contas ( nome )
+            saldo_contas ( nome ),
+            historicos ( codigo, descricao )
           ),
           pagbank_charge_id,
           pagbank_payment_link,
