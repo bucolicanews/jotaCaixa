@@ -92,7 +92,7 @@ export function useContratos(): ContratosHook {
           assinatura_proprietario_nome,
           assinatura_proprietario_url,
           clientes(nome, razao_social),
-          modelo_id:modelos_contratos(titulo),
+          modelos_contratos!modelo_id(titulo),
           contas_receber(id)
         `,
     )
