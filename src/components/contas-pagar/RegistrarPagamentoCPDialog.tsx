@@ -5,7 +5,6 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Loader2, PlusCircle, Trash2 } from 'lucide-react';
@@ -25,8 +24,6 @@ import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import FormExtratoManualCP from './FormExtratoManualCP';
-import { useSessao } from '@/hooks/use-sessao';
-import { formatCurrency } from '@/utils/formatters';
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -178,7 +175,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   }, [proprietarioId, configMap.Passivo]);
   
   const fetchHistoricoPadrao = useCallback(async () => {
-    if (!proprietarioId) return null;
+    if (!isAdminOrEmployee || !proprietarioId) return null;
     
     const { data, error } = await supabase
         .from('configuracao_historico_padrao')
@@ -193,7 +190,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
     
     return data?.historico_id || null;
-  }, [proprietarioId]);
+  }, [isAdminOrEmployee, proprietarioId]);
 
   useEffect(() => {
       if (open && proprietarioId) {
