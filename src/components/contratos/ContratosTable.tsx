@@ -21,7 +21,8 @@ import { BadgeAditivos } from './BadgeAditivos'
 import { AditivosContratoDialog } from './AditivosContratoDialog'
 
 type ContratoComCliente = ContratoGerado & {
-  clientes: { nome: string } | null
+  clientes: { nome: string, razao_social: string | null } | null
+  modelos_contratos: { titulo: string } | null
   conta_receber_id: string
 }
 
@@ -79,7 +80,8 @@ export default function ContratosTable({
                 )}
 
                 <TableCell className="font-medium">
-                  {c.clientes?.nome ?? 'N/A'}
+                  <div className="font-bold">{c.clientes?.razao_social || c.clientes?.nome || 'N/A'}</div>
+                  <div className="text-xs text-muted-foreground">{c.modelos_contratos?.titulo || 'Tipo não informado'}</div>
                 </TableCell>
 
                 <TableCell>

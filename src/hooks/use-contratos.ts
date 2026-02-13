@@ -7,7 +7,8 @@ import { useDebounce } from './use-debounce';
 import { resolveOwnerContext } from '@/utils/owner';
 
 type ContratoComCliente = ContratoGerado & {
-  clientes: { nome: string } | null
+  clientes: { nome: string, razao_social: string | null } | null
+  modelos_contratos: { titulo: string } | null
   conta_receber_id?: string | null
 }
 export type ContratoStatus = ContratoGerado['status'] | 'todos' // EXPORTADO
@@ -90,7 +91,8 @@ export function useContratos(): ContratosHook {
           assinatura_selfie_url,
           assinatura_proprietario_nome,
           assinatura_proprietario_url,
-          clientes(nome),
+          clientes(nome, razao_social),
+          modelos_contratos(titulo),
           contas_receber(id)
         `,
     )
