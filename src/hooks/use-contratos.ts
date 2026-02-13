@@ -11,8 +11,8 @@ type ContratoComCliente = ContratoGerado & {
   modelos_contratos: { titulo: string } | null
   conta_receber_id?: string | null
 }
-export type ContratoStatus = ContratoGerado['status'] | 'todos' // EXPORTADO
-export type Ordenacao = 'criado_em_desc' | 'vencimento_asc' | 'cliente_asc' // EXPORTADO
+export type ContratoStatus = ContratoGerado['status'] | 'todos'
+export type Ordenacao = 'criado_em_desc' | 'vencimento_asc' | 'cliente_asc'
 
 interface ContratosHook {
   contratos: ContratoComCliente[]
@@ -92,17 +92,14 @@ export function useContratos(): ContratosHook {
           assinatura_proprietario_nome,
           assinatura_proprietario_url,
           clientes(nome, razao_social),
-          modelos_contratos!modelo_id(titulo),
           contas_receber(id)
         `,
     )
 
-    // Se for Cliente/Usuário, filtra apenas pelos seus contratos
     if (!isAdmin && empresaId) {
       query = query.eq('proprietario_id', empresaId)
     }
 
-    // Aplica ordenação
     let ascending = true
     let orderByColumn = 'criado_em'
 
@@ -124,36 +121,54 @@ export function useContratos(): ContratosHook {
       showError('Erro ao carregar contratos: ' + error.message)
       setContratos([])
     } else {
-      const processedData = data.map((contrato: any) => {
-        const cr = contrato.contas_receber
-        const conta_receber_id = (Array.isArray(cr) ? cr[0]?.id : cr?.id) ?? null
-        return {
-          ...contrato,
-          conta_receber_id,
-        }
+      const contratosData = data as any[];
+      const modeloIds = [...new Set(contratosData.map(c => c.modelo_id).filter(Boolean))];
+
+      let modelosMap: Record<string, { titulo: string }> = {};
+      if (modeloIds.length > 0) {
+          const { data: modelosData, error: modelosError } = await supabase
+              .from('contrato_modelos')
+              .select('id, titulo')
+              .in('id', modeloIds);
+          
+          if (modelosError) {
+              console.error("Erro ao buscar modelos de contrato:", modelosError);
+          } else {
+              modelosMap = (modelosData || []).reduce((acc, modelo) => {
+                  acc[modelo.id] = { titulo: modelo.titulo };
+                  return acc;
+              }, {});
+          }
+      }
+
+      const processedData = contratosData.map((contrato: any) => {
+          const cr = contrato.contas_receber
+          const conta_receber_id = (Array.isArray(cr) ? cr[0]?.id : cr?.id) ?? null
+          return {
+            ...contrato,
+            modelos_contratos: contrato.modelo_id ? modelosMap[contrato.modelo_id] : null,
+            conta_receber_id,
+          }
       })
 
-      // NOVO: Busca por parcelas pagas em lote
       const contratoIds = processedData.map((c) => c.id)
       let contratosComParcelasPagas: string[] = []
 
       if (contratoIds.length > 0) {
         const { data: parcelasData, error: parcelasError } = await supabase
           .from('parcelas_contas_receber')
-          .select('contas_receber(contrato_id)')
-          .in('contas_receber.contrato_id', contratoIds)
+          .select('contas_receber!inner(contrato_gerado_id)')
+          .in('contas_receber.contrato_gerado_id', contratoIds)
           .eq('status', 'paga')
-          .not('contas_receber.contrato_id', 'is', null)
+          .not('contas_receber.contrato_gerado_id', 'is', null)
 
         if (parcelasError) {
           console.error('Erro ao buscar parcelas pagas:', parcelasError)
-          // Continua mesmo com erro, assumindo que não há parcelas pagas
         } else {
-          // Extrai IDs únicos dos contratos que possuem parcelas pagas
           contratosComParcelasPagas = [
             ...new Set(
               parcelasData
-                .map((p: any) => p.contas_receber?.contrato_id)
+                .map((p: any) => p.contas_receber?.contrato_gerado_id)
                 .filter((id: string | undefined) => id),
             ),
           ] as string[]
@@ -165,27 +180,28 @@ export function useContratos(): ContratosHook {
         tem_parcelas_pagas: contratosComParcelasPagas.includes(c.id),
       })) as ContratoComCliente[]
 
-      // Filtragem de status (se não for 'todos')
       if (filtroStatus !== 'todos') {
         fetchedContratos = fetchedContratos.filter(
           (c) => c.status === filtroStatus,
         )
       }
 
-      // Filtragem de texto
       const termoBusca = filtroTextoDebounced.toLowerCase()
       if (termoBusca) {
         fetchedContratos = fetchedContratos.filter((c) => {
           const clienteNome = c.clientes?.nome || ''
+          const razaoSocial = c.clientes?.razao_social || ''
+          const tipoContrato = c.modelos_contratos?.titulo || ''
           return (
             c.conteudo_renderizado?.toLowerCase().includes(termoBusca) ||
             clienteNome.toLowerCase().includes(termoBusca) ||
+            razaoSocial.toLowerCase().includes(termoBusca) ||
+            tipoContrato.toLowerCase().includes(termoBusca) ||
             c.id.toLowerCase().includes(termoBusca)
           )
         })
       }
 
-      // Ordenação por cliente (se selecionado)
       if (ordenacao === 'cliente_asc') {
         fetchedContratos.sort((a, b) =>
           (a.clientes?.nome || '').localeCompare(b.clientes?.nome || ''),
@@ -210,7 +226,38 @@ export function useContratos(): ContratosHook {
     }
   }, [carregandoSessao, isAdmin, empresaId, buscarContratos])
 
-  // --- Mutação de Contratos ---
+  const handleDeleteContract = useCallback(
+    async (contrato: ContratoGerado) => {
+      if (
+        !window.confirm(
+          `Tem certeza que deseja DELETAR o contrato ${contrato.id}? Esta ação é irreversível e só é permitida se não houver parcelas pagas.`,
+        )
+      )
+        return
+
+      setCarregando(true)
+
+      try {
+        const { error: rpcError } = await supabase.rpc(
+          'delete_contract_if_no_payments',
+          {
+            p_contrato_id: contrato.id,
+          },
+        )
+
+        if (rpcError) throw rpcError
+
+        showSuccess('Contrato deletado com sucesso.')
+        refetch()
+      } catch (error: any) {
+        console.error('Erro ao deletar contrato:', error)
+        showError('Falha ao deletar contrato: ' + error.message)
+      } finally {
+        setCarregando(false)
+      }
+    },
+    [refetch],
+  )
 
   const handleBlockContract = useCallback(
     async (contrato: ContratoGerado) => {
@@ -279,7 +326,6 @@ export function useContratos(): ContratosHook {
     [refetch],
   )
 
-  // --- Agrupamento para as Tabs ---
   const contratosAgrupados = useMemo(() => {
     const meusContratos = contratos.filter(
       (c) => c.proprietario_id === empresaId,
@@ -318,6 +364,7 @@ export function useContratos(): ContratosHook {
         setOrdenacao,
 
         // Mutations
+        handleDeleteContract,
         handleBlockContract,
         handleReactivateContract,
     };
