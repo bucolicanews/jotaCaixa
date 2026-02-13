@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useOwner } from '@/hooks/use-owner';
 
 const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -174,8 +175,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     onClose,
     parentValues,
 }) => {
-    const { role, usuario, perfil } = useSessao();
-    const isAdmin = role === 'Admin';
+    const { ownerId, ownerType } = useOwner();
     
     const [loading, setLoading] = useState(false);
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
@@ -190,16 +190,16 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     const [dialogNovoIdentificador, setDialogNovoIdentificador] = useState(false);
     
     const adminId = parcela.admin_id;
-    const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
+    const proprietarioDaSessao = ownerId;
     const totalPago = pagamentoDetalhes.reduce((sum, p) => sum + p.valor_pago, 0);
     
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     const contaDescontoObtido = mapeamentoContabil['desconto_obtido'];
     
-    const tabelaDescricao = isAdmin ? 'admin_descricao_extrato' : 'descricao_extrato';
-    const tabelaIdentificacao = isAdmin ? 'admin_identificacao_extrato' : 'identificacao_extrato';
-    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+    const isSupervisao = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+    const tabelaDescricao = isSupervisao ? 'admin_descricao_extrato' : 'descricao_extrato';
+    const tabelaIdentificacao = isSupervisao ? 'admin_identificacao_extrato' : 'identificacao_extrato';
     
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -208,6 +208,10 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             identificacao: '',
             observacao: '',
             comprovante_url: '',
+            acao_saldo_restante: 'reprogramar',
+            nova_data_vencimento: addDays(new Date(), 30),
+            numero_novas_parcelas: 2,
+            intervalo_dias_novas_parcelas: 30,
         },
     });
     
@@ -217,12 +221,11 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         const { data, error } = await supabase
             .from(tabelaDescricao)
             .select('*')
-            .eq(campoId, proprietarioDaSessao)
             .eq('status', true)
             .order('ordem', { ascending: true });
         if (!error) setDescricoes(data || []);
         setLoadingDescricoes(false);
-    }, [proprietarioDaSessao, tabelaDescricao, campoId]);
+    }, [proprietarioDaSessao, tabelaDescricao]);
     
     const carregarIdentificadores = useCallback(async () => {
         if (!proprietarioDaSessao) return;
@@ -230,12 +233,11 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         const { data, error } = await supabase
             .from(tabelaIdentificacao)
             .select('*')
-            .eq(campoId, proprietarioDaSessao)
             .eq('status', true)
             .order('ordem', { ascending: true });
         if (!error) setIdentificadores(data || []);
         setLoadingIdentificadores(false);
-    }, [proprietarioDaSessao, tabelaIdentificacao, campoId]);
+    }, [proprietarioDaSessao, tabelaIdentificacao]);
     
     useEffect(() => {
         carregarDescricoes();
@@ -290,9 +292,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         
         setLoading(true);
 
-        const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
-        const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-        const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+        const tabelaPagamentos = isSupervisao ? 'admin_pagamentos' : 'pagamentos';
+        const tabelaParcelas = isSupervisao ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+        const tabelaContasPagar = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
         
         const valorPagoAnterior = parcela.valor_pago || 0;
         const novoValorPagoTotal = valorPagoAnterior + totalPago;
@@ -323,17 +325,16 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             const dataNoonUTC = new Date(Date.UTC(dataPagamentoLocal.getFullYear(), dataPagamentoLocal.getMonth(), dataPagamentoLocal.getDate(), 12, 0, 0));
             const dataPagamentoISO = dataNoonUTC.toISOString();
             
-            const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
-            const proprietarioId = isAdmin ? adminId : proprietarioDaSessao;
+            const ownerKey = isSupervisao ? 'admin_id' : 'empresa_id';
             
             const extratosPayload = pagamentoDetalhes
                 .map(p => {
                     const contaOrigem = contasOrigem.find(c => c.id === p.conta_id);
                     if (!contaOrigem?.plano_contas?.is_banco) return null; 
                     const valorExtrato = -Math.abs(p.valor_pago); 
-                    const contaContabilPagamento = isAdmin ? mapeamentoContabil['pagamento'] : null;
+                    const contaContabilPagamento = isSupervisao ? mapeamentoContabil['pagamento'] : null;
                     return {
-                        empresa_id: proprietarioId,
+                        empresa_id: proprietarioDaSessao,
                         id_saldo_contas: p.conta_id,
                         data: format(dataPagamentoLocal, 'yyyy-MM-dd'),
                         descricao: values.descricao_extrato,
@@ -357,7 +358,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             for (const pagamento of pagamentoDetalhes) {
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
-                    [ownerKey]: proprietarioId, 
+                    [ownerKey]: proprietarioDaSessao, 
                     valor_pago: pagamento.valor_pago, 
                     conta_id: pagamento.conta_id,
                     id_conta_contabil: contaPagamento,
@@ -383,7 +384,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 
                 const lancamentoAtivoPayload = {
                     id: idAtivo,
-                    proprietario_id: proprietarioId,
+                    proprietario_id: proprietarioDaSessao,
                     data_movimentacao: dataPagamentoISO,
                     descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
                     valor: pagamento.valor_pago,
@@ -399,7 +400,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 if (contaPatrimonial) {
                     const lancamentoPatrimonialPayload = {
                         id: idPatrimonial,
-                        proprietario_id: proprietarioId,
+                        proprietario_id: proprietarioDaSessao,
                         data_movimentacao: dataPagamentoISO,
                         descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                         valor: pagamento.valor_pago,
@@ -428,7 +429,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
 
                         const lancamentoDescontoPassivoPayload = {
                             id: idDescontoPassivo,
-                            proprietario_id: proprietarioId,
+                            proprietario_id: proprietarioDaSessao,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
@@ -443,7 +444,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
 
                         const lancamentoDescontoReceitaPayload = {
                             id: idDescontoReceita,
-                            proprietario_id: proprietarioId,
+                            proprietario_id: proprietarioDaSessao,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
@@ -461,7 +462,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     finalStatus = 'paga';
                     observacaoFinal = `Pago R$ ${novoValorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${acaoSaldoRestante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`;
                     
-                    const baseParcelaPayload = { [ownerKey]: proprietarioId, id_conta_contabil: contaParcelaPagar };
+                    const baseParcelaPayload = { [ownerKey]: proprietarioDaSessao, id_conta_contabil: contaParcelaPagar };
                     
                     if (acaoSaldoRestante === 'reprogramar') {
                         await supabase.from(tabelaParcelas).insert({
@@ -495,7 +496,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             await supabase.from(tabelaParcelas).update({
                 status: finalStatus,
                 valor_pago: (parcela.valor_pago || 0) + totalPago,
-                data_pagamento: format(dataPagamentoLocal, 'yyyy-MM-dd'),
+                data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
                 id_conta_contabil: contaParcelaPagar,
                 observacao: observacaoFinal,
             }).eq('id', parcela.id);
@@ -570,7 +571,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             })}
                         </div>
                         <div className="space-y-2 p-3 bg-secondary rounded-md">
-                            <p className="text-sm font-medium">Data / Valor Total</p>
+                            <p className="text-sm font-medium">Data / Valor Pago</p>
                             <p className="text-xs font-mono">{format(dataPagamento, 'dd/MM/yyyy')}</p>
                             <p className="text-lg font-bold text-red-600">{formatCurrency(totalPago)}</p>
                         </div>
@@ -658,7 +659,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         <FormNovoItem
                             tipo="descricao"
                             proprietarioId={proprietarioDaSessao}
-                            isAdmin={isAdmin}
+                            isAdmin={isSupervisao}
                             proximaOrdem={proximaOrdemDescricao}
                             onSaveComplete={handleNovaDescricaoSalva}
                             onClose={() => setDialogNovaDescricao(false)}
@@ -674,7 +675,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         <FormNovoItem
                             tipo="identificacao"
                             proprietarioId={proprietarioDaSessao}
-                            isAdmin={isAdmin}
+                            isAdmin={isSupervisao}
                             proximaOrdem={proximaOrdemIdentificador}
                             onSaveComplete={handleNovoIdentificadorSalvo}
                             onClose={() => setDialogNovoIdentificador(false)}
