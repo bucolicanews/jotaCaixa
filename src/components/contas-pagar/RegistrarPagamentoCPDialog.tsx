@@ -25,6 +25,7 @@ import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import FormExtratoManualCP from './FormExtratoManualCP';
+import { formatCurrency } from '@/utils/formatters';
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
