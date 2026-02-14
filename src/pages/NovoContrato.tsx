@@ -62,13 +62,14 @@ const NovoContrato: React.FC = () => {
         .select('*')
         .order('titulo', { ascending: true });
         
-      // Filtra por empresa_id (ID do Admin/Dono) ou modelos globais (nulos)
-      if (ownerId) {
+      // Se não for Admin, filtra por empresa_id (ID do Dono) ou modelos globais (nulos)
+      if (!isAdmin && ownerId) {
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
-      } else {
-        // Se não houver ID de dono detectado, mostra apenas globais
+      } else if (!isAdmin) {
+        // Se não for Admin e não tiver ownerId, mostra apenas globais
         query = query.is('empresa_id', null);
       }
+      // Se for Admin, não aplica filtro, busca todos.
 
       const { data, error } = await query;
 
@@ -81,7 +82,7 @@ const NovoContrato: React.FC = () => {
     } finally {
       setCarregandoModelos(false);
     }
-  }, [carregandoSessao, role, ownerId]);
+  }, [carregandoSessao, role, ownerId, isAdmin]);
 
   /**
    * 3. Efeito principal de busca.
