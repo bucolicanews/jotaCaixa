@@ -275,36 +275,40 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                           </FormItem>
                       )}
                   />
-                  <FormField
-                      control={form.control}
-                      name="tipo_documento"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
-                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} disabled={context === 'financeiro'} /></FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-                  <FormField
-                      control={form.control}
-                      name="tipo_conteudo"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Formato do Conteúdo</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={context === 'financeiro'}>
-                                  <FormControl>
-                                      <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      <SelectItem value="html">HTML (Editor Visual)</SelectItem>
-                                      <SelectItem value="texto">Texto Simples</SelectItem>
-                                  </SelectContent>
-                              </Select>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
+                  {context === 'societario' && (
+                    <>
+                      <FormField
+                          control={form.control}
+                          name="tipo_documento"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                                  <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="tipo_conteudo"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Formato do Conteúdo</FormLabel>
+                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                          <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                          <SelectItem value="texto">Texto Simples</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                    </>
+                  )}
               </CardContent>
           </Card>
             
