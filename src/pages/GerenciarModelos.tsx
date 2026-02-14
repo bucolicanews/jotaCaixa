@@ -8,7 +8,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormContratoModelo from '@/components/formularios/FormContratoModelo';
+import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocumentoSocietarioModelo';
 import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOwner } from '@/hooks/use-owner';
@@ -189,10 +189,11 @@ const GerenciarModelos: React.FC = () => {
             <DialogHeader>
               <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
             </DialogHeader>
-            <FormContratoModelo
+            <FormDocumentoSocietarioModelo
               modeloInicial={modeloSelecionado}
               onSaveComplete={handleSaveComplete}
               ownerId={ownerId}
+              context="financeiro"
             />
           </DialogContent>
         </Dialog>
