@@ -28,7 +28,7 @@ const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
   tipo_documento: z.string().optional(),
-  tipo_conteudo: z.enum(['html', 'texto']),
+  tipo_conteudo: z.enum(['html', 'texto']).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -113,13 +113,16 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         return;
     }
     
-    const dataToSave = {
+    const dataToSave: any = {
       [ownerField]: targetOwnerId,
       titulo: values.titulo,
       conteudo_template: sanitizeConteudo(values.conteudo_template),
-      tipo_conteudo: values.tipo_conteudo, 
-      tipo_documento: values.tipo_documento || null,
     };
+
+    if (context === 'societario') {
+        dataToSave.tipo_conteudo = values.tipo_conteudo || 'html';
+        dataToSave.tipo_documento = values.tipo_documento || null;
+    }
 
     let error = null;
 
@@ -272,36 +275,40 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                           </FormItem>
                       )}
                   />
-                  <FormField
-                      control={form.control}
-                      name="tipo_documento"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
-                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-                  <FormField
-                      control={form.control}
-                      name="tipo_conteudo"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Formato do Conteúdo</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                  <FormControl>
-                                      <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      <SelectItem value="html">HTML (Editor Visual)</SelectItem>
-                                      <SelectItem value="texto">Texto Simples</SelectItem>
-                                  </SelectContent>
-                              </Select>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
+                  {context === 'societario' && (
+                    <>
+                      <FormField
+                          control={form.control}
+                          name="tipo_documento"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                                  <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="tipo_conteudo"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Formato do Conteúdo</FormLabel>
+                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                          <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                          <SelectItem value="texto">Texto Simples</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                    </>
+                  )}
               </CardContent>
           </Card>
             
