@@ -9,7 +9,7 @@ import { ContratoModelo } from '@/types/contratos';
 import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormContratoModelo from '@/components/documentos-societarios/FormDocumentoSocietarioModelo';
+import FormContratoModelo from '@/components/formularios/FormContratoModelo';
 import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
