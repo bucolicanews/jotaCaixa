@@ -6,60 +6,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
-import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoModelo from '@/components/formularios/FormContratoModelo';
 import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useOwner } from '@/hooks/use-owner';
 
 interface ExtendedContratoModelo extends ContratoModelo {
   tipo_conteudo?: 'html' | 'texto';
 }
 
 const GerenciarModelos: React.FC = () => {
-  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const { role, carregando: carregandoSessao } = useSessao();
+  const { ownerId } = useOwner();
+  
   const [modelos, setModelos] = useState<ExtendedContratoModelo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modeloSelecionado, setModeloSelecionado] = useState<ExtendedContratoModelo | null>(null);
   const [activeTab, setActiveTab] = useState('meus_modelos');
-  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
 
-  useEffect(() => {
-    console.log('[GerenciarModelos] useEffect para ownerId. Carregando sessão:', carregandoSessao);
-    if (carregandoSessao) return;
-
-    console.log('[GerenciarModelos] Calculando ownerId com dados da sessão:', { role, perfil, usuario });
-
-    const getOwnerId = () => {
-      if (isAdmin) return usuario?.id || null;
-      if (isCliente) return (perfil as ClienteProfile)?.id;
-      if (role === 'Usuario') {
-        const user = perfil as any;
-        if (user?.admin_id) {
-            console.log('[GerenciarModelos] ID do proprietário encontrado via user.admin_id:', user.admin_id);
-            return user.admin_id;
-        }
-        if (user?.cliente_id) {
-            console.log('[GerenciarModelos] ID do proprietário encontrado via user.cliente_id:', user.cliente_id);
-            return user.cliente_id;
-        }
-      }
-      console.warn('[GerenciarModelos] Não foi possível determinar o ID do proprietário.');
-      return null;
-    };
-
-    const calculatedOwnerId = getOwnerId();
-    setOwnerId(calculatedOwnerId);
-    console.log('[GerenciarModelos] ownerId final definido para:', calculatedOwnerId);
-  }, [carregandoSessao, isAdmin, isCliente, role, perfil, usuario]);
-
   const buscarModelos = useCallback(async () => {
-    // Se não tiver ownerId e não for Admin, não há o que buscar
     if (!ownerId && !isAdmin) {
         setModelos([]);
         setCarregando(false);
@@ -73,7 +44,7 @@ const GerenciarModelos: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    if (isCliente || (role === 'Usuario' && !!(perfil as any)?.admin_id)) {
+    if (!isAdmin && ownerId) {
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
 
@@ -87,7 +58,7 @@ const GerenciarModelos: React.FC = () => {
       setModelos(data as ExtendedContratoModelo[]);
     }
     setCarregando(false);
-  }, [ownerId, isAdmin, isCliente, role, perfil]);
+  }, [ownerId, isAdmin]);
 
   useEffect(() => {
     if (!carregandoSessao && (isAdmin || ownerId)) {
@@ -131,11 +102,9 @@ const GerenciarModelos: React.FC = () => {
   
   const modelosFiltrados = useMemo(() => {
       if (!isAdmin) {
-          // Para usuários comuns, tudo o que retornou da query é "meu modelo"
           return { meusModelos: modelos, modelosClientes: [] };
       }
       
-      // Admin separa o que é dele do que é dos clientes
       const meusModelos = modelos.filter(m => m.empresa_id === ownerId || m.empresa_id === null);
       const modelosClientes = modelos.filter(m => m.empresa_id !== ownerId && m.empresa_id !== null);
       
@@ -151,7 +120,6 @@ const GerenciarModelos: React.FC = () => {
   const renderModelosList = (list: ExtendedContratoModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
           {list.map((modelo) => {
-              // Só pode editar/deletar se for dono do modelo ou se for Admin e não estiver na aba de supervisão
               const isOwner = modelo.empresa_id === ownerId || (isAdmin && !isSupervisao);
 
               return (
