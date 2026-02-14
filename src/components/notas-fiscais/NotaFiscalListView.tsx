@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import NotaFiscalInlineEditor from './NotaFiscalInlineEditor'; // NOVO IMPORT
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface NotaFiscalListViewProps {
     parcelasParaNF: ParcelaNF[];
@@ -23,6 +24,9 @@ interface NotaFiscalListViewProps {
     handleUploadNF: (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => Promise<void>;
     handleSendNF: (nota: NotaFiscal, tipo: 'whatsapp' | 'email' | 'webhook') => Promise<void>;
     onUpdate: () => void;
+    selectedIds: string[];
+    onToggleSelect: (id: string, checked: boolean) => void;
+    onSelectAll: (checked: boolean) => void;
 }
 
 const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
@@ -33,8 +37,18 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
     handleUploadNF,
     handleSendNF,
     onUpdate,
+    selectedIds,
+    onToggleSelect,
+    onSelectAll,
 }) => {
     
+    const eligibleForSelection = parcelasParaNF.filter(p => {
+        const nota = notasFiscais[p.id];
+        return !nota || nota.status === 'Pendente Emissão';
+    });
+    const allSelected = eligibleForSelection.length > 0 && selectedIds.length === eligibleForSelection.length;
+    const isIndeterminate = selectedIds.length > 0 && selectedIds.length < eligibleForSelection.length;
+
     if (carregando) {
         return (
             <div className="flex justify-center items-center h-32">
@@ -48,6 +62,13 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableHead className="w-[40px]">
+                            <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={onSelectAll}
+                                disabled={eligibleForSelection.length === 0}
+                            />
+                        </TableHead>
                         <TableHead className="w-[150px]">Cliente</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Pagamento</TableHead>
@@ -62,16 +83,25 @@ const NotaFiscalListView: React.FC<NotaFiscalListViewProps> = ({
                 <TableBody>
                     {parcelasParaNF.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={9} className="text-center py-4 text-muted-foreground">
+                            <TableCell colSpan={10} className="text-center py-4 text-muted-foreground">
                                 Nenhuma parcela paga encontrada.
                             </TableCell>
                         </TableRow>
                     ) : (
                         parcelasParaNF.map((parcela) => {
                             const nota = notasFiscais[parcela.id];
+                            const isSelected = selectedIds.includes(parcela.id);
+                            const isActionable = !nota || nota.status === 'Pendente Emissão';
 
                             return (
                                 <TableRow key={parcela.id}>
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onCheckedChange={(checked) => onToggleSelect(parcela.id, !!checked)}
+                                            disabled={!isActionable}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-medium text-sm">
                                         {parcela.cliente_nome}
                                         {nota?.editada && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}

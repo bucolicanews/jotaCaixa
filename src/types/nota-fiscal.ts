@@ -2,7 +2,7 @@ export interface NotaFiscal {
   id: string;
   proprietario_id: string;
   parcela_id: string;
-  status: 'Pendente Emissão' | 'Nota Emitida' | 'Enviada Cliente' | 'Enviada com Sucesso' | 'Erro Envio';
+  status: 'Pendente Emissão' | 'Nota Emitida' | 'Enviada Cliente' | 'Enviada com Sucesso' | 'Erro Envio' | 'NaoEmitir';
   numero_nota: string | null;
   valor: number;
   data_emissao: string | null;

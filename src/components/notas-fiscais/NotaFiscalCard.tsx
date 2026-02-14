@@ -21,6 +21,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import NotaFiscalInlineEditor from './NotaFiscalInlineEditor'; // Importando o editor inline
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface NotaFiscalCardProps {
     parcela: ParcelaNF;
@@ -29,6 +30,8 @@ interface NotaFiscalCardProps {
     onUpdate: () => void;
     handleUploadNF: (parcela: ParcelaNF, file: File, numeroNota: string, dataEmissao: Date) => Promise<void>;
     handleSendNF: (nota: NotaFiscal, tipo: 'whatsapp' | 'email' | 'webhook') => Promise<void>;
+    isSelected: boolean;
+    onToggleSelect: (parcelaId: string, checked: boolean) => void;
 }
 
 const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
@@ -38,6 +41,8 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     onUpdate,
     handleUploadNF,
     handleSendNF,
+    isSelected,
+    onToggleSelect,
 }) => {
     const [file, setFile] = useState<File | null>(null);
     const [numeroNota, setNumeroNota] = useState(notaFiscal?.numero_nota || '');
@@ -105,6 +110,8 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
                 return <Badge variant="success">Enviada com Sucesso</Badge>;
             case 'Erro Envio':
                 return <Badge variant="destructive">Erro Envio</Badge>;
+            case 'NaoEmitir':
+                return <Badge variant="outline">Não Emitir</Badge>;
             default:
                 return <Badge variant="warning">Pendente Emissão</Badge>;
         }
@@ -113,14 +120,22 @@ const NotaFiscalCard: React.FC<NotaFiscalCardProps> = ({
     const isSendingOrUploading = sending !== null || uploading;
     const isDataChanged = numeroNota !== (notaFiscal?.numero_nota || '') || (dataEmissao && format(dataEmissao, 'yyyy-MM-dd') !== (notaFiscal?.data_emissao || format(new Date(), 'yyyy-MM-dd')));
     const canUpdate = isDataChanged || !!file;
+    const isActionable = !notaFiscal || notaFiscal.status === 'Pendente Emissão';
 
     return (
         <Card className={cn("border-l-4", isNFEmitted ? (isFullySent ? "border-green-500" : (isSendingError ? "border-red-500" : "border-blue-500")) : "border-yellow-500")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    {parcela.cliente_nome}
-                    {notaFiscal?.editada && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                    <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => onToggleSelect(parcela.id, !!checked)}
+                        disabled={!isActionable}
+                    />
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        {parcela.cliente_nome}
+                        {notaFiscal?.editada && <Badge variant="outline" className="ml-2 text-xs border-amber-500 text-amber-600">Editada</Badge>}
+                    </CardTitle>
+                </div>
                 {getStatusBadge(notaFiscal)}
             </CardHeader>
             <CardContent className="space-y-4">

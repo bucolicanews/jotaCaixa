@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Receipt, Filter, Search, AlertTriangle, LayoutGrid, List } from 'lucide-react';
+import { Loader2, Receipt, Filter, Search, AlertTriangle, LayoutGrid, List, Trash2 } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -17,6 +17,9 @@ import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import NotaFiscalCard from '@/components/notas-fiscais/NotaFiscalCard'; // IMPORT FALTANTE
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
+import { showSuccess, showError } from '@/utils/toast';
 
 const EmissaoNotas: React.FC = () => {
     const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -26,7 +29,8 @@ const EmissaoNotas: React.FC = () => {
     const [filtroStatus, setFiltroStatus] = useState('pendente');
     const [filtroTexto, setFiltroTexto] = useState('');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
-    const [viewMode, setViewMode] = useState<'card' | 'list'>('list'); // ALTERADO: Padrão para 'list'
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
+    const [selectedParcelaIds, setSelectedParcelaIds] = useState<string[]>([]);
 
     const {
         parcelasParaNF,
@@ -44,6 +48,57 @@ const EmissaoNotas: React.FC = () => {
     const totalPendente = useMemo(() => {
         return parcelasParaNF.reduce((sum, p) => sum + p.valor_parcela, 0);
     }, [parcelasParaNF]);
+
+    const handleToggleSelect = (parcelaId: string, checked: boolean) => {
+        setSelectedParcelaIds(prev => 
+            checked ? [...prev, parcelaId] : prev.filter(id => id !== parcelaId)
+        );
+    };
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            const eligibleIds = parcelasParaNF
+                .filter(p => {
+                    const nota = notasFiscais[p.id];
+                    return !nota || nota.status === 'Pendente Emissão';
+                })
+                .map(p => p.id);
+            setSelectedParcelaIds(eligibleIds);
+        } else {
+            setSelectedParcelaIds([]);
+        }
+    };
+
+    const handleMarkAsNaoEmitir = async () => {
+        if (selectedParcelaIds.length === 0) {
+            showError("Nenhuma parcela selecionada.");
+            return;
+        }
+        
+        try {
+            const upserts = selectedParcelaIds.map(parcelaId => {
+                const parcela = parcelasParaNF.find(p => p.id === parcelaId);
+                return {
+                    proprietario_id: ownerId,
+                    parcela_id: parcelaId,
+                    status: 'NaoEmitir',
+                    valor: parcela?.valor_parcela || 0,
+                };
+            });
+
+            const { error } = await supabase
+                .from('notas_fiscais')
+                .upsert(upserts, { onConflict: 'parcela_id' });
+
+            if (error) throw error;
+
+            showSuccess(`${selectedParcelaIds.length} parcela(s) marcada(s) como 'Não Emitir'.`);
+            setSelectedParcelaIds([]);
+            refetch();
+        } catch (error: any) {
+            showError("Falha ao atualizar status: " + error.message);
+        }
+    };
 
     if (carregandoSessao || carregando || loadingConfig) {
         return (
@@ -95,7 +150,8 @@ const EmissaoNotas: React.FC = () => {
                                 <SelectItem value="pendente">Pendente Emissão</SelectItem>
                                 <SelectItem value="emitida">Nota Emitida</SelectItem>
                                 <SelectItem value="enviada">Enviada ao Cliente</SelectItem>
-                                <SelectItem value="nao-emitidas">Notas Não Emitidas</SelectItem>
+                                <SelectItem value="nao-emitidas">Não Emitidas (Dinheiro/Bens)</SelectItem>
+                                <SelectItem value="nao-emitir">Não Emitir (Marcado)</SelectItem>
                                 <SelectItem value="todos">Todos os Status</SelectItem>
                             </SelectContent>
                         </Select>
@@ -129,6 +185,36 @@ const EmissaoNotas: React.FC = () => {
                 </Alert>
             )}
 
+            {selectedParcelaIds.length > 0 && (
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Ações em Lote</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={selectedParcelaIds.length === 0}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Marcar como 'Não Emitir' ({selectedParcelaIds.length})
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Ação</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Tem certeza que deseja marcar {selectedParcelaIds.length} parcela(s) como "Não Emitir"? Esta ação pode ser revertida editando a nota fiscal individualmente.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleMarkAsNaoEmitir}>Confirmar</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-xl">Parcelas Pagas ({parcelasParaNF.length})</CardTitle>
@@ -157,6 +243,8 @@ const EmissaoNotas: React.FC = () => {
                                     onUpdate={refetch}
                                     handleUploadNF={handleUploadNF}
                                     handleSendNF={handleSendNF}
+                                    isSelected={selectedParcelaIds.includes(parcela.id)}
+                                    onToggleSelect={handleToggleSelect}
                                 />
                             ))}
                         </div>
@@ -169,6 +257,9 @@ const EmissaoNotas: React.FC = () => {
                             handleUploadNF={handleUploadNF}
                             handleSendNF={handleSendNF}
                             onUpdate={refetch}
+                            selectedIds={selectedParcelaIds}
+                            onToggleSelect={handleToggleSelect}
+                            onSelectAll={handleSelectAll}
                         />
                     )}
                 </CardContent>

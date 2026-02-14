@@ -177,6 +177,10 @@ export function useNotasFiscais(
                     )) {
                         shouldInclude = true;
                     }
+                } else if (filtroStatus === 'nao-emitir') {
+                    if (notaExistente && notaExistente.status === 'NaoEmitir') {
+                        shouldInclude = true;
+                    }
                 }
                 // --- FIM LÓGICA DE FILTRO ---
 
