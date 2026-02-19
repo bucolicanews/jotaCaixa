@@ -140,6 +140,7 @@ const ContasReceber = () => {
         .from(tabelaParcelasReceber)
         .select(`
           *,
+          valor_original, valor_juros, valor_multa, valor_atualizado,
           contas_receber: ${tabelaContasReceber} (
             id,
             descricao,
@@ -611,8 +612,6 @@ const ContasReceber = () => {
     setCarregandoDados(true);
     await buscarDados();
     
-    // A `buscarDados` atualiza o estado `parcelas`. Precisamos encontrar a parcela atualizada.
-    // A forma mais segura é refazer a busca da parcela específica.
     const { data: updatedParcelaData, error } = await supabase
       .from(tabelaParcelasReceber)
       .select(`*, contas_receber: ${tabelaContasReceber} (descricao, clientes: ${tabelaClientes} (nome, telefone, email))`)

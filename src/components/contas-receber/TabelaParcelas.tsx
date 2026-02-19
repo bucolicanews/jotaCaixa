@@ -122,6 +122,10 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                     const historicoRecebimento = p.recebimentos && p.recebimentos.length > 0 ? p.recebimentos[0].historicos : null;
                                     
                                     const jurosCalculados = p.valor_juros || (p.valor_pago > p.valor_parcela ? p.valor_pago - p.valor_parcela : 0);
+                                    
+                                    const valorOriginal = p.valor_original || p.valor_parcela;
+                                    const temJurosMulta = (p.valor_juros || 0) > 0 || (p.valor_multa || 0) > 0;
+                                    const valorAtualizado = p.valor_atualizado || p.valor_parcela;
 
                                     return (
                                         <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
@@ -207,7 +211,17 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                             <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                                            <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                                            <TableCell>
+                                                {temJurosMulta ? (
+                                                    <div className="text-xs text-left">
+                                                        <p className="text-muted-foreground">Orig: {formatCurrency(valorOriginal)}</p>
+                                                        <p className="text-red-600">+ J/M: {formatCurrency((p.valor_juros || 0) + (p.valor_multa || 0))}</p>
+                                                        <p className="font-bold border-t mt-1 pt-1">{formatCurrency(valorAtualizado)}</p>
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-semibold">{formatCurrency(p.valor_parcela)}</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
                                             </TableCell>

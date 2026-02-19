@@ -53,6 +53,10 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     forma_pagamento?: string | null; // ADICIONADO
     conta_nome?: string | null; // ADICIONADO
     valor_recebido?: number | null; // ADICIONADO
+    valor_original?: number | null;
+    valor_juros?: number | null;
+    valor_multa?: number | null;
+    valor_atualizado?: number | null;
     contas_receber: {
         id: string;
         descricao: string;
