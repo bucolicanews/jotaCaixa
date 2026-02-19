@@ -260,14 +260,28 @@ export default function ConfiguracoesPagBank() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label>Percentual Taxas Bancárias (%)</Label>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={config.percentual_taxas_bancarias || ''}
-                                    onChange={(e) => setConfig({ ...config, percentual_taxas_bancarias: parseFloat(e.target.value) || null })}
-                                    placeholder="Ex: 2.99"
-                                />
+                                <Label>Conta de Receita (Juros)</Label>
+                                <Select value={(config as any).conta_receita_juros_id || ''} onValueChange={(v) => setConfig({...config, conta_receita_juros_id: v})}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a conta de juros" /></SelectTrigger>
+                                    <SelectContent>
+                                        {planoContas.filter(c => c.Conta.startsWith(receitaCode)).map(c => (
+                                            <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Conta de Receita (Multa)</Label>
+                                <Select value={(config as any).conta_receita_multa_id || ''} onValueChange={(v) => setConfig({...config, conta_receita_multa_id: v})}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a conta de multa" /></SelectTrigger>
+                                    <SelectContent>
+                                        {planoContas.filter(c => c.Conta.startsWith(receitaCode)).map(c => (
+                                            <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 
