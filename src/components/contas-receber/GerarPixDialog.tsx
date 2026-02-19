@@ -69,21 +69,24 @@ export function GerarPixDialog({
         const vencimento = parseISO(dataVencimento);
         const hoje = new Date();
 
+        // A base de cálculo é sempre a `valorParcela` que vem da prop (valor original)
+        const baseValueForCalc = valorParcela;
+
         if (data?.aplica_juros_multa && isPast(vencimento) && !isToday(vencimento)) {
           const dias = differenceInDays(hoje, vencimento);
           setDiasAtraso(dias > 0 ? dias : 0);
 
-          const multaCalculada = valorParcela * ((data.percentual_multa || 0) / 100);
-          const jurosCalculados = (valorParcela * (((data.percentual_juros_mes || 0) / 100) / 30)) * (dias > 0 ? dias : 0);
+          const multaCalculada = baseValueForCalc * ((data.percentual_multa || 0) / 100);
+          const jurosCalculados = (baseValueForCalc * (((data.percentual_juros_mes || 0) / 100) / 30)) * (dias > 0 ? dias : 0);
           
           setMulta(multaCalculada);
           setJuros(jurosCalculados);
-          setValorTotal(valorParcela + multaCalculada + jurosCalculados);
+          setValorTotal(baseValueForCalc + multaCalculada + jurosCalculados);
         } else {
           setMulta(0);
           setJuros(0);
           setDiasAtraso(0);
-          setValorTotal(valorParcela);
+          setValorTotal(baseValueForCalc);
         }
       } catch (err) {
         console.error("Erro ao calcular juros/multa:", err);
@@ -110,7 +113,6 @@ export function GerarPixDialog({
         throw new Error('Sessão não encontrada. Por favor, faça login novamente.');
       }
 
-      // 1. Buscar parcela para obter valor_original
       const { data: currentParcela, error: fetchError } = await supabase
         .from('admin_parcelas_receber')
         .select('valor_parcela, valor_original')
@@ -121,24 +123,18 @@ export function GerarPixDialog({
         throw new Error(`Falha ao buscar dados da parcela: ${fetchError.message}`);
       }
 
-      // 2. Determinar o valor original
-      const originalValue = currentParcela.valor_original || currentParcela.valor_parcela;
-
-      // 3. Preparar o payload de atualização
       const updatePayload: any = {
         valor_multa: multa,
         valor_juros: juros,
         dias_atraso: diasAtraso,
         data_calculo_juros: new Date().toISOString(),
-        valor_parcela: valorTotal, // Atualiza valor_parcela com o novo total
+        valor_atualizado: valorTotal,
       };
 
-      // Apenas salva o valor_original se ele ainda não estiver definido
       if (!currentParcela.valor_original) {
-        updatePayload.valor_original = originalValue;
+        updatePayload.valor_original = valorParcela;
       }
 
-      // 4. Atualizar a parcela no banco de dados
       const { error: updateError } = await supabase
         .from('admin_parcelas_receber')
         .update(updatePayload)
@@ -162,7 +158,6 @@ export function GerarPixDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Erro ao gerar PIX');
 
-      // 5. Atualizar a parcela com os dados do PIX gerado
       const { error: updateLinksError } = await supabase
         .from('admin_parcelas_receber')
         .update({

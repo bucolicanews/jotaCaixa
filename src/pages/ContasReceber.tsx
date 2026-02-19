@@ -612,6 +612,10 @@ const ContasReceber = () => {
     setCarregandoDados(true);
     await buscarDados();
     
+    const tabelaParcelasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaContasReceber = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaClientes = ownerType === 'Admin' || ownerType === 'AdminUsuario' ? 'tbl_clientes' : 'clientes';
+
     const { data: updatedParcelaData, error } = await supabase
       .from(tabelaParcelasReceber)
       .select(`*, contas_receber: ${tabelaContasReceber} (descricao, clientes: ${tabelaClientes} (nome, telefone, email))`)
@@ -941,7 +945,7 @@ const ContasReceber = () => {
           onOpenChange={setPixDialogOpen}
           parcelaId={selectedParcela.id}
           dataVencimento={selectedParcela.data_vencimento}
-          valorParcela={selectedParcela.valor_parcela}
+          valorParcela={selectedParcela.valor_original || selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
           onSuccess={handlePixGenerationSuccess}
         />
