@@ -9,12 +9,13 @@ import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
 import { differenceInDays, isPast, parseISO, isToday, format } from 'date-fns';
 import { formatCurrency } from '@/utils/formatters';
+import { Input } from '@/components/ui/input';
 
 interface GerarPixDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parcelaId: string;
-  valorParcela: number;
+  valorParcela: number; // This should be the original value
   dataVencimento: string;
   descricao: string;
   onSuccess?: () => void;
@@ -51,6 +52,11 @@ export function GerarPixDialog({
   const [diasAtraso, setDiasAtraso] = useState(0);
   const [valorTotal, setValorTotal] = useState(valorParcela);
 
+  // Recalcula o valor total sempre que o valor principal, multa ou juros mudarem.
+  useEffect(() => {
+    setValorTotal(valorParcela + multa + juros);
+  }, [valorParcela, multa, juros]);
+
   useEffect(() => {
     const calculateFees = async () => {
       if (!open || !ownerId) return;
@@ -81,12 +87,10 @@ export function GerarPixDialog({
           
           setMulta(multaCalculada);
           setJuros(jurosCalculados);
-          setValorTotal(baseValueForCalc + multaCalculada + jurosCalculados);
         } else {
           setMulta(0);
           setJuros(0);
           setDiasAtraso(0);
-          setValorTotal(baseValueForCalc);
         }
       } catch (err) {
         console.error("Erro ao calcular juros/multa:", err);
@@ -295,13 +299,29 @@ export function GerarPixDialog({
                   </div>
                   {diasAtraso > 0 && (
                     <>
-                      <div className="flex justify-between text-sm text-red-600">
-                        <span className="text-muted-foreground">Multa ({config?.percentual_multa}%):</span>
-                        <span className="font-medium">{formatCurrency(multa)}</span>
+                      <div className="flex justify-between items-center text-sm">
+                        <Label htmlFor="multa-input" className="text-muted-foreground">Multa ({config?.percentual_multa}%):</Label>
+                        <Input
+                            id="multa-input"
+                            type="number"
+                            step="0.01"
+                            value={multa.toFixed(2)}
+                            onChange={(e) => setMulta(parseFloat(e.target.value) || 0)}
+                            className="w-28 h-8 text-right font-medium text-red-600"
+                            disabled={loadingConfig}
+                        />
                       </div>
-                      <div className="flex justify-between text-sm text-red-600">
-                        <span className="text-muted-foreground">Juros ({diasAtraso} dias):</span>
-                        <span className="font-medium">{formatCurrency(juros)}</span>
+                      <div className="flex justify-between items-center text-sm">
+                          <Label htmlFor="juros-input" className="text-muted-foreground">Juros ({diasAtraso} dias):</Label>
+                          <Input
+                              id="juros-input"
+                              type="number"
+                              step="0.01"
+                              value={juros.toFixed(2)}
+                              onChange={(e) => setJuros(parseFloat(e.target.value) || 0)}
+                              className="w-28 h-8 text-right font-medium text-red-600"
+                              disabled={loadingConfig}
+                          />
                       </div>
                     </>
                   )}
