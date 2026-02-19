@@ -162,11 +162,24 @@ export function GerarPixDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Erro ao gerar PIX');
 
+      // 5. Atualizar a parcela com os dados do PIX gerado
+      const { error: updateLinksError } = await supabase
+        .from('admin_parcelas_receber')
+        .update({
+          pagbank_qr_code: data.qr_code,
+          pagbank_qr_code_text: data.qr_code_text,
+          pix_payment_page_url: data.pix_payment_page_url,
+          pagbank_charge_id: data.charge_id,
+          pagbank_status: 'WAITING',
+          pagbank_link_expira_em: data.expiration_date,
+        })
+        .eq('id', parcelaId);
+
+      if (updateLinksError) {
+        throw new Error(`Falha ao salvar os dados do PIX na parcela: ${updateLinksError.message}`);
+      }
+
       toast.success('PIX gerado com sucesso!');
-      setQrCode(data.qr_code);
-      setQrCodeText(data.qr_code_text);
-      setPixPaymentPageUrl(data.pix_payment_page_url);
-      setClienteInfo(data.cliente);
       
       if (onSuccess) onSuccess();
     } catch (error: any) {
@@ -234,7 +247,6 @@ export function GerarPixDialog({
   const handleClose = () => {
     handleResetFull();
     onOpenChange(false);
-    if (onSuccess) onSuccess();
   };
 
   const handleReset = () => {

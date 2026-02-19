@@ -606,6 +606,29 @@ const ContasReceber = () => {
     }
   };
 
+  const handlePixGenerationSuccess = async () => {
+    setPixDialogOpen(false);
+    setCarregandoDados(true);
+    await buscarDados();
+    
+    // A `buscarDados` atualiza o estado `parcelas`. Precisamos encontrar a parcela atualizada.
+    // A forma mais segura é refazer a busca da parcela específica.
+    const { data: updatedParcelaData, error } = await supabase
+      .from(tabelaParcelasReceber)
+      .select(`*, contas_receber: ${tabelaContasReceber} (descricao, clientes: ${tabelaClientes} (nome, telefone, email))`)
+      .eq('id', selectedParcela.id)
+      .single();
+
+    setCarregandoDados(false);
+    if (error || !updatedParcelaData) {
+      showError("Não foi possível recarregar os dados da parcela após gerar o PIX.");
+      return;
+    }
+    
+    setSelectedParcela(updatedParcelaData);
+    setVisualizarPagbankDialogOpen(true);
+  };
+
   const formatCurrencyLocal = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDateLocal = (dateString: string) => formatarData(dateString);
   
@@ -921,9 +944,7 @@ const ContasReceber = () => {
           dataVencimento={selectedParcela.data_vencimento}
           valorParcela={selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
-          onSuccess={() => {
-            buscarDados();
-          }}
+          onSuccess={handlePixGenerationSuccess}
         />
       )}
       
@@ -931,7 +952,7 @@ const ContasReceber = () => {
         <VisualizarLinkPagBankDialog
           open={visualizarPagbankDialogOpen}
           onOpenChange={setVisualizarPagbankDialogOpen}
-          paymentLink={selectedParcela.pagbank_payment_link}
+          paymentLink={selectedParcela.pix_payment_page_url || selectedParcela.pagbank_payment_link}
           checkoutLink={selectedParcela.pagbank_checkout_link}
           qrCode={selectedParcela.pagbank_qr_code}
           qrCodeText={selectedParcela.pagbank_qr_code_text}
