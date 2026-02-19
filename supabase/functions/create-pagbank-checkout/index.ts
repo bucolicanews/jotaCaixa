@@ -24,6 +24,7 @@ interface PagBankConfig {
   token_producao: string | null;
   token_sandbox: string | null;
   dias_expiracao_link: number;
+  webhook_url: string;
 }
 
 serve(async (req) => {
@@ -75,7 +76,8 @@ serve(async (req) => {
     if (configError || !config) throw new Error('Configuração do PagBank não encontrada.');
 
     const isProd = config.ambiente === 'producao';
-    const apiToken = isProd ? config.token_producao : config.token_sandbox;
+    // ✅ CORREÇÃO: Adicionado .trim() para remover espaços acidentais
+    const apiToken = (isProd ? config.token_producao : config.token_sandbox)?.trim();
     const apiUrl = isProd ? 'https://api.pagseguro.com' : 'https://api.sandbox.pagseguro.com';
 
     if (!apiToken) throw new Error(`Token do PagBank para ambiente de ${config.ambiente} não configurado.`);
@@ -86,6 +88,7 @@ serve(async (req) => {
 
     const payload = {
       reference_id: `PARCELA_${parcela.id}`,
+      expiration_date: expirationDate.toISOString(),
       customer: {
         name: cliente.nome,
         email: cliente.email,
@@ -106,11 +109,12 @@ serve(async (req) => {
       notification_urls: [config.webhook_url],
     };
 
-    // 4. Chamar a API do PagBank para criar o pedido (Order)
-    const response = await fetch(`${apiUrl}/orders`, {
+    // 4. Chamar a API do PagBank para criar o CHECKOUT
+    const response = await fetch(`${apiUrl}/checkouts`, {
       method: 'POST',
       headers: {
-        'Authorization': apiToken,
+        // ✅ CORREÇÃO: Adicionado o prefixo "Bearer "
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
         'x-api-version': '4.0',
       },
@@ -121,21 +125,21 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error("[create-pagbank-checkout] Erro da API PagBank:", responseData);
-      throw new Error(responseData.error_messages?.[0]?.description || 'Erro ao criar pedido no PagBank');
+      throw new Error(responseData.error_messages?.[0]?.description || 'Erro ao criar checkout no PagBank');
     }
 
     const checkoutLink = responseData.links?.find((l: any) => l.rel === 'PAY')?.href;
-    const orderId = responseData.id; // ID do Pedido (ORDE_...)
+    const checkoutId = responseData.id; // ID do Checkout (CHK_...)
 
-    if (!checkoutLink || !orderId) {
+    if (!checkoutLink || !checkoutId) {
       throw new Error('Link de checkout ou ID do pedido não retornado pelo PagBank.');
     }
 
-    // 5. Atualizar a parcela com o ID do Pedido e o link de checkout
+    // 5. Atualizar a parcela com o ID do Checkout e o link de checkout
     const { error: updateError } = await supabaseAdmin
       .from('admin_parcelas_receber')
       .update({
-        pagbank_checkout_id: orderId, // Salva o ID do Pedido
+        pagbank_checkout_id: checkoutId, // Salva o ID do Checkout
         pagbank_checkout_link: checkoutLink,
         pagbank_status: 'WAITING',
         pagbank_updated_at: new Date().toISOString(),
