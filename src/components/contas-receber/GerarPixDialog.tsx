@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -7,12 +7,15 @@ import { Loader2, Copy, Check, Send, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSessao } from '@/hooks/use-sessao';
+import { differenceInDays, isPast, parseISO, isToday, format } from 'date-fns';
+import { formatCurrency } from '@/utils/formatters';
 
 interface GerarPixDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parcelaId: string;
   valorParcela: number;
+  dataVencimento: string;
   descricao: string;
   onSuccess?: () => void;
 }
@@ -28,6 +31,7 @@ export function GerarPixDialog({
   onOpenChange,
   parcelaId,
   valorParcela,
+  dataVencimento,
   descricao,
   onSuccess,
 }: GerarPixDialogProps) {
@@ -40,62 +44,112 @@ export function GerarPixDialog({
   const [copied, setCopied] = useState(false);
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
 
+  const [config, setConfig] = useState<any>(null);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [juros, setJuros] = useState(0);
+  const [multa, setMulta] = useState(0);
+  const [diasAtraso, setDiasAtraso] = useState(0);
+  const [valorTotal, setValorTotal] = useState(valorParcela);
+
+  useEffect(() => {
+    const calculateFees = async () => {
+      if (!open || !ownerId) return;
+      
+      setLoadingConfig(true);
+      try {
+        const { data, error } = await supabase
+          .from('configuracoes_pagbank')
+          .select('aplica_juros_multa, percentual_multa, percentual_juros_mes')
+          .eq('proprietario_id', ownerId)
+          .single();
+
+        if (error) throw error;
+        setConfig(data);
+
+        const vencimento = parseISO(dataVencimento);
+        const hoje = new Date();
+
+        if (data?.aplica_juros_multa && isPast(vencimento) && !isToday(vencimento)) {
+          const dias = differenceInDays(hoje, vencimento);
+          setDiasAtraso(dias > 0 ? dias : 0);
+
+          const multaCalculada = valorParcela * ((data.percentual_multa || 0) / 100);
+          const jurosCalculados = (valorParcela * (((data.percentual_juros_mes || 0) / 100) / 30)) * (dias > 0 ? dias : 0);
+          
+          setMulta(multaCalculada);
+          setJuros(jurosCalculados);
+          setValorTotal(valorParcela + multaCalculada + jurosCalculados);
+        } else {
+          setMulta(0);
+          setJuros(0);
+          setDiasAtraso(0);
+          setValorTotal(valorParcela);
+        }
+      } catch (err) {
+        console.error("Erro ao calcular juros/multa:", err);
+        setValorTotal(valorParcela);
+      } finally {
+        setLoadingConfig(false);
+      }
+    };
+
+    if (open) {
+      calculateFees();
+    } else {
+      // Reset state when modal closes
+      handleReset();
+    }
+  }, [open, ownerId, dataVencimento, valorParcela]);
+
   const handleGerarPix = async () => {
     try {
       setLoading(true);
+      handleReset();
 
       if (!ownerId) {
-        throw new Error('Sessao nao encontrada. Por favor, faca login novamente.');
+        throw new Error('Sessão não encontrada. Por favor, faça login novamente.');
+      }
+
+      if (diasAtraso > 0 && config?.aplica_juros_multa) {
+        const { error: updateError } = await supabase
+          .from('admin_parcelas_receber')
+          .update({
+            valor_multa: multa,
+            valor_juros: juros,
+            dias_atraso: diasAtraso,
+            data_calculo_juros: new Date().toISOString(),
+          })
+          .eq('id', parcelaId);
+        
+        if (updateError) {
+          throw new Error(`Falha ao atualizar juros/multa na parcela: ${updateError.message}`);
+        }
       }
 
       const body = {
         parcela_id: parcelaId,
         payment_method: 'pix',
         admin_id: ownerId,
+        amount: Math.round(valorTotal * 100),
       };
 
       const { data, error } = await supabase.functions.invoke('create-pagbank-payment', {
         body,
       });
 
-      console.log('[GerarPixDialog] Resposta completa:', { data, error });
-      console.log('[GerarPixDialog] data.qr_code:', data?.qr_code);
-      console.log('[GerarPixDialog] data.pix_payment_page_url:', data?.pix_payment_page_url);
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao gerar PIX');
 
-      if (error) {
-        console.log('[GerarPixDialog] Erro detectado:', error);
-        throw error;
-      }
-
-      if (!data?.success) {
-        console.log('[GerarPixDialog] Success = false');
-        throw new Error(data?.error || 'Erro ao gerar PIX');
-      }
-
-      console.log('[GerarPixDialog] Sucesso! Atualizando estados...');
-      
       toast.success('PIX gerado com sucesso!');
-      
-      console.log('[GerarPixDialog] Setando QR Code:', data.qr_code);
       setQrCode(data.qr_code);
-      
-      console.log('[GerarPixDialog] Setando QR Code Text:', data.qr_code_text);
       setQrCodeText(data.qr_code_text);
-      
-      console.log('[GerarPixDialog] Setando PIX URL:', data.pix_payment_page_url);
       setPixPaymentPageUrl(data.pix_payment_page_url);
-      
-      console.log('[GerarPixDialog] Setando Cliente Info:', data.cliente);
       setClienteInfo(data.cliente);
       
-      console.log('[GerarPixDialog] Todos os estados atualizados!');
-      
-      // NÃO chama onSuccess aqui para evitar que o modal seja fechado
-      // A lista será atualizada quando o usuário fechar o modal manualmente
+      if (onSuccess) onSuccess();
     } catch (error: any) {
       console.error('Erro ao gerar PIX:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro ao gerar PIX';
-      toast.error(errorMessage);
+      toast.error(error.message || 'Erro ao gerar PIX');
     } finally {
       setLoading(false);
     }
@@ -114,24 +168,19 @@ export function GerarPixDialog({
 
   const handleSendWhatsApp = () => {
     if (!clienteInfo?.telefone) {
-      toast.error('Telefone do cliente nao encontrado');
+      toast.error('Telefone do cliente não encontrado');
+      return;
+    }
+
+    if (!pixPaymentPageUrl) {
+      toast.error('Link de pagamento PIX não disponível');
       return;
     }
 
     const telefone = clienteInfo.telefone.replace(/\D/g, '');
     const telefoneFormatado = telefone.startsWith('55') ? telefone : `55${telefone}`;
     
-    const mensagem = `Ola ${clienteInfo.nome}! 👋
-
-📱 *Pagamento PIX Facilitado*
-
-👉 Clique no link para ver o QR Code e copiar o codigo:
-${pixPaymentPageUrl}
-
-💰 Valor: *R$ ${valorParcela.toFixed(2)}*
-📝 ${descricao}
-
-✅ Rapido, facil e seguro!`;
+    const mensagem = `Olá ${clienteInfo.nome}! 👋\n\n📱 *Pagamento PIX Facilitado*\n\n👉 Clique no link para ver o QR Code e copiar o código:\n${pixPaymentPageUrl}\n\n💰 Valor: *${formatCurrency(valorTotal)}*\n📝 ${descricao}\n\n✅ Rápido, fácil e seguro!`;
     
     const url = `https://wa.me/${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
     
@@ -147,23 +196,13 @@ ${pixPaymentPageUrl}
 
     try {
       setSendingEmail(true);
-
       const { data, error } = await supabase.functions.invoke('send-payment-email', {
-        body: {
-          parcela_id: parcelaId,
-          admin_id: ownerId,
-        },
+        body: { parcela_id: parcelaId, admin_id: ownerId },
       });
-
       if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao enviar email');
-      }
-
+      if (!data.success) throw new Error(data.error || 'Erro ao enviar email');
       toast.success(data.message || 'Email enviado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao enviar email:', error);
+    } catch (error: any) {
       toast.error(error instanceof Error ? error.message : 'Erro ao enviar email');
     } finally {
       setSendingEmail(false);
@@ -171,17 +210,9 @@ ${pixPaymentPageUrl}
   };
 
   const handleClose = () => {
-    setQrCode(null);
-    setQrCodeText(null);
-    setPixPaymentPageUrl(null);
-    setCopied(false);
-    setClienteInfo(null);
+    handleReset();
     onOpenChange(false);
-    
-    // Atualiza a lista apenas quando fechar o modal
-    if (onSuccess) {
-      onSuccess();
-    }
+    if (onSuccess) onSuccess();
   };
 
   const handleReset = () => {
@@ -190,6 +221,10 @@ ${pixPaymentPageUrl}
     setPixPaymentPageUrl(null);
     setCopied(false);
     setClienteInfo(null);
+    setJuros(0);
+    setMulta(0);
+    setDiasAtraso(0);
+    setValorTotal(valorParcela);
   };
 
   return (
@@ -198,19 +233,52 @@ ${pixPaymentPageUrl}
         <DialogHeader>
           <DialogTitle>Gerar Pagamento PIX</DialogTitle>
           <DialogDescription>
-            Valor: R$ {valorParcela.toFixed(2)} - {descricao}
+            {descricao}
           </DialogDescription>
         </DialogHeader>
 
-        {console.log('[GerarPixDialog] Renderizando. qrCode:', qrCode, 'pixPaymentPageUrl:', pixPaymentPageUrl)}
-        
         {!qrCode ? (
           <div className="space-y-4 py-4">
-            <Alert>
-              <AlertDescription>
-                Será gerado um QR Code PIX e uma página de pagamento para enviar ao cliente.
-              </AlertDescription>
-            </Alert>
+            {loadingConfig ? (
+              <div className="flex justify-center items-center h-20">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="ml-2 text-sm">Calculando valores...</span>
+              </div>
+            ) : (
+              <>
+                <Alert>
+                  <AlertDescription>
+                    Será gerado um QR Code PIX e uma página de pagamento para enviar ao cliente.
+                  </AlertDescription>
+                </Alert>
+                <div className="p-4 border rounded-lg space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Valor Principal:</span>
+                    <span className="font-medium">{formatCurrency(valorParcela)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Vencimento Original:</span>
+                    <span className="font-medium">{format(parseISO(dataVencimento), 'dd/MM/yyyy')}</span>
+                  </div>
+                  {diasAtraso > 0 && (
+                    <>
+                      <div className="flex justify-between text-sm text-red-600">
+                        <span className="text-muted-foreground">Multa ({config?.percentual_multa}%):</span>
+                        <span className="font-medium">{formatCurrency(multa)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-red-600">
+                        <span className="text-muted-foreground">Juros ({diasAtraso} dias):</span>
+                        <span className="font-medium">{formatCurrency(juros)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
+                    <span>Valor Total a Pagar:</span>
+                    <span className="text-primary">{formatCurrency(valorTotal)}</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-4 py-4">
@@ -309,11 +377,11 @@ ${pixPaymentPageUrl}
         <DialogFooter>
           {!qrCode ? (
             <>
-              <Button variant="outline" onClick={handleClose} disabled={loading}>
+              <Button variant="outline" onClick={handleClose} disabled={loading || loadingConfig}>
                 Cancelar
               </Button>
-              <Button onClick={handleGerarPix} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button onClick={handleGerarPix} disabled={loading || loadingConfig}>
+                {(loading || loadingConfig) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Gerar PIX
               </Button>
             </>

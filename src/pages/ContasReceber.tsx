@@ -918,6 +918,7 @@ const ContasReceber = () => {
           open={pixDialogOpen}
           onOpenChange={setPixDialogOpen}
           parcelaId={selectedParcela.id}
+          dataVencimento={selectedParcela.data_vencimento}
           valorParcela={selectedParcela.valor_parcela}
           descricao={selectedParcela.contas_receber?.descricao || ''}
           onSuccess={() => {
