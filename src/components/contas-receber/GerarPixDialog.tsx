@@ -97,7 +97,7 @@ export function GerarPixDialog({
       calculateFees();
     } else {
       // Reset state when modal closes
-      handleReset();
+      handleResetFull();
     }
   }, [open, ownerId, dataVencimento, valorParcela]);
 
@@ -110,20 +110,42 @@ export function GerarPixDialog({
         throw new Error('Sessão não encontrada. Por favor, faça login novamente.');
       }
 
-      if (diasAtraso > 0 && config?.aplica_juros_multa) {
-        const { error: updateError } = await supabase
-          .from('admin_parcelas_receber')
-          .update({
-            valor_multa: multa,
-            valor_juros: juros,
-            dias_atraso: diasAtraso,
-            data_calculo_juros: new Date().toISOString(),
-          })
-          .eq('id', parcelaId);
-        
-        if (updateError) {
-          throw new Error(`Falha ao atualizar juros/multa na parcela: ${updateError.message}`);
-        }
+      // 1. Buscar parcela para obter valor_original
+      const { data: currentParcela, error: fetchError } = await supabase
+        .from('admin_parcelas_receber')
+        .select('valor_parcela, valor_original')
+        .eq('id', parcelaId)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Falha ao buscar dados da parcela: ${fetchError.message}`);
+      }
+
+      // 2. Determinar o valor original
+      const originalValue = currentParcela.valor_original || currentParcela.valor_parcela;
+
+      // 3. Preparar o payload de atualização
+      const updatePayload: any = {
+        valor_multa: multa,
+        valor_juros: juros,
+        dias_atraso: diasAtraso,
+        data_calculo_juros: new Date().toISOString(),
+        valor_parcela: valorTotal, // Atualiza valor_parcela com o novo total
+      };
+
+      // Apenas salva o valor_original se ele ainda não estiver definido
+      if (!currentParcela.valor_original) {
+        updatePayload.valor_original = originalValue;
+      }
+
+      // 4. Atualizar a parcela no banco de dados
+      const { error: updateError } = await supabase
+        .from('admin_parcelas_receber')
+        .update(updatePayload)
+        .eq('id', parcelaId);
+      
+      if (updateError) {
+        throw new Error(`Falha ao atualizar juros/multa na parcela: ${updateError.message}`);
       }
 
       const body = {
@@ -210,7 +232,7 @@ export function GerarPixDialog({
   };
 
   const handleClose = () => {
-    handleReset();
+    handleResetFull();
     onOpenChange(false);
     if (onSuccess) onSuccess();
   };
@@ -221,6 +243,10 @@ export function GerarPixDialog({
     setPixPaymentPageUrl(null);
     setCopied(false);
     setClienteInfo(null);
+  };
+
+  const handleResetFull = () => {
+    handleReset();
     setJuros(0);
     setMulta(0);
     setDiasAtraso(0);
