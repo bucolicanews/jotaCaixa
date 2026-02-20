@@ -19,13 +19,36 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { ptBR } from 'date-fns/locale';
-
+import { TabelaParcelasEdicao } from '@/components/contratos/TabelaParcelasEdicao';
 import { useCapitalSocial } from '@/hooks/use-capital-social';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { v4 as uuidv4 } from 'uuid';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar' | 'semanal';
 type ModoVencimento = 'dias' | 'fixo';
+
+interface ClienteCRCompleto {
+    id: string;
+    proprietario_id?: string | null;
+    nome: string;
+    razao_social?: string | null;
+    nome_fantasia?: string | null;
+    documento?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+    telefone_fixo?: string | null;
+    cep?: string | null;
+    endereco?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+    cpf?: string | null;
+    cnpj?: string | null;
+    rg?: string | null;
+    data_nascimento?: string | null;
+}
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
@@ -41,33 +64,30 @@ const PreencherContrato: React.FC = () => {
   const isAdminOrEmployee = isDirectAdmin || isAdminUsuario;
 
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
-  const [clientesCR, setClientesCR] = useState<any[]>([]);
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   
-  // Estados do Formulário
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number>(0); 
   const [tituloDocumento, setTituloDocumento] = useState('');
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<any[]>([]);
   
-  // Estados Financeiros Atualizados
   const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
   const [modoVencimento, setModoVencimento] = useState<ModoVencimento>('dias');
   
   const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(new Date());
   
-  // Para Parcelar/Repetir/Semanal
-  const [numeroParcelas, setNumeroParcelas] = useState<number>(1); // Semanal = Meses, Parcelar/Repetir = Qtd Parcelas
+  const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(new Date());
   
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [diaFixo, setDiaFixo] = useState<number>(5);
-  const [diaSemana, setDiaSemana] = useState<string>('1'); // 1 = Segunda
+  const [diaSemana, setDiaSemana] = useState<string>('1');
 
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [dadosContratada, setDadosContratada] = useState<any>(null);
@@ -314,11 +334,10 @@ const PreencherContrato: React.FC = () => {
           newTags['{{EMPRESA_CPF}}'] = dadosContratada.cpf || '';
       }
 
-      // 3. Dados Financeiros
       let valorFinalContrato = 0;
       let valorParcelaFinal = 0;
       let dataPrimeiroVenc = '';
-      let clausulaMensalidades = ''; // NOVA VARIÁVEL
+      let clausulaMensalidades = '';
 
       if (tipoLancamento === 'unico') {
           valorFinalContrato = valorTotal;
@@ -344,8 +363,8 @@ const PreencherContrato: React.FC = () => {
           clausulaMensalidades = `${baseText} ${recorrenciaTexto} a iniciar da data ${dataPrimeiroVenc}.`;
 
       } else if (tipoLancamento === 'semanal') {
-          valorFinalContrato = valorTotal * numeroParcelas; // Valor Mensal * Meses
-          valorParcelaFinal = 0; // Variável
+          valorFinalContrato = valorTotal * numeroParcelas;
+          valorParcelaFinal = 0;
           dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
           
           const diasSemanaNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -360,7 +379,6 @@ const PreencherContrato: React.FC = () => {
       newTags['{{PRIMEIRO_VENCIMENTO}}'] = dataPrimeiroVenc;
       newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
       
-      // NOVA TAG PARA O TEXTO DINÂMICO
       newTags['{{CLAUSULA_FINANCEIRA_MENSALIDADES}}'] = clausulaMensalidades;
       
       setValoresTags(newTags);
@@ -374,11 +392,17 @@ const PreencherContrato: React.FC = () => {
       numeroParcelas, 
       dataVencimentoUnico, 
       dataPrimeiroVencimento,
+      modoVencimento,
+      diaFixo,
+      intervaloDias,
+      diaSemana
   ]);
 
   const tagsParaPreenchimentoManual = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
-    return combined
+    const uniqueTags = Array.from(new Map(combined.map(item => [item.nome_tag, item])).values());
+    
+    return uniqueTags
         .filter(tag => 
             !tag.nome_tag.startsWith('{{CLIENTE_') && 
             !tag.nome_tag.startsWith('{{EMPRESA_') &&
@@ -387,18 +411,17 @@ const PreencherContrato: React.FC = () => {
         .map(t => t.nome_tag);
   }, [tagsCustomizadas]);
 
-  const renderConteudo = useCallback(() => {
+  const renderConteudo = () => {
     let html = modelo?.conteudo_template || '';
     Object.keys(valoresTags).forEach(tag => {
       const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       html = html.replace(regex, valoresTags[tag] || '');
     });
     return html;
-  }, [modelo, valoresTags]);
+  };
 
   const handlePreview = () => {
-      const template = conteudoPrincipalManual || modelo?.conteudo_template || '';
-      const finalHtml = renderConteudo(template, valoresTags);
+      const finalHtml = renderConteudo();
       setConteudoPreview(finalHtml);
       setPreviewTitle(tituloDocumento || modelo?.titulo || '');
       setPreviewOpen(true);
@@ -417,7 +440,6 @@ const PreencherContrato: React.FC = () => {
         return;
     }
 
-    // Validação de segurança para evitar salvar o ID do proprietário como cliente
     if (clienteSelecionadoId === proprietarioContratoId) {
         showError('O cliente selecionado não pode ser o mesmo que a empresa proprietária do contrato.');
         return;
@@ -425,26 +447,37 @@ const PreencherContrato: React.FC = () => {
 
     setIsSubmitting(true);
     
-    const { data: configData } = await supabase
-        .from('configuracao_contratos')
-        .select('id_conta_clientes_receber, id_conta_receita_contrato')
-        .eq('proprietario_id', proprietarioContratoId)
-        .single();
-        
-    const contaPatrimonialId = configData?.id_conta_clientes_receber || null;
-    const contaReceitaId = configData?.id_conta_receita_contrato || null;
-    
-    const { data: parcelaConfig } = await supabase
-        .from('configuracao_contas_receber')
-        .select('conta_contabil_id')
-        .eq('proprietario_id', proprietarioContratoId)
-        .eq('tipo_registro', 'parcela')
-        .single();
-        
-    const contaParcelaId = parcelaConfig?.conta_contabil_id || null;
-    const temConfigContabil = !!contaPatrimonialId && !!contaReceitaId && !!contaParcelaId;
-
     try {
+        const { data: clientExists, error: clientCheckError } = await supabase
+            .from('clientes')
+            .select('id')
+            .eq('id', clienteSelecionadoId)
+            .maybeSingle();
+
+        if (clientCheckError || !clientExists) {
+            console.error('Client check failed:', { clienteSelecionadoId, clientCheckError });
+            throw new Error(`O cliente selecionado não é válido ou não foi encontrado na base de dados de clientes. Verifique o cadastro do cliente.`);
+        }
+
+        const { data: configData } = await supabase
+            .from('configuracao_contratos')
+            .select('id_conta_clientes_receber, id_conta_receita_contrato')
+            .eq('proprietario_id', proprietarioContratoId)
+            .single();
+            
+        const contaPatrimonialId = configData?.id_conta_clientes_receber || null;
+        const contaReceitaId = configData?.id_conta_receita_contrato || null;
+        
+        const { data: parcelaConfig } = await supabase
+            .from('configuracao_contas_receber')
+            .select('conta_contabil_id')
+            .eq('proprietario_id', proprietarioContratoId)
+            .eq('tipo_registro', 'parcela')
+            .single();
+            
+        const contaParcelaId = parcelaConfig?.conta_contabil_id || null;
+        const temConfigContabil = !!contaPatrimonialId && !!contaReceitaId && !!contaParcelaId;
+
         let currentContratoId = contratoId;
         let contaReceberId: string | null = null;
         let valorTotalPago = 0;
@@ -492,7 +525,6 @@ const PreencherContrato: React.FC = () => {
             valorTotalNovasParcelas = valorTotal;
             parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorTotal, data_vencimento: format(dataVencimentoUnico!, 'yyyy-MM-dd'), status: 'aberta' });
         } else if (tipoLancamento === 'semanal') {
-            // Lógica Semanal
             const diaSemanaInt = parseInt(diaSemana);
             let contadorParcelas = 1;
             
@@ -507,8 +539,6 @@ const PreencherContrato: React.FC = () => {
                 const valorPorSemana = segundasNoMes.length > 0 ? valorTotal / segundasNoMes.length : 0;
                 
                 segundasNoMes.forEach(data => {
-                    // Inclui apenas se for >= dataPrimeiroVencimento para não gerar datas passadas indesejadas na primeira iteração
-                    // Se o usuário quer incluir, ele deve ajustar a data de inicio
                     if (!isBefore(data, dataPrimeiroVencimento!)) {
                         parcelasParaInserir.push({
                             numero_parcela: contadorParcelas++,
@@ -521,7 +551,6 @@ const PreencherContrato: React.FC = () => {
                 });
             }
         } else {
-            // Parcelar ou Repetir
             let valorParcelaBase = 0;
             if (tipoLancamento === 'parcelar') {
                  valorParcelaBase = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
@@ -535,14 +564,12 @@ const PreencherContrato: React.FC = () => {
                 let dataVenc: Date;
                 
                 if (modoVencimento === 'fixo') {
-                    // Lógica Dia Fixo Mensal
                     const mesReferencia = addMonths(dataPrimeiroVencimento!, i);
                     const ultimoDiaDoMes = getDaysInMonth(mesReferencia);
                     const diaEfetivo = Math.min(diaFixo, ultimoDiaDoMes);
                     
                     dataVenc = setDate(mesReferencia, diaEfetivo);
                 } else {
-                    // Lógica Intervalo Dias
                     dataVenc = addDays(dataPrimeiroVencimento!, i * intervaloDias);
                 }
 
@@ -695,7 +722,9 @@ const PreencherContrato: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <div className="flex items-center">
             <Button onClick={() => navigate('/contratos')} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
-            <h1 className="text-2xl font-bold">Preencher: {modelo?.titulo}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+              <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Gerar Contrato'}: {modelo?.titulo}
+            </h1>
         </div>
         {renderActionButtons()}
       </div>
@@ -787,7 +816,6 @@ const PreencherContrato: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4 border-t pt-4 mt-2">
-                   {/* Linha de configuração do modo de recorrência */}
                    <div className="grid grid-cols-2 gap-4">
                       {tipoLancamento === 'semanal' ? (
                           <>
@@ -831,7 +859,6 @@ const PreencherContrato: React.FC = () => {
                       )}
                    </div>
 
-                   {/* Linha de detalhes da data/intervalo */}
                    <div className="grid grid-cols-2 gap-4">
                       {tipoLancamento !== 'semanal' && (
                           <div className="space-y-2">
@@ -886,7 +913,7 @@ const PreencherContrato: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex justify-between items-center">
               Prévia do Documento
-              <Button variant="ghost" size="sm" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4 mr-2" /> Ampliar</Button>
+              <Button variant="ghost" size="sm" onClick={handlePreview}><Eye className="h-4 w-4 mr-2" /> Ampliar</Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
