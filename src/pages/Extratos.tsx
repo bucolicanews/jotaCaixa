@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react';
+import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
@@ -27,6 +27,7 @@ import ReactDOMServer from 'react-dom/server';
 import ExtratosPrint from '@/components/contabilidade/ExtratosPrint';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import FormExtratoDiretoDialog from '@/components/formularios/FormExtratoDiretoDialog';
 
 interface ExtratoRecord extends TransacaoExtrato {
     id: string;
@@ -53,16 +54,16 @@ const Extratos: React.FC = () => {
   const [contasDisponiveis, setContasDisponiveis] = useState<{ id: string, nome: string }[]>([]);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   
-  // Edição
+  // Diálogos
   const [extratoParaEditar, setExtratoParaEditar] = useState<ExtratoRecord | null>(null);
-  const [dialogAberto, setDialogAberto] = useState(false);
+  const [dialogEdicaoAberto, setDialogEdicaoAberto] = useState(false);
+  const [dialogNovoAberto, setDialogNovoAberto] = useState(false);
 
   const { ownerId } = useOwner();
 
   const fetchContas = useCallback(async () => {
     if (!ownerId) return;
     
-    // Busca contas de saldo que estão vinculadas a uma conta contábil marcada como is_banco = true
     const { data, error } = await supabase
         .from('saldo_contas')
         .select(`
@@ -71,13 +72,12 @@ const Extratos: React.FC = () => {
             plano_contas ( is_banco )
         `)
         .eq('proprietario_id', ownerId)
-        .eq('plano_contas.is_banco', true); // FILTRO CRÍTICO: Apenas contas bancárias
+        .eq('plano_contas.is_banco', true);
 
     if (error) {
         console.error('Erro ao carregar contas:', error);
         setContasDisponiveis([]);
     } else {
-        // Filtra para garantir que apenas contas com is_banco = true sejam retornadas
         const filtered = (data || []).filter(c => c.plano_contas?.is_banco === true);
         setContasDisponiveis(filtered.map(c => ({ id: c.id, nome: c.nome })) || []);
     }
@@ -124,7 +124,6 @@ const Extratos: React.FC = () => {
         query = query.or(`descricao.ilike.${termo},identificacao.ilike.${termo}`);
     }
     
-    // NOVO FILTRO DE DATA
     if (filtroPeriodo?.from) {
         query = query.gte('data', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
@@ -153,19 +152,17 @@ const Extratos: React.FC = () => {
   
   const handleEdit = (extrato: ExtratoRecord) => {
       setExtratoParaEditar(extrato);
-      setDialogAberto(true);
+      setDialogEdicaoAberto(true);
   };
   
   const handleDelete = async (extrato: ExtratoRecord) => {
-    if (!window.confirm('Tem certeza que deseja excluir este registro de extrato? Esta ação também tentará DELETAR os lançamentos contábeis correspondentes na tabela Lançamentos.')) return;
+    if (!window.confirm('Tem certeza que deseja excluir este registro de extrato? Esta ação também tentará DELETAR os lançamentos contábeis correspondentes.')) return;
     
     setIsDeleting(true);
     try {
-        // 1. Deletar os lançamentos correspondentes na tabela 'lancamentos'
         const valorAbsoluto = Math.abs(extrato.valor);
         
-        // Deleta o lançamento de Ativo/Caixa (que tem conta_bancaria_id)
-        const { error: deleteAtivoError } = await supabase
+        await supabase
             .from('lancamentos')
             .delete()
             .eq('proprietario_id', extrato.empresa_id)
@@ -174,11 +171,8 @@ const Extratos: React.FC = () => {
             .eq('valor', valorAbsoluto)
             .eq('origem', 'conciliacao_extrato');
             
-        if (deleteAtivoError) console.warn('Aviso: Falha ao deletar lançamento de Ativo/Caixa:', deleteAtivoError);
-        
-        // Deleta o lançamento de Resultado/DRE (que tem conta_contabil_id)
         if (extrato.conta_contabil_id) {
-            const { error: deleteResultadoError } = await supabase
+            await supabase
                 .from('lancamentos')
                 .delete()
                 .eq('proprietario_id', extrato.empresa_id)
@@ -186,11 +180,8 @@ const Extratos: React.FC = () => {
                 .eq('descricao', extrato.descricao)
                 .eq('valor', valorAbsoluto)
                 .eq('origem', 'conciliacao_extrato');
-                
-            if (deleteResultadoError) console.warn('Aviso: Falha ao deletar lançamento de Resultado/DRE:', deleteResultadoError);
         }
         
-        // 2. Deleta o registro da tabela 'extratos'
         const { error: extratoError } = await supabase
             .from('extratos')
             .delete()
@@ -198,7 +189,7 @@ const Extratos: React.FC = () => {
             
         if (extratoError) throw extratoError;
         
-        showSuccess('Registro de extrato e lançamentos contábeis correspondentes excluídos com sucesso.');
+        showSuccess('Registro de extrato excluído com sucesso.');
         fetchExtratos();
     } catch (error: any) {
         showError('Falha ao excluir extrato: ' + error.message);
@@ -208,7 +199,8 @@ const Extratos: React.FC = () => {
   };
   
   const handleSaveComplete = () => {
-      setDialogAberto(false);
+      setDialogEdicaoAberto(false);
+      setDialogNovoAberto(false);
       setExtratoParaEditar(null);
       fetchExtratos();
   };
@@ -232,14 +224,12 @@ const Extratos: React.FC = () => {
     printContent(htmlContent, `Extratos - ${ownerName}`, orientation);
   };
   
-  // --- CÁLCULO DOS TOTAIS PARA OS CARDS ---
   const { totalEntradas, totalSaidas, variacaoLiquida } = useMemo(() => {
       const entradas = extratos.filter(e => e.tipo === 'Entrada').reduce((sum, e) => sum + Math.abs(e.valor), 0);
       const saidas = extratos.filter(e => e.tipo === 'Saida').reduce((sum, e) => sum + Math.abs(e.valor), 0);
       const variacao = entradas - saidas;
       return { totalEntradas: entradas, totalSaidas: saidas, variacaoLiquida: variacao };
   }, [extratos]);
-  // ---------------------------------------
 
   if (carregandoSessao || carregandoExtratos) {
     return (
@@ -252,16 +242,21 @@ const Extratos: React.FC = () => {
   }
   
   if (!ownerId) {
-    return <LayoutPrincipal><Card><CardContent className="p-6">Você não está vinculado a uma empresa para ver extratos.</CardContent></Card></LayoutPrincipal>;
+    return <LayoutPrincipal><Card><CardContent className="p-6">Você não tem permissão para ver extratos.</CardContent></Card></LayoutPrincipal>;
   }
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-3xl font-bold mb-6 flex items-center">
-        <Banknote className="w-6 h-6 mr-2" /> Extratos Bancários
-      </h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold flex items-center">
+          <Banknote className="w-6 h-6 mr-2" /> Extratos Bancários
+        </h1>
+        <Button onClick={() => setDialogNovoAberto(true)} className="w-full sm:w-auto">
+          <PlusCircle className="w-4 h-4 mr-2" />
+          Nova Movimentação
+        </Button>
+      </div>
       
-      {/* NOVO: CARDS DE RESUMO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card className="border-l-4 border-green-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -297,7 +292,6 @@ const Extratos: React.FC = () => {
               </CardContent>
           </Card>
       </div>
-      {/* FIM CARDS DE RESUMO */}
       
       <Card className="mb-6">
         <CardHeader className="pb-2">
@@ -419,10 +413,16 @@ const Extratos: React.FC = () => {
       
       <ExtratoFormDialog
           extratoInicial={extratoParaEditar}
-          open={dialogAberto}
-          onOpenChange={setDialogAberto}
+          open={dialogEdicaoAberto}
+          onOpenChange={setDialogEdicaoAberto}
           onSaveComplete={handleSaveComplete}
           contasContabeis={contasContabeisResultado}
+      />
+
+      <FormExtratoDiretoDialog
+          open={dialogNovoAberto}
+          onOpenChange={setDialogNovoAberto}
+          onSaveComplete={handleSaveComplete}
       />
     </LayoutPrincipal>
   );
