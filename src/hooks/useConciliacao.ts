@@ -324,18 +324,28 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             
             // Pré-processamento do conteúdo do CSV para remover linhas indesejadas
             const lines = fileContent.split('\n');
-            const headerRow = lines.find(line => line.trim().toLowerCase().startsWith('data;'));
-            if (!headerRow) {
-                throw new Error("Cabeçalho do CSV (iniciando com 'Data;') não encontrado.");
+            
+            // Busca a linha do cabeçalho de forma flexível (procurando por 'Data' e 'Valor' ou 'Descrição')
+            const headerIndex = lines.findIndex(line => {
+                const l = line.toLowerCase();
+                return l.includes('data') && (l.includes('valor') || l.includes('descri') || l.includes('transa'));
+            });
+
+            if (headerIndex === -1) {
+                throw new Error("Cabeçalho do CSV não encontrado. Certifique-se de que o arquivo contém as colunas 'Data' e 'Valor'.");
             }
-            const cleanedLines = [headerRow.trim()]; // Começa com o cabeçalho limpo
-            lines.slice(1).forEach(line => {
+
+            const headerRow = lines[headerIndex].trim();
+            const cleanedLines = [headerRow];
+            
+            // Filtrar linhas de dados (devem começar com algo que pareça uma data)
+            lines.slice(headerIndex + 1).forEach(line => {
                 const trimmedLine = line.trim();
-                // Mantém apenas linhas que começam com um formato de data (dd/mm/yyyy)
-                if (/^\d{2}\/\d{2}\/\d{4}/.test(trimmedLine)) {
+                if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(trimmedLine)) {
                     cleanedLines.push(trimmedLine);
                 }
             });
+            
             const cleanedCsvContent = cleanedLines.join('\n');
 
             const contentHash = calculateContentHash(cleanedCsvContent);
@@ -365,7 +375,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             Papa.parse(cleanedCsvContent, {
                 header: true,
                 skipEmptyLines: 'greedy',
-                delimiter: ";",
+                delimiter: "", // Auto-detect delimiter (vírgula ou ponto-e-vírgula)
                 complete: (results: ParseResult<any>) => {
                     try {
                         console.log('[CSV Debug] Dados parseados:', results.data);
