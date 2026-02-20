@@ -126,7 +126,6 @@ const PreencherContrato: React.FC = () => {
               setResolvedOwnerId(data.admin_id);
               return;
           }
-          showError('Não foi possível identificar a empresa contratada. Contate o suporte.');
       };
       resolveOwner();
   }, [carregandoSessao, usuario, isDirectAdmin, perfil]);
@@ -281,7 +280,7 @@ const PreencherContrato: React.FC = () => {
     }
     
     setCarregandoDados(false);
-  }, [modeloId, resolvedOwnerId, isAdminOrEmployee, fetchDependentData, contratoId]);
+  }, [modeloId, resolvedOwnerId, isAdminOrEmployee, fetchDependentData, contratoId, tabelaContasReceber, tabelaParcelasReceber]);
 
   useEffect(() => {
     if (!carregandoSessao && resolvedOwnerId) buscarDados();
@@ -364,13 +363,7 @@ const PreencherContrato: React.FC = () => {
 
       } else if (tipoLancamento === 'semanal') {
           valorFinalContrato = valorTotal * numeroParcelas;
-          valorParcelaFinal = 0;
-          dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
-          
-          const diasSemanaNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-          const diaSemanaNome = diasSemanaNomes[parseInt(diaSemana)];
-
-          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} meses de serviço. O pagamento será realizado semanalmente, sendo o valor mensal de ${formatCurrency(valorTotal)} dividido pelo número de semanas do mês, resultando em parcelas semanais variáveis, cobradas toda ${diaSemanaNome}, a iniciar da data ${dataPrimeiroVenc}.`;
+          clausulaMensalidades = `O valor total do contrato é de ${formatCurrency(valorFinalContrato)}, correspondente a ${numeroParcelas} meses de serviço. O pagamento será realizado semanalmente, sendo o valor mensal de ${formatCurrency(valorTotal)} dividido pelo número de semanas do mês, resultando em parcelas semanais variáveis, a iniciar da data ${dataPrimeiroVenc}.`;
       }
 
       newTags['{{VALOR_TOTAL_CONTRATO}}'] = formatCurrency(valorFinalContrato);
@@ -378,7 +371,6 @@ const PreencherContrato: React.FC = () => {
       newTags['{{NUMERO_PARCELAS}}'] = tipoLancamento === 'semanal' ? `${numeroParcelas} meses` : numeroParcelas.toString();
       newTags['{{PRIMEIRO_VENCIMENTO}}'] = dataPrimeiroVenc;
       newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
-      
       newTags['{{CLAUSULA_FINANCEIRA_MENSALIDADES}}'] = clausulaMensalidades;
       
       setValoresTags(newTags);
@@ -395,7 +387,9 @@ const PreencherContrato: React.FC = () => {
       modoVencimento,
       diaFixo,
       intervaloDias,
-      diaSemana
+      diaSemana,
+      valoresTags,
+      formatCurrency
   ]);
 
   const tagsParaPreenchimentoManual = useMemo(() => {
@@ -429,7 +423,7 @@ const PreencherContrato: React.FC = () => {
 
   const handleSalvarContrato = async (status: string) => {
     if (!temCapitalSocial && status !== 'rascunho') {
-        showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber.');
+        showError('É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos.');
         return;
     }
     
@@ -440,27 +434,45 @@ const PreencherContrato: React.FC = () => {
         return;
     }
 
-    if (clienteSelecionadoId === proprietarioContratoId) {
-        showError('O cliente selecionado não pode ser o mesmo que a empresa proprietária do contrato.');
-        return;
-    }
-
     setIsSubmitting(true);
     
     try {
-        // CORREÇÃO: Verificação em ambas as tabelas (clientes CR e tbl_clientes sistema)
-        const [crRes, sysRes] = await Promise.all([
-            supabase.from('clientes').select('id').eq('id', clienteSelecionadoId).maybeSingle(),
-            supabase.from('tbl_clientes').select('id').eq('id', clienteSelecionadoId).maybeSingle()
-        ]);
+        // --- ETAPA CRÍTICA: GARANTIR QUE O CLIENTE EXISTE NA TABELA 'clientes' ---
+        // Se o cliente selecionado vier de 'tbl_clientes' mas não de 'clientes', o FK do banco falha.
+        const { data: checkCR, error: checkError } = await supabase
+            .from('clientes')
+            .select('id')
+            .eq('id', clienteSelecionadoId)
+            .maybeSingle();
 
-        if ((crRes.error && crRes.error.code !== 'PGRST116') || (sysRes.error && sysRes.error.code !== 'PGRST116')) {
-            throw new Error(`Erro ao validar o cliente. Tente novamente.`);
-        }
+        if (checkError) throw checkError;
 
-        if (!crRes.data && !sysRes.data) {
-            throw new Error(`O cliente selecionado não é válido ou não foi encontrado na base de dados. Verifique o cadastro do cliente.`);
+        if (!checkCR) {
+            // Se não existe na tabela 'clientes' (Financeiro), buscamos na 'tbl_clientes' (Sistema) e criamos a "sombra"
+            const { data: sysClient } = await supabase
+                .from('tbl_clientes')
+                .select('*')
+                .eq('id', clienteSelecionadoId)
+                .single();
+
+            if (sysClient) {
+                const { error: insertCRError } = await supabase
+                    .from('clientes')
+                    .insert({
+                        id: sysClient.id,
+                        proprietario_id: proprietarioContratoId,
+                        nome: sysClient.nome,
+                        razao_social: sysClient.razao_social,
+                        email: sysClient.email,
+                        documento: sysClient.documento || sysClient.cnpj || sysClient.cpf,
+                        is_system_client: true
+                    });
+                if (insertCRError) throw insertCRError;
+            } else {
+                throw new Error('Cliente selecionado não encontrado em nenhuma base de dados.');
+            }
         }
+        // --- FIM ETAPA CRÍTICA ---
 
         const { data: configData } = await supabase
             .from('configuracao_contratos')
@@ -483,7 +495,7 @@ const PreencherContrato: React.FC = () => {
 
         let currentContratoId = contratoId;
         let contaReceberId: string | null = null;
-        let valorTotalPago = 0;
+        let valorTotalAnterior = 0;
         
         if (isEditing && contratoInicial) {
             const { data: oldContaSintetica } = await supabase
@@ -494,30 +506,25 @@ const PreencherContrato: React.FC = () => {
                 
             if (oldContaSintetica) {
                 contaReceberId = oldContaSintetica.id;
-                
-                const { data: existingParcelas, error: parcelasError } = await supabase
+                const { data: existingParcelas } = await supabase
                     .from(tabelaParcelasReceber)
-                    .select('id, numero_parcela, valor_parcela, data_vencimento, status')
+                    .select('id, valor_parcela, status')
                     .eq('conta_receber_id', contaReceberId);
                     
-                if (parcelasError) throw parcelasError;
-                
-                const parcelasPagas = existingParcelas.filter(p => p.status !== 'aberta');
-                const parcelasAbertasAntigasIds = existingParcelas.filter(p => p.status === 'aberta').map(p => p.id);
-                
-                if (parcelasAbertasAntigasIds.length > 0) {
-                    await supabase.from(tabelaParcelasReceber)
-                        .delete()
-                        .in('id', parcelasAbertasAntigasIds);
+                const parcelasPagasCount = existingParcelas?.filter(p => p.status !== 'aberta').length || 0;
+                const valorPagas = (existingParcelas || []).filter(p => p.status !== 'aberta').reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+                valorTotalAnterior = valorPagas;
+
+                const parcelasAbertasIds = (existingParcelas || []).filter(p => p.status === 'aberta').map(p => p.id);
+                if (parcelasAbertasIds.length > 0) {
+                    await supabase.from(tabelaParcelasReceber).delete().in('id', parcelasAbertasIds);
                 }
-                
-                valorTotalPago = parcelasPagas.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
                 
                 await supabase.from('lancamentos')
                     .delete()
                     .eq('origem', 'lancamento_cr')
                     .eq('proprietario_id', proprietarioContratoId)
-                    .or(`descricao.ilike.%CR ID: ${contaReceberId!.substring(0, 8)}%`);
+                    .ilike('descricao', `%CR ID: ${contaReceberId!.substring(0, 8)}%`);
             }
         }
         
@@ -527,65 +534,23 @@ const PreencherContrato: React.FC = () => {
         if (tipoLancamento === 'unico') {
             valorTotalNovasParcelas = valorTotal;
             parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: valorTotal, data_vencimento: format(dataVencimentoUnico!, 'yyyy-MM-dd'), status: 'aberta' });
-        } else if (tipoLancamento === 'semanal') {
-            const diaSemanaInt = parseInt(diaSemana);
-            let contadorParcelas = 1;
-            
-            for (let m = 0; m < numeroParcelas; m++) {
-                const mesReferencia = addMonths(dataPrimeiroVencimento!, m);
-                const inicioMes = startOfMonth(mesReferencia);
-                const fimMes = endOfMonth(mesReferencia);
-                
-                const diasNoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
-                const segundasNoMes = diasNoMes.filter(d => getDay(d) === diaSemanaInt);
-                
-                const valorPorSemana = segundasNoMes.length > 0 ? valorTotal / segundasNoMes.length : 0;
-                
-                segundasNoMes.forEach(data => {
-                    if (!isBefore(data, dataPrimeiroVencimento!)) {
-                        parcelasParaInserir.push({
-                            numero_parcela: contadorParcelas++,
-                            valor_parcela: valorPorSemana,
-                            data_vencimento: format(data, 'yyyy-MM-dd'),
-                            status: 'aberta'
-                        });
-                        valorTotalNovasParcelas += valorPorSemana;
-                    }
-                });
-            }
         } else {
-            let valorParcelaBase = 0;
-            if (tipoLancamento === 'parcelar') {
-                 valorParcelaBase = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
-                 valorTotalNovasParcelas = valorTotal;
-            } else {
-                 valorParcelaBase = valorTotal;
-                 valorTotalNovasParcelas = valorTotal * numeroParcelas;
-            }
-
+            const valorParcelaBase = tipoLancamento === 'parcelar' ? (valorTotal / numeroParcelas) : valorTotal;
+            valorTotalNovasParcelas = tipoLancamento === 'parcelar' ? valorTotal : (valorTotal * numeroParcelas);
+            
             for (let i = 0; i < numeroParcelas; i++) {
                 let dataVenc: Date;
-                
                 if (modoVencimento === 'fixo') {
                     const mesReferencia = addMonths(dataPrimeiroVencimento!, i);
-                    const ultimoDiaDoMes = getDaysInMonth(mesReferencia);
-                    const diaEfetivo = Math.min(diaFixo, ultimoDiaDoMes);
-                    
-                    dataVenc = setDate(mesReferencia, diaEfetivo);
+                    dataVenc = setDate(mesReferencia, Math.min(diaFixo, getDaysInMonth(mesReferencia)));
                 } else {
                     dataVenc = addDays(dataPrimeiroVencimento!, i * intervaloDias);
                 }
-
-                parcelasParaInserir.push({ 
-                    numero_parcela: i + 1, 
-                    valor_parcela: valorParcelaBase, 
-                    data_vencimento: format(dataVenc, 'yyyy-MM-dd'), 
-                    status: 'aberta' 
-                });
+                parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcelaBase, data_vencimento: format(dataVenc, 'yyyy-MM-dd'), status: 'aberta' });
             }
         }
         
-        const valorTotalFinal = valorTotalPago + valorTotalNovasParcelas;
+        const valorTotalFinal = valorTotalAnterior + valorTotalNovasParcelas;
         
         const contratoPayload = {
             modelo_id: modelo?.id,
@@ -600,22 +565,20 @@ const PreencherContrato: React.FC = () => {
         };
         
         if (isEditing) {
-            const { data, error } = await supabase.from('contratos_gerados').update(contratoPayload).eq('id', contratoId).select('id').single();
-            if (error) throw error;
+            const { data } = await supabase.from('contratos_gerados').update(contratoPayload).eq('id', contratoId).select('id').single();
             currentContratoId = data.id;
         } else {
-            const { data, error } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
-            if (error) throw error;
+            const { data } = await supabase.from('contratos_gerados').insert(contratoPayload).select('id').single();
             currentContratoId = data.id;
         }
         
         const contaReceberPayload = {
-            ...(isAdminOrEmployee ? { admin_id: proprietarioContratoId } : { empresa_id: proprietarioContratoId }),
+            [ownerKey]: proprietarioContratoId,
             cliente_id: clienteSelecionadoId,
             descricao: `Contrato: ${tituloDocumento}`,
             valor_total: valorTotalFinal,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
-            data_vencimento: parcelasParaInserir.length > 0 ? parcelasParaInserir[0].data_vencimento : format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento,
             tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
             status: 'aberta',
             origem: 'contrato',
@@ -625,25 +588,13 @@ const PreencherContrato: React.FC = () => {
         };
         
         if (isEditing && contaReceberId) {
-            const { error: contaError } = await supabase
-                .from(tabelaContasReceber)
-                .update(contaReceberPayload)
-                .eq('id', contaReceberId);
-            if (contaError) throw contaError;
+            await supabase.from(tabelaContasReceber).update(contaReceberPayload).eq('id', contaReceberId);
         } else {
-            const { data: newContaSintetica, error: contaError } = await supabase
-                .from(tabelaContasReceber)
-                .insert(contaReceberPayload)
-                .select('id')
-                .single();
-                
-            if (contaError) throw contaError;
-            contaReceberId = newContaSintetica.id;
+            const { data } = await supabase.from(tabelaContasReceber).insert(contaReceberPayload).select('id').single();
+            contaReceberId = data.id;
         }
         
-        if (!contaReceberId) throw new Error("Falha ao obter ID da Conta a Receber.");
-        const validContaReceberId = contaReceberId;
-        
+        const validContaReceberId = contaReceberId!;
         const parcelasComId = parcelasParaInserir.map(p => ({
             ...p,
             conta_receber_id: validContaReceberId,
@@ -652,51 +603,24 @@ const PreencherContrato: React.FC = () => {
         }));
         
         if (parcelasComId.length > 0) {
-            const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
-            if (parcelError) throw parcelError;
+            await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
         }
         
         if (temConfigContabil && status !== 'rascunho') {
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
-            const launchDescription = `Contrato: ${tituloDocumento}`;
-            const contaReceberIdShort = validContaReceberId.substring(0, 8);
+            const launchDesc = `Contrato: ${tituloDocumento}`;
+            const crIdShort = validContaReceberId.substring(0, 8);
             
             const idPatrimonial = uuidv4();
             const idReceita = uuidv4();
             
-            const lancamentoPatrimonialPayload = {
-                id: idPatrimonial,
-                proprietario_id: proprietarioContratoId,
-                data_movimentacao: dataMovimentacao,
-                descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
-                valor: valorTotalFinal,
-                tipo: 'Entrada' as const,
-                conta_bancaria_id: null,
-                conta_contabil_id: contaPatrimonialId,
-                origem: 'lancamento_cr',
-                historico_id: null,
-                conta_resultado_id: idReceita,
-            };
-            
-            const lancamentoReceitaPayload = {
-                id: idReceita,
-                proprietario_id: proprietarioContratoId,
-                data_movimentacao: dataMovimentacao,
-                descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
-                valor: valorTotalFinal,
-                tipo: 'Saida' as const,
-                conta_bancaria_id: null,
-                conta_contabil_id: contaReceitaId,
-                origem: 'lancamento_cr',
-                historico_id: null,
-                conta_resultado_id: idPatrimonial,
-            };
-            
-            const { error: lancamentoError } = await supabase.from('lancamentos').insert([lancamentoPatrimonialPayload, lancamentoReceitaPayload]);
-            if (lancamentoError) throw lancamentoError;
+            await supabase.from('lancamentos').insert([
+                { id: idPatrimonial, proprietario_id: proprietarioContratoId, data_movimentacao, valor: valorTotalFinal, tipo: 'Entrada', conta_contabil_id: contaPatrimonialId, origem: 'lancamento_cr', conta_resultado_id: idReceita, descricao: `Lançamento Inicial CR: ${launchDesc} (CR ID: ${crIdShort})` },
+                { id: idReceita, proprietario_id: proprietarioContratoId, data_movimentacao, valor: valorTotalFinal, tipo: 'Saida', conta_contabil_id: contaReceitaId, origem: 'lancamento_cr', conta_resultado_id: idPatrimonial, descricao: `Receita: ${launchDesc} (CR ID: ${crIdShort})` }
+            ]);
         }
 
-        showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} e Contas a Receber geradas com sucesso!`);
+        showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} e financeiro gerado!`);
         navigate('/contratos');
     } catch (e: any) {
         showError(e.message);
@@ -737,7 +661,7 @@ const PreencherContrato: React.FC = () => {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Lançamento Inicial Obrigatório</AlertTitle>
           <AlertDescription>
-            É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos que criam Contas a Receber.
+            É necessário fazer o lançamento inicial do Capital Social antes de gerar contratos.
           </AlertDescription>
         </Alert>
       )}
