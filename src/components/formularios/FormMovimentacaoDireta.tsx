@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Save, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Upload, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -19,8 +19,9 @@ import { Label } from '@/components/ui/label';
 import { DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/utils/formatters';
 import { format } from 'date-fns';
-import { useSessao } from '@/hooks/use-sessao'; // IMPORT CORRIGIDO
+import { useSessao } from '@/hooks/use-sessao';
 import { v4 as uuidv4 } from 'uuid';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Interface for the primary launch (linked to the bank account)
 interface LancamentoPrimario {
@@ -32,7 +33,8 @@ interface LancamentoPrimario {
     conta_bancaria_id: string;
     historico_id: string | null;
     conta_contabil_id: string; // This is the DRE account ID (Resultado)
-    conta_resultado_id: string; // NOVO: ID do lançamento emparelhado
+    conta_resultado_id: string; // ID do lançamento emparelhado
+    anexo_id?: string | null;
 }
 export type { LancamentoPrimario };
 
@@ -42,29 +44,35 @@ const formSchema = z.object({
   conta_bancaria_id: z.string().uuid('Selecione a conta de destino/origem.'),
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   
-  // Contas de Partida Dobrada (Resultado)
-  conta_resultado_id: z.string().uuid('Selecione a conta de resultado (Receita/Despesa).'),
+  // Contas de Partida Dobrada (Resultado ou Ativo se for transferência)
+  conta_resultado_id: z.string().uuid('Selecione a conta de contrapartida.'),
+  
+  // Novo: Transferência
+  is_transferencia: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormMovimentacaoDiretaProps {
   onSaveComplete: () => void;
-  lancamentoInicial?: LancamentoPrimario | null; // NEW PROP
+  lancamentoInicial?: LancamentoPrimario | null;
 }
 
 const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveComplete, lancamentoInicial }) => {
   const { usuario, role, perfil } = useSessao();
   const { configMap } = useContabilConfig();
   
-  const isEditing = !!lancamentoInicial; // Determine editing mode
+  const isEditing = !!lancamentoInicial;
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]);
-  const [loadingContasResultado, setLoadingContasResultado] = useState(true);
+  const [contasContrapartida, setContasContrapartida] = useState<PlanoContas[]>([]);
+  const [loadingContasContrapartida, setLoadingContasContrapartida] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // NOVO ESTADO: ID do lançamento de DRE emparelhado (para edição)
+  // Estado para o arquivo de comprovante
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
   const [dreLaunchId, setDreLaunchId] = useState<string | null>(lancamentoInicial?.conta_resultado_id || null); 
   
   const getOwnerId = () => {
@@ -83,10 +91,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
   const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
   
-  // NOVO: Filtra as contas para mostrar apenas as marcadas como CAIXA
   const contasCaixa = contasAtivo.filter(c => c.plano_contas?.is_caixa);
 
-  // 🚨 CORREÇÃO: useForm deve ser declarado no topo do componente
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -94,60 +100,40 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       valor: Math.abs(lancamentoInicial?.valor || 0),
       conta_bancaria_id: lancamentoInicial?.conta_bancaria_id || undefined,
       historico_id: lancamentoInicial?.historico_id || null,
-      // Inicializa com undefined, o useEffect assíncrono irá definir o valor
       conta_resultado_id: undefined, 
+      is_transferencia: false,
     },
   });
   
   const tipoMovimentacao = form.watch('tipo_movimentacao');
+  const isTransferencia = form.watch('is_transferencia');
 
-  // Hook to fetch the paired DRE launch ID if editing
   useEffect(() => {
     if (isEditing && lancamentoInicial?.id && ownerId) {
         const fetchPairedLaunch = async () => {
-            // 1. Busca o lançamento emparelhado usando a referência cruzada
             const { data, error } = await supabase
                 .from('lancamentos')
-                .select('id, conta_contabil_id')
+                .select('id, conta_contabil_id, conta_bancaria_id')
                 .eq('proprietario_id', ownerId)
                 .eq('origem', 'movimentacao_direta')
-                .eq('conta_resultado_id', lancamentoInicial.id) // Busca onde o ID do lançamento primário é a referência
-                .is('conta_bancaria_id', null)
+                .eq('conta_resultado_id', lancamentoInicial.id)
                 .limit(1)
                 .single();
                 
             if (error || !data) {
-                console.error('Could not find paired DRE launch for editing:', error);
-                // Tenta a busca inversa (caso o campo tenha sido salvo de forma antiga)
-                const { data: oldData } = await supabase
-                    .from('lancamentos')
-                    .select('id, conta_contabil_id')
-                    .eq('proprietario_id', ownerId)
-                    .eq('origem', 'movimentacao_direta')
-                    .eq('descricao', lancamentoInicial.descricao)
-                    .neq('id', lancamentoInicial.id)
-                    .is('conta_bancaria_id', null)
-                    .limit(1)
-                    .single();
-                
-                if (oldData) {
-                    setDreLaunchId(oldData.id);
-                    form.setValue('conta_resultado_id', oldData.conta_contabil_id);
-                    return;
-                }
-                
-                // Se ainda assim não encontrar, lança o erro
-                throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para edição.');
+                console.error('Could not find paired launch for editing:', error);
             } else {
                 setDreLaunchId(data.id);
-                // CRÍTICO: Inicializa o campo do formulário com o conta_contabil_id do lançamento de DRE
                 form.setValue('conta_resultado_id', data.conta_contabil_id);
+                // Se o lançamento emparelhado tiver conta_bancaria_id, é uma transferência
+                if (data.conta_bancaria_id) {
+                    form.setValue('is_transferencia', true);
+                }
             }
         };
         fetchPairedLaunch();
     }
   }, [isEditing, lancamentoInicial, ownerId, form]);
-
 
   const fetchHistoricos = useCallback(async () => {
     if (!ownerId) return;
@@ -165,47 +151,92 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     }
   }, [ownerId]);
   
-  const fetchContasResultado = useCallback(async () => {
+  const fetchContasContrapartida = useCallback(async () => {
     if (!ownerId) return;
-    setLoadingContasResultado(true);
+    setLoadingContasContrapartida(true);
     
-    // Busca contas de Resultado (Receita e Despesa/Custo)
+    const ativoCode = configMap.Ativo || '1';
     const receitaCode = configMap.Receita || '4';
     const custoCode = configMap.Custo || '5';
     const despesaCode = configMap.Despesa || '6';
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao')
+        .select('id, Conta, Descricao, is_conta_resultado')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
-        .or(`Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
+        .or(`Conta.like.${ativoCode}.%,Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
         .order('Conta');
         
     if (error) {
-        showError('Erro ao carregar contas de resultado: ' + error.message);
-        setContasResultado([]);
+        showError('Erro ao carregar contas: ' + error.message);
+        setContasContrapartida([]);
     } else {
-        setContasResultado(data as PlanoContas[]);
+        setContasContrapartida(data as PlanoContas[]);
     }
-    setLoadingContasResultado(false);
-  }, [ownerId, configMap.Receita, configMap.Custo, configMap.Despesa]);
+    setLoadingContasContrapartida(false);
+  }, [ownerId, configMap]);
 
   useEffect(() => {
       if (ownerId) {
           refetchSaldos();
           fetchHistoricos();
-          fetchContasResultado();
+          fetchContasContrapartida();
       }
-  }, [ownerId, refetchSaldos, fetchHistoricos, fetchContasResultado]);
+  }, [ownerId, refetchSaldos, fetchHistoricos, fetchContasContrapartida]);
 
   useEffect(() => {
-    // Se não estiver editando e houver contas de caixa, define a primeira como padrão
     if (!isEditing && !form.getValues('conta_bancaria_id') && contasCaixa.length > 0) {
         form.setValue('conta_bancaria_id', contasCaixa[0].id);
     }
   }, [contasCaixa, form, isEditing]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setComprovanteFile(e.target.files[0]);
+    }
+  };
+
+  const uploadComprovante = async (): Promise<string | null> => {
+    if (!comprovanteFile || !ownerId) return null;
+    
+    setIsUploading(true);
+    try {
+      const fileExt = comprovanteFile.name.split('.').pop();
+      const fileName = `${ownerId}/${uuidv4()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('comprovantes-financeiros')
+        .upload(fileName, comprovanteFile);
+        
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('comprovantes-financeiros')
+        .getPublicUrl(fileName);
+        
+      // Criar registro na tabela anexos
+      const { data: anexoData, error: anexoError } = await supabase
+        .from('anexos')
+        .insert({
+          empresa_id: ownerId,
+          nome_arquivo: comprovanteFile.name,
+          tipo_mime: comprovanteFile.type,
+          url_armazenamento: publicUrl,
+        })
+        .select('id')
+        .single();
+        
+      if (anexoError) throw anexoError;
+      
+      return anexoData.id;
+    } catch (error: any) {
+      showError('Erro ao fazer upload do comprovante: ' + error.message);
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -214,10 +245,10 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     }
     
     const contaBancaria = contasAtivo.find(c => c.id === values.conta_bancaria_id);
-    const contaResultado = contasResultado.find(c => c.id === values.conta_resultado_id);
+    const contaContrapartida = contasContrapartida.find(c => c.id === values.conta_resultado_id);
     
-    if (!contaBancaria || !contaResultado) {
-        showError('Conta bancária ou conta de resultado não encontrada.');
+    if (!contaBancaria || !contaContrapartida) {
+        showError('Conta bancária ou conta de contrapartida não encontrada.');
         return;
     }
     
@@ -226,11 +257,9 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         return;
     }
     
-    // Only check balance if it's a withdrawal AND not editing (or if editing, check against current balance minus original value)
     if (values.tipo_movimentacao === 'Saida') {
         let saldoParaVerificar = contaBancaria.saldo_atual;
         if (isEditing && lancamentoInicial) {
-            // Se estiver editando, remove o valor original da conta para verificar o novo saldo
             saldoParaVerificar += Math.abs(lancamentoInicial.valor);
         }
         
@@ -242,72 +271,86 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
 
     setIsSubmitting(true);
     
-    const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
-    const valor = values.valor;
-    const historicoId = values.historico_id;
-    
-    // Contas Contábeis
-    const contaAtivoCaixa = contaBancaria.plano_contas.id;
-    const contaResultadoId = values.conta_resultado_id;
-    
-    // 1. Lançamento na Conta de Saldo (Caixa/Banco) - DÉBITO/CRÉDITO no Ativo
-    const lancamentoAtivoPayload = {
-        proprietario_id: ownerId,
-        data_movimentacao: dataMovimentacao,
-        descricao: `${values.tipo_movimentacao} Direta: ${contaResultado.Descricao}`,
-        valor: valor,
-        tipo: values.tipo_movimentacao, // Entrada (Débito) ou Saída (Crédito)
-        conta_bancaria_id: values.conta_bancaria_id,
-        conta_contabil_id: contaAtivoCaixa,
-        origem: 'movimentacao_direta',
-        historico_id: historicoId,
-        conciliado: true, // Movimentação direta é sempre conciliada
-        atualizado_em: new Date().toISOString(), // Para upsert
-    };
-    
-    // 2. Lançamento na Conta de Resultado (Partida Dobrada)
-    let tipoResultado: 'Entrada' | 'Saida';
-    
-    if (values.tipo_movimentacao === 'Entrada') {
-        // Entrada (Reforço): D: Caixa (Ativo), C: Receita -> Receita é Credora, então C = 'Saida'
-        tipoResultado = 'Saida';
-    } else {
-        // Saída (Sangria): D: Despesa/Resultado (Credora), C: Caixa (Ativo)
-        tipoResultado = 'Entrada';
-    }
-    
-    const lancamentoResultadoPayload = {
-        proprietario_id: ownerId,
-        data_movimentacao: dataMovimentacao,
-        descricao: `${values.tipo_movimentacao === 'Entrada' ? 'Reforço de Caixa' : 'Sangria de Caixa'}: ${contaResultado.Descricao}`,
-        valor: valor,
-        tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
-        conta_bancaria_id: null, // Não é conta bancária
-        conta_contabil_id: contaResultadoId, // Conta de Resultado (Receita/Despesa)
-        origem: 'movimentacao_direta',
-        historico_id: historicoId,
-        conciliado: true, // Movimentação direta é sempre conciliada
-        atualizado_em: new Date().toISOString(), // Para upsert
-    };
-
     try {
+      // 1. Upload do comprovante se houver
+      const anexoId = await uploadComprovante();
+      
+      const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+      const valor = values.valor;
+      const historicoId = values.historico_id;
+      
+      const contaAtivoCaixa = contaBancaria.plano_contas.id;
+      const contaContrapartidaId = values.conta_resultado_id;
+      
+      // Se for transferência, tenta encontrar o saldo_contas correspondente à conta de contrapartida
+      let contaBancariaContrapartidaId: string | null = null;
+      if (values.is_transferencia) {
+          const saldoContaDestino = contasAtivo.find(c => c.plano_contas?.id === contaContrapartidaId);
+          if (saldoContaDestino) {
+              contaBancariaContrapartidaId = saldoContaDestino.id;
+          }
+      }
+
+      // 1. Lançamento na Conta de Saldo (Caixa/Banco)
+      const lancamentoAtivoPayload: any = {
+          proprietario_id: ownerId,
+          data_movimentacao: dataMovimentacao,
+          descricao: values.is_transferencia 
+            ? `Transferência (${values.tipo_movimentacao === 'Entrada' ? 'de' : 'para'}): ${contaContrapartida.Descricao}`
+            : `${values.tipo_movimentacao} Direta: ${contaContrapartida.Descricao}`,
+          valor: valor,
+          tipo: values.tipo_movimentacao,
+          conta_bancaria_id: values.conta_bancaria_id,
+          conta_contabil_id: contaAtivoCaixa,
+          origem: 'movimentacao_direta',
+          historico_id: historicoId,
+          conciliado: true,
+          anexo_id: anexoId || lancamentoInicial?.anexo_id,
+          atualizado_em: new Date().toISOString(),
+      };
+      
+      // 2. Lançamento na Conta de Contrapartida (Resultado ou outro Ativo)
+      let tipoContrapartida: 'Entrada' | 'Saida';
+      
+      if (values.tipo_movimentacao === 'Entrada') {
+          // Entrada no Caixa (D) -> Saída na Contrapartida (C)
+          tipoContrapartida = 'Saida';
+      } else {
+          // Saída do Caixa (C) -> Entrada na Contrapartida (D)
+          tipoContrapartida = 'Entrada';
+      }
+      
+      const lancamentoContrapartidaPayload: any = {
+          proprietario_id: ownerId,
+          data_movimentacao: dataMovimentacao,
+          descricao: values.is_transferencia
+            ? `Transferência (${values.tipo_movimentacao === 'Entrada' ? 'para' : 'de'}): ${contaBancaria.nome}`
+            : `${values.tipo_movimentacao === 'Entrada' ? 'Reforço de Caixa' : 'Sangria de Caixa'}: ${contaContrapartida.Descricao}`,
+          valor: valor,
+          tipo: tipoContrapartida,
+          conta_bancaria_id: contaBancariaContrapartidaId, // Se for transferência, vincula ao saldo_contas
+          conta_contabil_id: contaContrapartidaId,
+          origem: 'movimentacao_direta',
+          historico_id: historicoId,
+          conciliado: true,
+          anexo_id: anexoId || lancamentoInicial?.anexo_id,
+          atualizado_em: new Date().toISOString(),
+      };
+
       if (isEditing) {
-          // CRÍTICO: Se estiver editando, precisamos dos IDs originais
           const launchIdAtivo = lancamentoInicial!.id;
           const launchIdResultado = dreLaunchId;
           
           if (!launchIdResultado) {
-              throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para edição.');
+              throw new Error('Não foi possível encontrar o lançamento emparelhado para edição.');
           }
           
-          // 3. CRÍTICO: Atualiza a referência cruzada antes do upsert
           lancamentoAtivoPayload.conta_resultado_id = launchIdResultado;
-          lancamentoResultadoPayload.conta_resultado_id = launchIdAtivo;
+          lancamentoContrapartidaPayload.conta_resultado_id = launchIdAtivo;
           
-          // Executa o UPSERT para ambos os lançamentos
           const [resAtivo, resResultado] = await Promise.all([
               supabase.from('lancamentos').upsert({ ...lancamentoAtivoPayload, id: launchIdAtivo }),
-              supabase.from('lancamentos').upsert({ ...lancamentoResultadoPayload, id: launchIdResultado }),
+              supabase.from('lancamentos').upsert({ ...lancamentoContrapartidaPayload, id: launchIdResultado }),
           ]);
           
           if (resAtivo.error) throw resAtivo.error;
@@ -316,26 +359,24 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           showSuccess(`Movimentação atualizada com sucesso!`);
           
       } else {
-          // Criação (INSERT)
-          // 3. CRÍTICO: Gera IDs e define a referência cruzada
           const idAtivo = uuidv4();
           const idResultado = uuidv4();
           
           lancamentoAtivoPayload.id = idAtivo;
           lancamentoAtivoPayload.conta_resultado_id = idResultado;
           
-          lancamentoResultadoPayload.id = idResultado;
-          lancamentoResultadoPayload.conta_resultado_id = idAtivo;
+          lancamentoContrapartidaPayload.id = idResultado;
+          lancamentoContrapartidaPayload.conta_resultado_id = idAtivo;
           
           const [resAtivo, resResultado] = await Promise.all([
               supabase.from('lancamentos').insert(lancamentoAtivoPayload),
-              supabase.from('lancamentos').insert(lancamentoResultadoPayload),
+              supabase.from('lancamentos').insert(lancamentoContrapartidaPayload),
           ]);
           
           if (resAtivo.error) throw resAtivo.error;
           if (resResultado.error) throw resResultado.error;
           
-          showSuccess(`${values.tipo_movimentacao} direta de ${formatCurrency(valor)} registrada com sucesso!`);
+          showSuccess(`${values.is_transferencia ? 'Transferência' : values.tipo_movimentacao + ' direta'} de ${formatCurrency(valor)} registrada com sucesso!`);
       }
       
       onSaveComplete();
@@ -346,26 +387,62 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     }
   };
 
+  const filteredContasContrapartida = useMemo(() => {
+    const ativoCode = configMap.Ativo || '1';
+    const receitaCode = configMap.Receita || '4';
+    const custoCode = configMap.Custo || '5';
+    const despesaCode = configMap.Despesa || '6';
+
+    return contasContrapartida.filter(c => {
+        const prefix = c.Conta.split('.')[0];
+        if (isTransferencia) {
+            // Se for transferência, mostra apenas contas de Ativo (1)
+            return prefix === ativoCode;
+        } else {
+            // Se não for transferência, mostra Receita (4) para Entrada e Despesa (5/6) para Saída
+            if (tipoMovimentacao === 'Entrada') {
+                return prefix === receitaCode;
+            } else {
+                return prefix === custoCode || prefix === despesaCode;
+            }
+        }
+    });
+  }, [contasContrapartida, isTransferencia, tipoMovimentacao, configMap]);
+
   return (
     <>
     <DialogDescription className="sr-only">
-        Formulário para registrar entradas ou saídas diretas de caixa/banco.
+        Formulário para registrar entradas, saídas ou transferências diretas de caixa/banco.
     </DialogDescription>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         
-        <FormField control={form.control} name="tipo_movimentacao" render={({ field }) => (
-          <FormItem>
-            <FormLabel>1. Tipo de Movimentação</FormLabel>
-            <FormControl>
-              <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2" disabled={isEditing}>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="Entrada" id="entrada" /><Label htmlFor="entrada" className="flex items-center text-green-600"><ArrowUpCircle className="w-4 h-4 mr-1" /> Entrada (Reforço)</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="Saida" id="saida" /><Label htmlFor="saida" className="flex items-center text-red-600"><ArrowDownCircle className="w-4 h-4 mr-1" /> Saída (Sangria)</Label></div>
-              </RadioGroup>
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
+        <div className="flex items-center justify-between">
+            <FormField control={form.control} name="tipo_movimentacao" render={({ field }) => (
+            <FormItem className="space-y-1">
+                <FormLabel>1. Tipo de Movimentação</FormLabel>
+                <FormControl>
+                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-1" disabled={isEditing}>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="Entrada" id="entrada" /><Label htmlFor="entrada" className="flex items-center text-green-600 cursor-pointer"><ArrowUpCircle className="w-4 h-4 mr-1" /> Entrada (Reforço)</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="Saida" id="saida" /><Label htmlFor="saida" className="flex items-center text-red-600 cursor-pointer"><ArrowDownCircle className="w-4 h-4 mr-1" /> Saída (Sangria)</Label></div>
+                </RadioGroup>
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )} />
+
+            <FormField control={form.control} name="is_transferencia" render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-slate-50">
+                    <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isEditing} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel className="cursor-pointer">Transferência?</FormLabel>
+                        <FormDescription className="text-[10px]">Entre contas de Ativo</FormDescription>
+                    </div>
+                </FormItem>
+            )} />
+        </div>
         
         <Separator />
         
@@ -383,7 +460,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas || isEditing}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContas ? "Carregando Contas..." : "Selecione a conta"} />
+                                <SelectValue placeholder={loadingContas ? "Carregando..." : "Selecione"} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -395,9 +472,6 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasCaixa.length === 0 && !loadingContas && (
-                        <p className="text-xs text-red-500">Nenhuma conta marcada como Caixa encontrada. Verifique Bancos/Caixas.</p>
-                    )}
                 </FormItem>
             )} />
         </div>
@@ -406,48 +480,17 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         
         <FormField control={form.control} name="conta_resultado_id" render={({ field }) => (
             <FormItem>
-                <FormLabel>4. Conta de Partida Dobrada (Resultado)</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasResultado}>
+                <FormLabel>4. {isTransferencia ? 'Conta de Contrapartida (Ativo)' : 'Conta de Partida Dobrada (Resultado)'}</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasContrapartida}>
                     <FormControl>
                         <SelectTrigger>
-                            <SelectValue placeholder={loadingContasResultado ? "Carregando Contas..." : `Selecione a conta de ${tipoMovimentacao === 'Entrada' ? 'Receita' : 'Despesa'}`} />
+                            <SelectValue placeholder={loadingContasContrapartida ? "Carregando..." : `Selecione a conta`} />
                         </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        {contasResultado
-                            .filter(c => {
-                                const prefix = c.Conta.split('.')[0];
-                                if (tipoMovimentacao === 'Entrada') {
-                                    return prefix === (configMap.Receita || '4');
-                                } else {
-                                    return prefix === (configMap.Custo || '5') || prefix === (configMap.Despesa || '6');
-                                }
-                            })
-                            .map(c => (
-                                <SelectItem key={c.id} value={c.id}>
-                                    {c.Conta} - {c.Descricao}
-                                </SelectItem>
-                            ))}
-                    </SelectContent>
-                </Select>
-                <FormMessage />
-            </FormItem>
-        )} />
-        
-        <FormField control={form.control} name="historico_id" render={({ field }) => (
-            <FormItem>
-                <FormLabel>5. Histórico (Opcional)</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || undefined}>
-                    <FormControl>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Selecione o histórico" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value={null as any}>Nenhum</SelectItem>
-                        {historicos.map(h => (
-                            <SelectItem key={h.id} value={h.id}>
-                                {h.codigo && `[${h.codigo}] `}{h.descricao}
+                        {filteredContasContrapartida.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -455,9 +498,49 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 <FormMessage />
             </FormItem>
         )} />
+        
+        <div className="grid grid-cols-2 gap-4">
+            <FormField control={form.control} name="historico_id" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>5. Histórico (Opcional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum</SelectItem>
+                            {historicos.map(h => (
+                                <SelectItem key={h.id} value={h.id}>
+                                    {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+            )} />
 
-        <Button type="submit" className="w-full" disabled={isSubmitting || (isEditing && !dreLaunchId)}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <FormItem>
+                <FormLabel>6. Comprovante</FormLabel>
+                <div className="flex items-center gap-2">
+                    <Input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" id="comprovante-upload" />
+                    <Button type="button" variant="outline" className="w-full" onClick={() => document.getElementById('comprovante-upload')?.click()}>
+                        <Upload className="w-4 h-4 mr-2" /> {comprovanteFile ? 'Trocar Arquivo' : 'Anexar'}
+                    </Button>
+                    {comprovanteFile && (
+                        <Button type="button" variant="ghost" size="icon" onClick={() => setComprovanteFile(null)}>
+                            <X className="w-4 h-4 text-red-500" />
+                        </Button>
+                    )}
+                </div>
+                {comprovanteFile && <p className="text-[10px] text-muted-foreground mt-1 truncate">{comprovanteFile.name}</p>}
+            </FormItem>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={isSubmitting || isUploading || (isEditing && !dreLaunchId)}>
+          {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEditing ? 'Salvar Alterações' : 'Registrar Movimentação'}
         </Button>
       </form>
