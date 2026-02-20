@@ -141,12 +141,12 @@ const PreencherContrato: React.FC = () => {
 
   const fetchDependentData = useCallback(async (targetId: string) => {
     if (!targetId || !resolvedOwnerId) return;
-
+    
     const { data: tagsData } = await supabase
-      .from('contrato_tags')
-      .select('*')
-      .eq('empresa_id', targetId);
-      
+        .from('contrato_tags')
+        .select('*')
+        .eq('empresa_id', targetId);
+        
     if (tagsData) setTagsCustomizadas(tagsData);
 
     let clientesDataSource: any;
@@ -414,6 +414,12 @@ const PreencherContrato: React.FC = () => {
     
     if (!clienteSelecionadoId || !proprietarioContratoId || !dataInicio) {
         showError('Preencha o cliente, proprietário e as datas de vencimento.');
+        return;
+    }
+
+    // Validação de segurança para evitar salvar o ID do proprietário como cliente
+    if (clienteSelecionadoId === proprietarioContratoId) {
+        showError('O cliente selecionado não pode ser o mesmo que a empresa proprietária do contrato.');
         return;
     }
 
