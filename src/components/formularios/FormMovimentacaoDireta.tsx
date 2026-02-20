@@ -563,7 +563,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                     )}
                 </div>
                 {comprovanteFile && <p className="text-[10px] text-muted-foreground mt-1 truncate">{comprovanteFile.name}</p>}
-            </Button>
+            </FormItem>
         </div>
 
         <Button type="submit" className="w-full" disabled={isSubmitting || isUploading || (isEditing && !dreLaunchId)}>
