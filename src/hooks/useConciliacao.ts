@@ -10,6 +10,7 @@ import { format, parseISO, parse, isValid } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters';
 import useSaldoContaCalculado from './use-saldo-conta-calculado';
 import { useOwner } from './use-owner';
+import { buscarParcelasCandidatas } from './conciliacao/useMapeamentoParcelas';
 
 interface ConciliacaoHook {
     // State
@@ -51,7 +52,7 @@ interface ConciliacaoHook {
 }
 
 export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
-    const { usuario } = useSessao();
+    const { usuario, role, perfil } = useSessao();
     const { ownerId } = useOwner();
     const usuarioId = usuario?.id;
     
@@ -297,6 +298,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             return;
         }
         const config = configSelecionada;
+        const isAdmin = role === 'Admin';
         
         const safeFormatDate = (dateStr: string | undefined | null): string | null => {
             if (!dateStr) return null;
@@ -321,11 +323,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         
         try {
             const fileContent = await file.text();
-            
-            // Pré-processamento do conteúdo do CSV para remover linhas indesejadas
             const lines = fileContent.split('\n');
-            
-            // Busca a linha do cabeçalho de forma flexível (procurando por 'Data' e 'Valor' ou 'Descrição')
             const headerIndex = lines.findIndex(line => {
                 const l = line.toLowerCase();
                 return l.includes('data') && (l.includes('valor') || l.includes('descri') || l.includes('transa'));
@@ -337,8 +335,6 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
 
             const headerRow = lines[headerIndex].trim();
             const cleanedLines = [headerRow];
-            
-            // Filtrar linhas de dados (devem começar com algo que pareça uma data)
             lines.slice(headerIndex + 1).forEach(line => {
                 const trimmedLine = line.trim();
                 if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(trimmedLine)) {
@@ -347,7 +343,6 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             });
             
             const cleanedCsvContent = cleanedLines.join('\n');
-
             const contentHash = calculateContentHash(cleanedCsvContent);
             
             if (!contentHash) {
@@ -369,25 +364,19 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             }
             
             setFileHash(contentHash);
-
             const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
             
             Papa.parse(cleanedCsvContent, {
                 header: true,
                 skipEmptyLines: 'greedy',
-                delimiter: "", // Auto-detect delimiter (vírgula ou ponto-e-vírgula)
-                complete: (results: ParseResult<any>) => {
+                delimiter: "",
+                complete: async (results: ParseResult<any>) => {
                     try {
-                        console.log('[CSV Debug] Dados parseados:', results.data);
-                        console.log('[CSV Debug] Configuração:', config);
-                        
-                        const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
-                            // valor vindo do CSV *sempre* tratado como texto primeiro e convertido
+                        const rawTransacoes: TransacaoExtrato[] = await Promise.all(results.data.map(async (row: any) => {
                             const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
                             const parsedValor = Number(parseFloat(rawValorStr || '0'));
                             let valor = isNaN(parsedValor) ? 0 : parsedValor;
                             
-                            // Lógica para determinar o sinal do valor (mantemos valor numérico real)
                             if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
                                 valor = -Math.abs(valor);
                             }
@@ -398,51 +387,43 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                                 
                             const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
                             const dataMovimentacaoRaw = row[config.mapeamento.data];
-                            
-                            let formattedDate: string | null = safeFormatDate(dataMovimentacaoRaw);
-                            if (!formattedDate) {
-                                // Garantir que haja algum valor (manter a original se não formatável)
-                                console.error('Falha ao formatar data do CSV:', dataMovimentacaoRaw);
-                                formattedDate = String(dataMovimentacaoRaw || '');
-                            }
+                            let formattedDate = safeFormatDate(dataMovimentacaoRaw);
                             
                             const descricaoRaw = row[config.mapeamento.descricao] ?? '';
                             const normalizedDesc = normalizeString(String(descricaoRaw));
-                            
-                            // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal, 2 casas)
                             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
                             
-                            let isDuplicated = false;
-                            let motivoDuplicidade: string | null = null;
+                            let isDuplicated = existingExtratosSet.has(uniqueKey);
                             
-                            // Verifica duplicidade de transação (CHAVE ÚNICA)
-                            if (existingExtratosSet.has(uniqueKey)) {
-                                isDuplicated = true;
-                                motivoDuplicidade = 'Transação já existe na tabela de extratos.';
-                            }
-                            
-                            return {
+                            const transacao: TransacaoExtrato = {
                                 data: dataMovimentacaoRaw,
                                 descricao: String(descricaoRaw),
                                 valor: valor,
                                 tipo: tipo,
                                 identificacao: identificacao,
                                 isDuplicated: isDuplicated,
-                                motivoDuplicidade: motivoDuplicidade,
-                            } as TransacaoExtrato;
-                        }).filter((t): t is TransacaoExtrato => t !== null);
+                                motivoDuplicidade: isDuplicated ? 'Transação já existe na tabela de extratos.' : null,
+                            };
+
+                            // NOVO: Tentar encontrar match automático para parcelas
+                            if (!isDuplicated) {
+                                const candidatos = await buscarParcelasCandidatas(transacao, proprietarioDaConfiguracao, isAdmin);
+                                if (candidatos.length > 0) {
+                                    const melhorMatch = candidatos[0];
+                                    transacao.tem_sugestao = true;
+                                    transacao.sugestao_parcela_id = melhorMatch.id;
+                                    transacao.nivel_confianca = melhorMatch.compatibilidade;
+                                }
+                            }
+
+                            return transacao;
+                        }));
                         
-                        console.log('[CSV Debug] Transações após filter:', rawTransacoes);
-                        console.log('[CSV Debug] Total de transações:', rawTransacoes.length);
-                        
-                        // 4. Aplica regras de mapeamento APENAS nas transações válidas
                         const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
                         const transacoesMapeadas = applyRegras(transacoesValidas);
-                        
-                        // 5. Combina transações mapeadas e rejeitadas para a exibição unificada
                         const transacoesCompletas = [...transacoesMapeadas, ...rawTransacoes.filter(t => t.isDuplicated)];
                         
-                        setTransacoes(() => transacoesCompletas); // LISTA COMPLETA
+                        setTransacoes(() => transacoesCompletas);
                         
                         let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
                         if (rawTransacoes.filter(t => t.isDuplicated).length > 0) {
@@ -465,7 +446,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             setLoading(false);
             showError('Erro ao processar o arquivo: ' + (err?.message || String(err)));
         }
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, regras, fetchExistingExtratos, applyRegras]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, regras, role, fetchExistingExtratos, applyRegras]);
 
     const handleSaveConciliacao = useCallback(async () => {
         if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file || !contaSelecionada || !usuarioId || !fileHash) {
@@ -499,9 +480,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                     data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
-                    tipo: t.tipo, // Usa o tipo original (Entrada/Saida)
+                    tipo: t.tipo,
                     conta_bancaria_id: contaSelecionadaId,
-                    conta_contabil_id: contaAtivoCaixaId, // Conta de Ativo/Caixa
+                    conta_contabil_id: contaAtivoCaixaId,
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,
@@ -519,9 +500,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                     data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
-                    tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
-                    conta_bancaria_id: null, // Não é conta bancária
-                    conta_contabil_id: t.conta_contabil_id, // Conta de Resultado (Receita/Despesa)
+                    tipo: tipoResultado,
+                    conta_bancaria_id: null,
+                    conta_contabil_id: t.conta_contabil_id,
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,

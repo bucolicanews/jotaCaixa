@@ -24,6 +24,7 @@ export interface ParcelaCandidato {
   status?: string;
   similaridade_nome?: number;
   nome_comparado?: string;
+  pagbank_transaction_id?: string | null;
 }
 
 export interface TransacaoComId extends TransacaoExtrato {
@@ -75,17 +76,10 @@ export async function buscarParcelasCandidatas(
     }
   }
   
-  // NOVO: Para transações PagBank, usar ±2 dias; para outras, ±3 dias
+  // Janela de busca: ±3 dias para transações normais, ±2 para PagBank
   const diasBusca = isPagBank ? 2 : 3;
   const dataInicio = format(subDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
   const dataFim = format(addDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
-
-  console.log('🔍 Busca de parcelas candidatas:');
-  console.log('  - Transação:', transacao.descricao);
-  console.log('  - Valor:', transacao.valor);
-  console.log('  - Data:', transacao.data, '→', format(dataTransacao, 'yyyy-MM-dd'));
-  console.log('  - Janela de busca:', dataInicio, 'até', dataFim);
-  console.log('  - Tipo:', tipo);
 
   const { data: parcelas, error: parcelasError } = await supabase
     .from(tabelaParcelas)
@@ -95,17 +89,6 @@ export async function buscarParcelasCandidatas(
     .in('status', ['aberta', 'parcial', 'paga'])
     .gte('data_vencimento', dataInicio)
     .lte('data_vencimento', dataFim);
-
-  console.log('  - Parcelas encontradas:', parcelas?.length || 0);
-  if (parcelas && parcelas.length > 0) {
-    console.log('  - Amostra:', parcelas.slice(0, 3).map(p => ({
-      id: p.id.substring(0, 8),
-      valor: p.valor_parcela,
-      vencimento: p.data_vencimento,
-      status: p.status,
-      mapeado: p.mapeado_extrato_id
-    })));
-  }
 
   if (parcelasError || !parcelas) {
     console.error('Erro ao buscar parcelas candidatas:', parcelasError);
@@ -177,6 +160,7 @@ export async function buscarParcelasCandidatas(
 
   const valorTransacao = Math.abs(transacao.valor);
   const nomeExtratoNormalizado = normalizarNome(transacao.identificacao || '');
+  const codigoTransacaoExtrato = transacao.identificacao?.trim();
 
   return parcelas.map(p => {
     const diferencaValor = Math.abs(p.valor_parcela - valorTransacao);
@@ -203,56 +187,30 @@ export async function buscarParcelasCandidatas(
     let compatibilidade: 'alta' | 'media' | 'baixa' = 'baixa';
     let motivo = '';
 
-    // NOVO: Aceitar pagamento parcial
-    const isPagamentoParcial = valorTransacao <= p.valor_parcela && valorTransacao > 0;
-
-    if (isPagamentoParcial && diferencaDias <= 7 && similaridadeNome >= 70) {
-      compatibilidade = 'media';
-      motivo = `Possível pagamento parcial: R$ ${valorTransacao.toFixed(2)} de R$ ${p.valor_parcela.toFixed(2)}, ${diferencaDias} dias de diferença, nome similar (${similaridadeNome.toFixed(0)}%)`;
-    } else if (isPagamentoParcial && diferencaDias <= 3) {
-      compatibilidade = 'media';
-      motivo = `Possível pagamento parcial: R$ ${valorTransacao.toFixed(2)} de R$ ${p.valor_parcela.toFixed(2)}, data próxima (±${diferencaDias} dias)`;
-    } else if (isPagBank) {
-      const origemPagBank = p.origem === 'link_pagamento_pagbank' || 
-                           (contaId && contaDescMap[contaId]?.origem === 'link_pagamento_pagbank');
-      
-      if (origemPagBank && diferencaValor < 0.01 && diferencaDias <= 2) {
+    // NOVO: Match por Código de Transação (Prioridade Máxima)
+    if (codigoTransacaoExtrato && p.pagbank_transaction_id === codigoTransacaoExtrato) {
         compatibilidade = 'alta';
-        motivo = 'PagBank: Valor exato, data próxima (±2 dias)';
-      } else if (diferencaValor < 0.01 && diferencaDias === 0) {
-        compatibilidade = 'alta';
-        motivo = 'Valor e data exatos';
-      } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
-        compatibilidade = 'media';
-        motivo = 'Valor exato, data próxima (±1 dia)';
-      } else if (diferencaValor < 1 && diferencaDias <= 3) {
-        compatibilidade = 'media';
-        motivo = 'Valor e data aproximados';
-      } else {
-        motivo = 'Compatibilidade baixa';
-      }
+        motivo = 'Código de transação idêntico encontrado.';
+    } else if (diferencaValor < 0.01 && diferencaDias <= 1 && similaridadeNome >= 80) {
+      compatibilidade = 'alta';
+      motivo = `Valor exato, data próxima (±1 dia) e nome similar (${similaridadeNome.toFixed(0)}%)`;
+    } else if (diferencaValor < 0.01 && diferencaDias === 0) {
+      compatibilidade = 'alta';
+      motivo = 'Valor e data exatos';
+    } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
+      compatibilidade = 'media';
+      motivo = 'Valor exato, data próxima (±1 dia)';
+    } else if (diferencaValor < 0.01 && diferencaDias <= 3 && similaridadeNome >= 70) {
+      compatibilidade = 'media';
+      motivo = `Valor exato, data próxima (±3 dias) e nome similar (${similaridadeNome.toFixed(0)}%)`;
+    } else if (diferencaValor < 1 && diferencaDias <= 3 && similaridadeNome >= 80) {
+      compatibilidade = 'media';
+      motivo = `Valor aproximado, data próxima e nome similar (${similaridadeNome.toFixed(0)}%)`;
+    } else if (diferencaValor < 1 && diferencaDias <= 3) {
+      compatibilidade = 'media';
+      motivo = 'Valor e data aproximados';
     } else {
-      if (diferencaValor < 0.01 && diferencaDias <= 1 && similaridadeNome >= 80) {
-        compatibilidade = 'alta';
-        motivo = `Valor exato, data próxima (±1 dia) e nome similar (${similaridadeNome.toFixed(0)}%)`;
-      } else if (diferencaValor < 0.01 && diferencaDias === 0) {
-        compatibilidade = 'alta';
-        motivo = 'Valor e data exatos';
-      } else if (diferencaValor < 0.01 && diferencaDias <= 1) {
-        compatibilidade = 'media';
-        motivo = 'Valor exato, data próxima (±1 dia)';
-      } else if (diferencaValor < 0.01 && diferencaDias <= 3 && similaridadeNome >= 70) {
-        compatibilidade = 'media';
-        motivo = `Valor exato, data próxima (±3 dias) e nome similar (${similaridadeNome.toFixed(0)}%)`;
-      } else if (diferencaValor < 1 && diferencaDias <= 3 && similaridadeNome >= 80) {
-        compatibilidade = 'media';
-        motivo = `Valor aproximado, data próxima e nome similar (${similaridadeNome.toFixed(0)}%)`;
-      } else if (diferencaValor < 1 && diferencaDias <= 3) {
-        compatibilidade = 'media';
-        motivo = 'Valor e data aproximados';
-      } else {
-        motivo = 'Compatibilidade baixa';
-      }
+      motivo = 'Compatibilidade baixa';
     }
 
     return {
@@ -275,6 +233,7 @@ export async function buscarParcelasCandidatas(
       status: p.status,
       similaridade_nome: similaridadeNome > 0 ? similaridadeNome : undefined,
       nome_comparado: nomeParceiroNormalizado || undefined,
+      pagbank_transaction_id: p.pagbank_transaction_id,
     } as ParcelaCandidato;
   }).sort((a, b) => {
     const ordem = { alta: 3, media: 2, baixa: 1 };

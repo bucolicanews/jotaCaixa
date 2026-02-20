@@ -2,7 +2,7 @@ export interface MapeamentoConciliacao {
     data: string;
     descricao: string;
     valor: string;
-    identificacao?: string; // NOVO CAMPO
+    identificacao?: string;
 }
 
 export interface ConfiguracaoConciliacao {
@@ -17,16 +17,20 @@ export interface ConfiguracaoConciliacao {
 }
 
 export interface TransacaoExtrato {
-    id?: string; // ID da transação salva no banco (UUID)
+    id?: string;
     data: string;
     descricao: string;
     valor: number;
     tipo: 'Entrada' | 'Saida';
-    identificacao?: string; // NOVO CAMPO
+    identificacao?: string;
     conciliada?: boolean;
     conta_contabil_id?: string | null;
-    isDuplicated?: boolean; // NOVO: Indica se é duplicada
-    motivoDuplicidade?: string | null; // NOVO: Motivo da duplicidade
+    isDuplicated?: boolean;
+    motivoDuplicidade?: string | null;
+    // Novos campos para sugestão automática
+    sugestao_parcela_id?: string | null;
+    tem_sugestao?: boolean;
+    nivel_confianca?: 'alta' | 'media' | 'baixa';
 }
 
 export interface ConciliacaoRegra {
