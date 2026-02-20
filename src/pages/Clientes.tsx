@@ -587,7 +587,7 @@ const ClientesPage = () => {
         const { data: resetData, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, { redirectTo: `${BASE_URL}/atualizar-senha` });
         if (resetError) console.error('Aviso: Falha ao enviar email de redefinição de senha:', resetError);
         const resetLink = (resetData as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
-        if (window.confirm(`Link de Acesso Gerado para ${cliente.nome}. Deseja copiar o link para enviar manualmente?`)) {
+        if (window.confirm(`Link de Acesso Gerado para ${cliente.nome}. Deseja copiar the link para enviar manualmente?`)) {
             navigator.clipboard.writeText(resetLink);
             showSuccess('Link copiado para a área de transferência.');
         }
@@ -708,7 +708,8 @@ const ClientesPage = () => {
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Nome da Empresa</TableHead>
+                    <TableHead>Nome do Empresário</TableHead> {/* Alterado de "Nome da Empresa" */}
+                    <TableHead>Nome Fantasia</TableHead> {/* Adicionado */}
                     <TableHead>Razão Social</TableHead>
                     <TableHead>Email (Login)</TableHead>
                     <TableHead>Plano</TableHead>
@@ -719,7 +720,7 @@ const ClientesPage = () => {
             </TableHeader>
             <TableBody>
                 {empresas.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-4 text-muted-foreground">Nenhuma empresa encontrada nesta categoria.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-4 text-muted-foreground">Nenhuma empresa encontrada nesta categoria.</TableCell></TableRow>
                 ) : (
                     empresas.map((empresa) => {
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
@@ -738,6 +739,7 @@ const ClientesPage = () => {
                         return (
                             <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlockedOrExpired && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
+                                <TableCell>{empresa.nome_fantasia || '-'}</TableCell> {/* Adicionado */}
                                 <TableCell>{empresa.razao_social || '-'}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
