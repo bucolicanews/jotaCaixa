@@ -79,7 +79,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
 
     const [fileHash, setFileHash] = useState<string | null>(null);
 
-    const { contas, carregando: carregandoContas } = useSaldoContaCalculado(
+    const { contas, carregando: carregandoSessao } = useSaldoContaCalculado(
         'todos', 
         'todos', 
         '', 
@@ -147,9 +147,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     }, [ownerId]);
 
     useEffect(() => {
-        setLoading(carregandoContas);
+        setLoading(carregandoSessao);
         fetchHistorico();
-    }, [carregandoContas, fetchHistorico]);
+    }, [carregandoSessao, fetchHistorico]);
     
     useEffect(() => {
         if (contaSelecionadaId) {
@@ -396,7 +396,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             let isDuplicated = existingExtratosSet.has(uniqueKey);
                             
                             const transacao: TransacaoExtrato = {
-                                data: dataMovimentacaoRaw,
+                                data: formattedDate || String(dataMovimentacaoRaw), // USANDO DATA FORMATADA
                                 descricao: String(descricaoRaw),
                                 valor: valor,
                                 tipo: tipo,
@@ -406,7 +406,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             };
 
                             // NOVO: Tentar encontrar match automático para parcelas
-                            if (!isDuplicated) {
+                            if (!isDuplicated && formattedDate) {
                                 const candidatos = await buscarParcelasCandidatas(transacao, proprietarioDaConfiguracao, isAdmin);
                                 if (candidatos.length > 0) {
                                     const melhorMatch = candidatos[0];

@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { TransacaoExtrato } from '@/types/conciliacao';
-import { parseISO, format, subDays, addDays, differenceInDays } from 'date-fns';
+import { parseISO, format, subDays, addDays, differenceInDays, isValid } from 'date-fns';
 import { normalizeString } from '@/utils/formatters';
 import { calcularSimilaridadeAvancada, normalizarNome } from '@/utils/string-similarity';
 
@@ -61,22 +61,40 @@ export async function buscarParcelasCandidatas(
     : (tipo === 'CR' ? 'contas_receber' : 'contas_pagar');
   const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
 
-  // NOVO: Verificar se é transação PagBank para ampliar critérios de busca
   const isPagBank = isPagBankTransaction(transacao.descricao);
 
+  // CONVERSÃO DE DATA ROBUSTA
   let dataTransacao: Date;
-  try {
-    dataTransacao = parseISO(transacao.data);
-  } catch {
-    const partes = transacao.data.split('/');
-    if (partes.length === 3) {
-      dataTransacao = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
-    } else {
-      dataTransacao = new Date();
-    }
+  const rawData = transacao.data;
+  
+  if (rawData instanceof Date) {
+      dataTransacao = rawData;
+  } else {
+      // Tenta parseISO primeiro
+      const parsed = parseISO(rawData);
+      if (isValid(parsed)) {
+          dataTransacao = parsed;
+      } else {
+          // Tenta formato brasileiro DD/MM/YYYY
+          const partes = rawData.split(/[\/\-]/);
+          if (partes.length === 3) {
+              // Se o primeiro item tiver 4 dígitos, assume YYYY-MM-DD
+              if (partes[0].length === 4) {
+                  dataTransacao = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+              } else {
+                  // Assume DD/MM/YYYY
+                  dataTransacao = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
+              }
+          } else {
+              dataTransacao = new Date();
+          }
+      }
   }
   
-  // Janela de busca: ±3 dias para transações normais, ±2 para PagBank
+  if (!isValid(dataTransacao)) {
+      dataTransacao = new Date();
+  }
+  
   const diasBusca = isPagBank ? 2 : 3;
   const dataInicio = format(subDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
   const dataFim = format(addDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
@@ -187,7 +205,7 @@ export async function buscarParcelasCandidatas(
     let compatibilidade: 'alta' | 'media' | 'baixa' = 'baixa';
     let motivo = '';
 
-    // NOVO: Match por Código de Transação (Prioridade Máxima)
+    // Match por Código de Transação (Prioridade Máxima)
     if (codigoTransacaoExtrato && p.pagbank_transaction_id === codigoTransacaoExtrato) {
         compatibilidade = 'alta';
         motivo = 'Código de transação idêntico encontrado.';
