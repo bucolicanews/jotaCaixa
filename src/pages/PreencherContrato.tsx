@@ -168,30 +168,56 @@ const PreencherContrato: React.FC = () => {
         
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    let clientesDataSource: any;
-    if (isAdminOrEmployee) {
-      clientesDataSource = supabase
+    // 1. Busca Clientes do Sistema (tbl_clientes)
+    const { data: clientesSistemaData } = await supabase
         .from('tbl_clientes')
         .select('*')
         .eq('admin_id', targetId)
-        .eq('aprovado', true)
-        .order('razao_social', { ascending: true, nullsLast: true }).order('nome', { ascending: true });
-    } else {
-      clientesDataSource = supabase
+        .eq('aprovado', true);
+        
+    // 2. Busca Clientes CR (clientes)
+    const { data: clientesCRData } = await supabase
         .from('clientes')
         .select('*')
-        .eq('proprietario_id', targetId)
-        .order('razao_social', { ascending: true, nullsLast: true }).order('nome', { ascending: true });
-    }
+        .eq('proprietario_id', targetId);
+        
+    // 3. Lógica de Mesclagem Inteligente (Merge por Documento)
+    // Se um documento existe na tabela 'clientes', usamos o ID de lá (o ID que a FK exige)
+    const combinedClientsMap = new Map<string, ClienteCRCompleto>();
+    const docToClientIdMap = new Map<string, string>(); // Mapeia documento -> ID na tabela 'clientes'
     
-    const { data: clientesData } = await clientesDataSource;
-      
-    if (clientesData) {
-        const uniqueClients = Array.from(new Map(clientesData.map((item: any) => [item.id, item])).values());
-        setClientesCR(uniqueClients);
-    } else {
-        setClientesCR([]);
-    }
+    // Processa Clientes CR primeiro para estabelecer os IDs "mestres" do financeiro
+    (clientesCRData || []).forEach(c => {
+        const doc = (c.documento || '').replace(/\D/g, '');
+        if (doc) docToClientIdMap.set(doc, c.id);
+        combinedClientsMap.set(c.id, { ...c } as ClienteCRCompleto);
+    });
+    
+    // Processa Clientes do Sistema
+    (clientesSistemaData || []).forEach(c => {
+        const doc = (c.documento || c.cnpj || c.cpf || '').replace(/\D/g, '');
+        
+        // Se este cliente do sistema já existe no financeiro (mesmo documento)
+        if (doc && docToClientIdMap.has(doc)) {
+            const crId = docToClientIdMap.get(doc)!;
+            const existing = combinedClientsMap.get(crId)!;
+            // Atualiza os dados do mapa mantendo o ID do CR mas usando nomes mais recentes se houver
+            combinedClientsMap.set(crId, { ...existing, ...c, id: crId });
+        } else {
+            // Se não existe, adiciona como novo
+            if (!combinedClientsMap.has(c.id)) {
+                combinedClientsMap.set(c.id, { ...c } as ClienteCRCompleto);
+            }
+        }
+    });
+    
+    const sortedClients = Array.from(combinedClientsMap.values()).sort((a, b) => {
+        const nameA = (a.razao_social || a.nome || '').toLowerCase();
+        const nameB = (b.razao_social || b.nome || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+        
+    setClientesCR(sortedClients);
   }, [isAdminOrEmployee, resolvedOwnerId]);
 
   const buscarDados = useCallback(async () => {
@@ -438,7 +464,6 @@ const PreencherContrato: React.FC = () => {
     
     try {
         // --- ETAPA CRÍTICA: GARANTIR QUE O CLIENTE EXISTE NA TABELA 'clientes' ---
-        // Se o cliente selecionado vier de 'tbl_clientes' mas não de 'clientes', o FK do banco falha.
         const { data: checkCR, error: checkError } = await supabase
             .from('clientes')
             .select('id')
@@ -448,7 +473,6 @@ const PreencherContrato: React.FC = () => {
         if (checkError) throw checkError;
 
         if (!checkCR) {
-            // Se não existe na tabela 'clientes' (Financeiro), buscamos na 'tbl_clientes' (Sistema) e criamos a "sombra"
             const { data: sysClient } = await supabase
                 .from('tbl_clientes')
                 .select('*')
@@ -469,7 +493,7 @@ const PreencherContrato: React.FC = () => {
                     });
                 if (insertCRError) throw insertCRError;
             } else {
-                throw new Error('Cliente selecionado não encontrado em nenhuma base de dados.');
+                throw new Error('Cliente selecionado não encontrado na base de dados.');
             }
         }
         // --- FIM ETAPA CRÍTICA ---
