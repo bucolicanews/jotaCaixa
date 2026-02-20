@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ChevronLeft, Save, Eye, Building2, Info, Tag, CalendarIcon } from 'lucide-react';
+import { Loader2, ChevronLeft, Save, Eye, Building2, Info, Tag, CalendarIcon, FileSignature } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
