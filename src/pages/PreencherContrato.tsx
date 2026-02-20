@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ChevronLeft, Save, Eye, Building2, Info, Tag, CalendarIcon, FileSignature } from 'lucide-react';
+import { Loader2, ChevronLeft, Save, Eye, Building2, Info, Tag, CalendarIcon, FileSignature, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
@@ -448,15 +448,18 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        const { data: clientExists, error: clientCheckError } = await supabase
-            .from('clientes')
-            .select('id')
-            .eq('id', clienteSelecionadoId)
-            .maybeSingle();
+        // CORREÇÃO: Verificação em ambas as tabelas (clientes CR e tbl_clientes sistema)
+        const [crRes, sysRes] = await Promise.all([
+            supabase.from('clientes').select('id').eq('id', clienteSelecionadoId).maybeSingle(),
+            supabase.from('tbl_clientes').select('id').eq('id', clienteSelecionadoId).maybeSingle()
+        ]);
 
-        if (clientCheckError || !clientExists) {
-            console.error('Client check failed:', { clienteSelecionadoId, clientCheckError });
-            throw new Error(`O cliente selecionado não é válido ou não foi encontrado na base de dados de clientes. Verifique o cadastro do cliente.`);
+        if ((crRes.error && crRes.error.code !== 'PGRST116') || (sysRes.error && sysRes.error.code !== 'PGRST116')) {
+            throw new Error(`Erro ao validar o cliente. Tente novamente.`);
+        }
+
+        if (!crRes.data && !sysRes.data) {
+            throw new Error(`O cliente selecionado não é válido ou não foi encontrado na base de dados. Verifique o cadastro do cliente.`);
         }
 
         const { data: configData } = await supabase
