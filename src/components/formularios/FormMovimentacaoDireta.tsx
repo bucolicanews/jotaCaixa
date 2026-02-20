@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Upload, X } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Upload, X, FileText, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -23,7 +23,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { v4 as uuidv4 } from 'uuid';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// Interface for the primary launch (linked to the bank account)
+// Interface para o lançamento primário (vinculado à conta bancária selecionada)
 interface LancamentoPrimario {
     id: string;
     data_movimentacao: string;
@@ -32,8 +32,8 @@ interface LancamentoPrimario {
     tipo: 'Entrada' | 'Saida';
     conta_bancaria_id: string;
     historico_id: string | null;
-    conta_contabil_id: string; // This is the DRE account ID (Resultado)
-    conta_resultado_id: string; // ID do lançamento emparelhado
+    conta_contabil_id: string; 
+    conta_resultado_id: string; // ID do lançamento emparelhado (partida dobrada)
     anexo_id?: string | null;
 }
 export type { LancamentoPrimario };
@@ -44,10 +44,10 @@ const formSchema = z.object({
   conta_bancaria_id: z.string().uuid('Selecione a conta de destino/origem.'),
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   
-  // Contas de Partida Dobrada (Resultado ou Ativo se for transferência)
+  // Conta de Contrapartida (Resultado ou Ativo se for transferência)
   conta_resultado_id: z.string().uuid('Selecione a conta de contrapartida.'),
   
-  // Novo: Transferência
+  // Campo de Transferência
   is_transferencia: z.boolean().default(false),
 });
 
@@ -88,10 +88,13 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   
   const ownerId = getOwnerId();
 
-  // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
-  const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
+  // Busca contas de Ativo (Debito) para o seletor principal e para transferências
+  const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
   
-  const contasCaixa = contasAtivo.filter(c => c.plano_contas?.is_caixa);
+  // Filtra apenas contas marcadas como Caixa ou Banco
+  const contasCaixaBanco = useMemo(() => {
+      return contasAtivo.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
+  }, [contasAtivo]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -108,6 +111,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   const tipoMovimentacao = form.watch('tipo_movimentacao');
   const isTransferencia = form.watch('is_transferencia');
 
+  // Carrega dados do lançamento emparelhado se estiver editando
   useEffect(() => {
     if (isEditing && lancamentoInicial?.id && ownerId) {
         const fetchPairedLaunch = async () => {
@@ -115,17 +119,15 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 .from('lancamentos')
                 .select('id, conta_contabil_id, conta_bancaria_id')
                 .eq('proprietario_id', ownerId)
-                .eq('origem', 'movimentacao_direta')
                 .eq('conta_resultado_id', lancamentoInicial.id)
                 .limit(1)
                 .single();
                 
             if (error || !data) {
-                console.error('Could not find paired launch for editing:', error);
+                console.error('Não foi possível encontrar o lançamento emparelhado para edição:', error);
             } else {
                 setDreLaunchId(data.id);
                 form.setValue('conta_resultado_id', data.conta_contabil_id);
-                // Se o lançamento emparelhado tiver conta_bancaria_id, é uma transferência
                 if (data.conta_bancaria_id) {
                     form.setValue('is_transferencia', true);
                 }
@@ -160,9 +162,10 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     const custoCode = configMap.Custo || '5';
     const despesaCode = configMap.Despesa || '6';
     
+    // Busca contas analíticas de Ativo e Resultado
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, is_conta_resultado')
+        .select('id, Conta, Descricao, is_conta_resultado, is_conta_patrimonial, is_caixa, is_banco')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
         .or(`Conta.like.${ativoCode}.%,Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
@@ -184,12 +187,6 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           fetchContasContrapartida();
       }
   }, [ownerId, refetchSaldos, fetchHistoricos, fetchContasContrapartida]);
-
-  useEffect(() => {
-    if (!isEditing && !form.getValues('conta_bancaria_id') && contasCaixa.length > 0) {
-        form.setValue('conta_bancaria_id', contasCaixa[0].id);
-    }
-  }, [contasCaixa, form, isEditing]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -231,7 +228,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       
       return anexoData.id;
     } catch (error: any) {
-      showError('Erro ao fazer upload do comprovante: ' + error.message);
+      showError('Falha ao fazer upload do comprovante: ' + error.message);
       return null;
     } finally {
       setIsUploading(false);
@@ -244,7 +241,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         return;
     }
     
-    const contaBancaria = contasAtivo.find(c => c.id === values.conta_bancaria_id);
+    const contaBancaria = contasCaixaBanco.find(c => c.id === values.conta_bancaria_id);
     const contaContrapartida = contasContrapartida.find(c => c.id === values.conta_resultado_id);
     
     if (!contaBancaria || !contaContrapartida) {
@@ -253,10 +250,11 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     }
     
     if (!contaBancaria.plano_contas?.id) {
-        showError('A conta bancária selecionada não está vinculada a um Plano de Contas (Ativo).');
+        showError('A conta selecionada não está vinculada a um Plano de Contas.');
         return;
     }
     
+    // Validação de saldo para saídas
     if (values.tipo_movimentacao === 'Saida') {
         let saldoParaVerificar = contaBancaria.saldo_atual;
         if (isEditing && lancamentoInicial) {
@@ -264,7 +262,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         }
         
         if (values.valor > saldoParaVerificar) {
-            showError('Saldo insuficiente na conta para realizar a sangria.');
+            showError('Saldo insuficiente na conta para realizar a operação.');
             return;
         }
     }
@@ -279,7 +277,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       const valor = values.valor;
       const historicoId = values.historico_id;
       
-      const contaAtivoCaixa = contaBancaria.plano_contas.id;
+      const contaAtivoPrincipal = contaBancaria.plano_contas.id;
       const contaContrapartidaId = values.conta_resultado_id;
       
       // Se for transferência, tenta encontrar o saldo_contas correspondente à conta de contrapartida
@@ -291,7 +289,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           }
       }
 
-      // 1. Lançamento na Conta de Saldo (Caixa/Banco)
+      // 1. Lançamento na Conta Principal (Caixa/Banco selecionado)
       const lancamentoAtivoPayload: any = {
           proprietario_id: ownerId,
           data_movimentacao: dataMovimentacao,
@@ -301,7 +299,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           valor: valor,
           tipo: values.tipo_movimentacao,
           conta_bancaria_id: values.conta_bancaria_id,
-          conta_contabil_id: contaAtivoCaixa,
+          conta_contabil_id: contaAtivoPrincipal,
           origem: 'movimentacao_direta',
           historico_id: historicoId,
           conciliado: true,
@@ -311,12 +309,11 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       
       // 2. Lançamento na Conta de Contrapartida (Resultado ou outro Ativo)
       let tipoContrapartida: 'Entrada' | 'Saida';
-      
       if (values.tipo_movimentacao === 'Entrada') {
-          // Entrada no Caixa (D) -> Saída na Contrapartida (C)
+          // Entrada na Principal (D) -> Saída na Contrapartida (C)
           tipoContrapartida = 'Saida';
       } else {
-          // Saída do Caixa (C) -> Entrada na Contrapartida (D)
+          // Saída da Principal (C) -> Entrada na Contrapartida (D)
           tipoContrapartida = 'Entrada';
       }
       
@@ -328,7 +325,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             : `${values.tipo_movimentacao === 'Entrada' ? 'Reforço de Caixa' : 'Sangria de Caixa'}: ${contaContrapartida.Descricao}`,
           valor: valor,
           tipo: tipoContrapartida,
-          conta_bancaria_id: contaBancariaContrapartidaId, // Se for transferência, vincula ao saldo_contas
+          conta_bancaria_id: contaBancariaContrapartidaId, // Vincula ao saldo_contas se for transferência entre bancos
           conta_contabil_id: contaContrapartidaId,
           origem: 'movimentacao_direta',
           historico_id: historicoId,
@@ -337,27 +334,55 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           atualizado_em: new Date().toISOString(),
       };
 
+      // 3. Lógica de Extratos (Statement)
+      const extratosPayload = [];
+      
+      // Extrato para a conta principal se for Banco
+      if (contaBancaria.plano_contas?.is_banco) {
+          extratosPayload.push({
+              empresa_id: ownerId,
+              id_saldo_contas: values.conta_bancaria_id,
+              data: format(new Date(), 'yyyy-MM-dd'),
+              descricao: lancamentoAtivoPayload.descricao,
+              valor: values.tipo_movimentacao === 'Entrada' ? valor : -valor,
+              tipo: values.tipo_movimentacao,
+              conciliado: true,
+              conta_contabil_id: contaContrapartidaId,
+          });
+      }
+      
+      // Extrato para a conta de contrapartida se for transferência entre Bancos
+      if (values.is_transferencia && contaBancariaContrapartidaId) {
+          const targetConta = contasAtivo.find(c => c.id === contaBancariaContrapartidaId);
+          if (targetConta?.plano_contas?.is_banco) {
+              extratosPayload.push({
+                  empresa_id: ownerId,
+                  id_saldo_contas: contaBancariaContrapartidaId,
+                  data: format(new Date(), 'yyyy-MM-dd'),
+                  descricao: lancamentoContrapartidaPayload.descricao,
+                  valor: tipoContrapartida === 'Entrada' ? valor : -valor,
+                  tipo: tipoContrapartida,
+                  conciliado: true,
+                  conta_contabil_id: contaAtivoPrincipal,
+              });
+          }
+      }
+
       if (isEditing) {
           const launchIdAtivo = lancamentoInicial!.id;
           const launchIdResultado = dreLaunchId;
           
-          if (!launchIdResultado) {
-              throw new Error('Não foi possível encontrar o lançamento emparelhado para edição.');
-          }
+          if (!launchIdResultado) throw new Error('Lançamento emparelhado não encontrado.');
           
           lancamentoAtivoPayload.conta_resultado_id = launchIdResultado;
           lancamentoContrapartidaPayload.conta_resultado_id = launchIdAtivo;
           
-          const [resAtivo, resResultado] = await Promise.all([
+          await Promise.all([
               supabase.from('lancamentos').upsert({ ...lancamentoAtivoPayload, id: launchIdAtivo }),
               supabase.from('lancamentos').upsert({ ...lancamentoContrapartidaPayload, id: launchIdResultado }),
           ]);
           
-          if (resAtivo.error) throw resAtivo.error;
-          if (resResultado.error) throw resResultado.error;
-          
           showSuccess(`Movimentação atualizada com sucesso!`);
-          
       } else {
           const idAtivo = uuidv4();
           const idResultado = uuidv4();
@@ -376,7 +401,11 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           if (resAtivo.error) throw resAtivo.error;
           if (resResultado.error) throw resResultado.error;
           
-          showSuccess(`${values.is_transferencia ? 'Transferência' : values.tipo_movimentacao + ' direta'} de ${formatCurrency(valor)} registrada com sucesso!`);
+          if (extratosPayload.length > 0) {
+              await supabase.from('extratos').insert(extratosPayload);
+          }
+          
+          showSuccess(`${values.is_transferencia ? 'Transferência' : values.tipo_movimentacao + ' direta'} registrada com sucesso!`);
       }
       
       onSaveComplete();
@@ -396,10 +425,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     return contasContrapartida.filter(c => {
         const prefix = c.Conta.split('.')[0];
         if (isTransferencia) {
-            // Se for transferência, mostra apenas contas de Ativo (1)
             return prefix === ativoCode;
         } else {
-            // Se não for transferência, mostra Receita (4) para Entrada e Despesa (5/6) para Saída
             if (tipoMovimentacao === 'Entrada') {
                 return prefix === receitaCode;
             } else {
@@ -432,7 +459,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             )} />
 
             <FormField control={form.control} name="is_transferencia" render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-slate-50">
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-slate-50 dark:bg-slate-900">
                     <FormControl>
                         <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isEditing} />
                     </FormControl>
@@ -456,7 +483,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             
             <FormField control={form.control} name="conta_bancaria_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta {tipoMovimentacao === 'Entrada' ? 'Destino' : 'Origem'} (Caixa)</FormLabel>
+                    <FormLabel>3. Conta {tipoMovimentacao === 'Entrada' ? 'Destino' : 'Origem'}</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas || isEditing}>
                         <FormControl>
                             <SelectTrigger>
@@ -464,7 +491,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            {contasCaixa.map(c => (
+                            {contasCaixaBanco.map(c => (
                                 <SelectItem key={c.id} value={c.id}>
                                     {c.nome} ({formatCurrency(c.saldo_atual)})
                                 </SelectItem>
@@ -536,7 +563,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                     )}
                 </div>
                 {comprovanteFile && <p className="text-[10px] text-muted-foreground mt-1 truncate">{comprovanteFile.name}</p>}
-            </FormItem>
+            </Button>
         </div>
 
         <Button type="submit" className="w-full" disabled={isSubmitting || isUploading || (isEditing && !dreLaunchId)}>
