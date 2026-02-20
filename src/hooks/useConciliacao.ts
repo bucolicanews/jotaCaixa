@@ -53,6 +53,7 @@ interface ConciliacaoHook {
 export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     const { usuario } = useSessao();
     const { ownerId } = useOwner();
+    const usuarioId = usuario?.id;
     
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -367,67 +368,71 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                 delimiter: ";",
                 complete: (results: ParseResult<any>) => {
                     try {
+                        console.log('[CSV Debug] Dados parseados:', results.data);
+                        console.log('[CSV Debug] Configuração:', config);
+                        
                         const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
-                            const dataOriginal = row[config.mapeamento.data];
-                            const descricaoOriginal = row[config.mapeamento.descricao];
-
-                            if (!dataOriginal || !descricaoOriginal || String(descricaoOriginal).trim().toLowerCase() === 'saldo anterior') {
-                                return null;
+                            // valor vindo do CSV *sempre* tratado como texto primeiro e convertido
+                            const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
+                            const parsedValor = Number(parseFloat(rawValorStr || '0'));
+                            let valor = isNaN(parsedValor) ? 0 : parsedValor;
+                            
+                            // Lógica para determinar o sinal do valor (mantemos valor numérico real)
+                            if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                                valor = -Math.abs(valor);
                             }
-
-                            let valor = 0;
-                            let tipo: 'Entrada' | 'Saida' = 'Entrada';
-                            const hasCreditoDebito = config.mapeamento.credito && config.mapeamento.debito;
-
-                            if (hasCreditoDebito) {
-                                const creditoStr = String(row[config.mapeamento.credito!] ?? '0').replace(/\s+/g, '').replace(/\./g, '').replace(',', '.');
-                                const debitoStr = String(row[config.mapeamento.debito!] ?? '0').replace(/\s+/g, '').replace(/\./g, '').replace(',', '.');
-                                const creditoVal = parseFloat(creditoStr);
-                                const debitoVal = parseFloat(debitoStr);
-
-                                if (!isNaN(creditoVal) && creditoVal !== 0) {
-                                    valor = Math.abs(creditoVal);
-                                    tipo = 'Entrada';
-                                } else if (!isNaN(debitoVal) && debitoVal !== 0) {
-                                    valor = -Math.abs(debitoVal);
-                                    tipo = 'Saida';
-                                } else {
-                                    return null;
-                                }
-                            } else {
-                                const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
-                                const parsedValor = Number(parseFloat(rawValorStr || '0'));
-                                valor = isNaN(parsedValor) ? 0 : parsedValor;
+                            
+                            const identificacao = config.mapeamento.identificacao 
+                                ? String(row[config.mapeamento.identificacao] || '') 
+                                : undefined;
                                 
-                                if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                                    valor = -Math.abs(valor);
-                                }
-                                tipo = (valor >= 0 ? 'Entrada' : 'Saida');
+                            const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
+                            const dataMovimentacaoRaw = row[config.mapeamento.data];
+                            
+                            let formattedDate: string | null = safeFormatDate(dataMovimentacaoRaw);
+                            if (!formattedDate) {
+                                // Garantir que haja algum valor (manter a original se não formatável)
+                                console.error('Falha ao formatar data do CSV:', dataMovimentacaoRaw);
+                                formattedDate = String(dataMovimentacaoRaw || '');
                             }
-
-                            if (valor === 0) return null;
-
-                            const identificacao = config.mapeamento.identificacao ? String(row[config.mapeamento.identificacao] || '') : undefined;
-                            const formattedDate = safeFormatDate(dataOriginal);
-                            const normalizedDesc = normalizeString(String(descricaoOriginal));
+                            
+                            const descricaoRaw = row[config.mapeamento.descricao] ?? '';
+                            const normalizedDesc = normalizeString(String(descricaoRaw));
+                            
+                            // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal, 2 casas)
                             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
                             
+                            let isDuplicated = false;
+                            let motivoDuplicidade: string | null = null;
+                            
+                            // Verifica duplicidade de transação (CHAVE ÚNICA)
+                            if (existingExtratosSet.has(uniqueKey)) {
+                                isDuplicated = true;
+                                motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                            }
+                            
                             return {
-                                data: dataOriginal,
-                                descricao: String(descricaoOriginal),
+                                data: dataMovimentacaoRaw,
+                                descricao: String(descricaoRaw),
                                 valor: valor,
                                 tipo: tipo,
                                 identificacao: identificacao,
-                                isDuplicated: existingExtratosSet.has(uniqueKey),
-                                motivoDuplicidade: existingExtratosSet.has(uniqueKey) ? 'Transação já existe no banco de dados.' : null,
+                                isDuplicated: isDuplicated,
+                                motivoDuplicidade: motivoDuplicidade,
                             } as TransacaoExtrato;
                         }).filter((t): t is TransacaoExtrato => t !== null);
                         
+                        console.log('[CSV Debug] Transações após filter:', rawTransacoes);
+                        console.log('[CSV Debug] Total de transações:', rawTransacoes.length);
+                        
+                        // 4. Aplica regras de mapeamento APENAS nas transações válidas
                         const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
                         const transacoesMapeadas = applyRegras(transacoesValidas);
+                        
+                        // 5. Combina transações mapeadas e rejeitadas para a exibição unificada
                         const transacoesCompletas = [...transacoesMapeadas, ...rawTransacoes.filter(t => t.isDuplicated)];
                         
-                        setTransacoes(() => transacoesCompletas);
+                        setTransacoes(() => transacoesCompletas); // LISTA COMPLETA
                         
                         let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
                         if (rawTransacoes.filter(t => t.isDuplicated).length > 0) {
@@ -435,6 +440,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                         }
                         showSuccess(successMessage);
                     } catch (innerErr: any) {
+                        console.error('Erro ao processar resultado do CSV:', innerErr);
                         showError('Erro ao processar o arquivo CSV: ' + (innerErr?.message || String(innerErr)));
                     } finally {
                         setLoading(false);
@@ -483,9 +489,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                     data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
-                    tipo: t.tipo,
+                    tipo: t.tipo, // Usa o tipo original (Entrada/Saida)
                     conta_bancaria_id: contaSelecionadaId,
-                    conta_contabil_id: contaAtivoCaixaId,
+                    conta_contabil_id: contaAtivoCaixaId, // Conta de Ativo/Caixa
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,
@@ -503,9 +509,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                     data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
-                    tipo: tipoResultado,
-                    conta_bancaria_id: null,
-                    conta_contabil_id: t.conta_contabil_id,
+                    tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
+                    conta_bancaria_id: null, // Não é conta bancária
+                    conta_contabil_id: t.conta_contabil_id, // Conta de Resultado (Receita/Despesa)
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,
