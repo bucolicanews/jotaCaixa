@@ -319,6 +319,20 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             return null;
         };
 
+        const parseValue = (val: any): number => {
+            if (typeof val === 'number') return val;
+            let s = String(val || '0').trim();
+            s = s.replace(/[R$\s]/g, '');
+            
+            if (s.includes(',') && s.includes('.')) {
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else if (s.includes(',')) {
+                s = s.replace(',', '.');
+            }
+            
+            return parseFloat(s) || 0;
+        };
+
         setLoading(true);
         
         try {
@@ -373,12 +387,17 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                 complete: async (results: ParseResult<any>) => {
                     try {
                         const rawTransacoes: TransacaoExtrato[] = await Promise.all(results.data.map(async (row: any) => {
-                            const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
-                            const parsedValor = Number(parseFloat(rawValorStr || '0'));
-                            let valor = isNaN(parsedValor) ? 0 : parsedValor;
+                            let valor = parseValue(row[config.mapeamento.valor]);
                             
-                            if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                                valor = -Math.abs(valor);
+                            if (config.coluna_tipo_transacao && config.valor_credito) {
+                                const rowType = normalizeString(String(row[config.coluna_tipo_transacao]));
+                                const configType = normalizeString(config.valor_credito);
+                                
+                                if (rowType === configType) {
+                                    valor = Math.abs(valor);
+                                } else {
+                                    valor = -Math.abs(valor);
+                                }
                             }
                             
                             const identificacao = config.mapeamento.identificacao 
@@ -396,7 +415,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             let isDuplicated = existingExtratosSet.has(uniqueKey);
                             
                             const transacao: TransacaoExtrato = {
-                                data: formattedDate || String(dataMovimentacaoRaw), // USANDO DATA FORMATADA
+                                data: formattedDate || String(dataMovimentacaoRaw),
                                 descricao: String(descricaoRaw),
                                 valor: valor,
                                 tipo: tipo,
@@ -405,7 +424,6 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                                 motivoDuplicidade: isDuplicated ? 'Transação já existe na tabela de extratos.' : null,
                             };
 
-                            // NOVO: Tentar encontrar match automático para parcelas
                             if (!isDuplicated && formattedDate) {
                                 const candidatos = await buscarParcelasCandidatas(transacao, proprietarioDaConfiguracao, isAdmin);
                                 if (candidatos.length > 0) {
