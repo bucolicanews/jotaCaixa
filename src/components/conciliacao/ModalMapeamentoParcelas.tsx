@@ -60,13 +60,6 @@ export function ModalMapeamentoParcelas({
   const buscarParcelasCR = useCallback(async () => {
     if (!ownerId) return [];
 
-    const isAdmin = role === 'Admin';
-    
-    if (!isAdmin) {
-      // TODO: Implementar busca para Cliente
-      return [];
-    }
-
     console.log('[CR] Buscando parcelas para admin_id:', ownerId);
 
     // Buscar parcelas com join nas contas e clientes
@@ -147,13 +140,6 @@ export function ModalMapeamentoParcelas({
   // Buscar Parcelas de Contas a Pagar
   const buscarParcelasCP = useCallback(async () => {
     if (!ownerId) return [];
-
-    const isAdmin = role === 'Admin';
-    
-    if (!isAdmin) {
-      // TODO: Implementar busca para Cliente
-      return [];
-    }
 
     console.log('[CP] Buscando parcelas para admin_id:', ownerId);
 
