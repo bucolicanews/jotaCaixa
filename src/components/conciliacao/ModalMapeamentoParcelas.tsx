@@ -217,6 +217,8 @@ export function ModalMapeamentoParcelas({
     }
   }, [open, ownerId, buscarParcelasCR, buscarParcelasCP, buscarParcelasQuitadas]);
 
+  const tipoTransacao = transacao.tipo === 'Entrada' ? 'CR' : 'CP';
+
   // Filtrar parcelas
   const parcelasCRFiltradas = useMemo(() => {
     if (!filtro) return parcelasCR;
@@ -245,9 +247,10 @@ export function ModalMapeamentoParcelas({
   }, [parcelasCP, filtro]);
 
   const parcelasQuitadasFiltradas = useMemo(() => {
-    if (!filtro) return parcelasQuitadas;
+    const porTipo = parcelasQuitadas.filter(p => p.tipo === tipoTransacao);
+    if (!filtro) return porTipo;
     const filtroLower = filtro.toLowerCase();
-    return parcelasQuitadas.filter(p =>
+    return porTipo.filter(p =>
       p.clienteNome?.toLowerCase().includes(filtroLower) ||
       p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
       p.descricao?.toLowerCase().includes(filtroLower) ||
@@ -255,7 +258,7 @@ export function ModalMapeamentoParcelas({
       p.valor_parcela?.toString().includes(filtroLower) ||
       p.dataVencimento?.includes(filtro)
     );
-  }, [parcelasQuitadas, filtro]);
+  }, [parcelasQuitadas, filtro, tipoTransacao]);
 
   // Cálculo de valores
   const valorSelecionado = useMemo(() => {
@@ -353,9 +356,6 @@ export function ModalMapeamentoParcelas({
       setSalvando(false);
     }
   };
-
-  // Determinar qual aba mostrar baseado no tipo de transação
-  const tipoTransacao = transacao.tipo === 'Entrada' ? 'CR' : 'CP';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
