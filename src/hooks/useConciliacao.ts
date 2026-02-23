@@ -53,7 +53,7 @@ interface ConciliacaoHook {
 
 export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     const { usuario, role, perfil } = useSessao();
-    const { ownerId } = useOwner();
+    const { ownerId, ownerType } = useOwner();
     const usuarioId = usuario?.id;
     
     const [loading, setLoading] = useState(true);
@@ -298,7 +298,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             return;
         }
         const config = configSelecionada;
-        const isAdmin = role === 'Admin';
+        const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
         
         const safeFormatDate = (dateStr: string | undefined | null): string | null => {
             if (!dateStr) return null;
@@ -425,7 +425,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             };
 
                             if (!isDuplicated && formattedDate) {
-                                const candidatos = await buscarParcelasCandidatas(transacao, proprietarioDaConfiguracao, isAdmin);
+                                const candidatos = await buscarParcelasCandidatas(transacao, proprietarioDaConfiguracao);
                                 if (candidatos.length > 0) {
                                     const melhorMatch = candidatos[0];
                                     transacao.tem_sugestao = true;

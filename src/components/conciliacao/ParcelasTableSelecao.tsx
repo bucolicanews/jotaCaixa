@@ -16,6 +16,7 @@ interface ParcelaMatching {
   id: string;
   clienteNome?: string;
   fornecedorNome?: string;
+  descricao?: string;
   numeroParcela: number;
   dataVencimento: string;
   valor_parcela: number;
@@ -90,6 +91,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
         <TableRow>
           <TableHead className="w-[50px]">Sel.</TableHead>
           <TableHead>{tipo === 'CR' ? 'Cliente' : 'Fornecedor'}</TableHead>
+          <TableHead>Descrição</TableHead>
           <TableHead>Nº</TableHead>
           <TableHead>Vencimento</TableHead>
           <TableHead>Status</TableHead>
@@ -102,7 +104,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
       <TableBody>
         {parcelas.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+            <TableCell colSpan={10} className="text-center py-8 text-gray-500">
               Nenhuma parcela encontrada.
             </TableCell>
           </TableRow>
@@ -126,6 +128,9 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
                 </TableCell>
                 <TableCell>
                   {tipo === 'CR' ? parcela.clienteNome : parcela.fornecedorNome}
+                </TableCell>
+                <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground" title={parcela.descricao}>
+                  {parcela.descricao || '-'}
                 </TableCell>
                 <TableCell>{parcela.numeroParcela}</TableCell>
                 <TableCell>{formatDate(parcela.dataVencimento)}</TableCell>

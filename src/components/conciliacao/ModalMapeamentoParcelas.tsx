@@ -47,6 +47,7 @@ export function ModalMapeamentoParcelas({
   const [loading, setLoading] = useState(true);
   const [parcelasCR, setParcelasCR] = useState<ParcelaMatching[]>([]);
   const [parcelasCP, setParcelasCP] = useState<ParcelaMatching[]>([]);
+  const [parcelasQuitadas, setParcelasQuitadas] = useState<ParcelaMatching[]>([]);
   const [filtro, setFiltro] = useState('');
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<Map<string, number>>(
     new Map()
@@ -60,145 +61,135 @@ export function ModalMapeamentoParcelas({
   const buscarParcelasCR = useCallback(async () => {
     if (!ownerId) return [];
 
-    console.log('[CR] Buscando parcelas para admin_id:', ownerId);
-
-    // Buscar parcelas com join nas contas e clientes
-    const { data: parcelas, error: errorParcelas } = await supabase
+    const { data: parcelas, error } = await supabase
       .from('admin_parcelas_receber')
-      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, conta_receber_id')
+      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, admin_contas_receber!conta_receber_id(id, descricao, cliente_id, tbl_clientes!cliente_id(id, nome, razao_social))')
       .eq('admin_id', ownerId)
       .in('status', ['aberta', 'reprogramada'])
       .order('data_vencimento', { ascending: true });
 
-    if (errorParcelas) {
-      console.error('Erro ao buscar parcelas CR:', errorParcelas);
+    if (error) {
+      console.error('Erro ao buscar parcelas CR:', error);
       return [];
     }
 
-    console.log('[CR] Parcelas encontradas:', parcelas?.length, parcelas);
-
     if (!parcelas || parcelas.length === 0) return [];
 
-    // Buscar contas a receber relacionadas
-    const contasIds = parcelas.map(p => p.conta_receber_id).filter(Boolean);
-    
-    console.log('[CR] Buscando contas IDs:', contasIds);
-
-    const { data: contas, error: errorContas } = await supabase
-      .from('admin_contas_receber')
-      .select('id, descricao, cliente_id')
-      .in('id', contasIds);
-
-    if (errorContas) {
-      console.error('Erro ao buscar contas CR:', errorContas);
-    }
-
-    console.log('[CR] Contas encontradas:', contas?.length, contas);
-
-    // Buscar clientes relacionados
-    const clientesIds = contas?.map(c => c.cliente_id).filter(Boolean) || [];
-    
-    console.log('[CR] Buscando clientes IDs:', clientesIds);
-
-    const { data: clientes, error: errorClientes } = await supabase
-      .from('tbl_clientes')
-      .select('id, nome, razao_social')
-      .in('id', clientesIds);
-
-    if (errorClientes) {
-      console.error('Erro ao buscar clientes:', errorClientes);
-    }
-
-    console.log('[CR] Clientes encontrados:', clientes?.length, clientes);
-
-    // Mapear dados
-    const resultado = parcelas.map((p: any) => {
-      const conta = contas?.find(c => c.id === p.conta_receber_id);
-      const cliente = clientes?.find(c => c.id === conta?.cliente_id);
-      const nomeCliente = cliente?.razao_social || cliente?.nome || 'N/A';
-
+    return parcelas.map((p: any) => {
+      const conta = p.admin_contas_receber;
+      const cliente = conta?.tbl_clientes;
       return {
         id: p.id,
         numeroParcela: p.numero_parcela,
         valor_parcela: p.valor_parcela,
         valorPago: p.valor_pago || 0,
-        valorRestante: (p.valor_parcela - (p.valor_pago || 0)),
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
         dataVencimento: p.data_vencimento,
         status: p.status,
         descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
-        clienteNome: nomeCliente,
+        clienteNome: cliente?.razao_social || cliente?.nome || '',
         tipo: 'CR' as const,
         matchScore: 0,
       };
     });
-
-    console.log('[CR] Resultado final:', resultado);
-
-    return resultado;
-  }, [ownerId, role]);
+  }, [ownerId]);
 
   // Buscar Parcelas de Contas a Pagar
   const buscarParcelasCP = useCallback(async () => {
     if (!ownerId) return [];
 
-    console.log('[CP] Buscando parcelas para admin_id:', ownerId);
-
-    // Buscar parcelas com join nas contas
-    const { data: parcelas, error: errorParcelas } = await supabase
+    const { data: parcelas, error } = await supabase
       .from('admin_parcelas_pagar')
-      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, conta_pagar_id')
+      .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, status, admin_contas_pagar!conta_pagar_id(id, descricao, fornecedor)')
       .eq('admin_id', ownerId)
       .in('status', ['aberta', 'reprogramada'])
       .order('data_vencimento', { ascending: true });
 
-    if (errorParcelas) {
-      console.error('Erro ao buscar parcelas CP:', errorParcelas);
+    if (error) {
+      console.error('Erro ao buscar parcelas CP:', error);
       return [];
     }
 
-    console.log('[CP] Parcelas encontradas:', parcelas?.length, parcelas);
-
     if (!parcelas || parcelas.length === 0) return [];
 
-    // Buscar contas a pagar relacionadas
-    const contasIds = parcelas.map(p => p.conta_pagar_id).filter(Boolean);
-    
-    console.log('[CP] Buscando contas IDs:', contasIds);
-
-    const { data: contas, error: errorContas } = await supabase
-      .from('admin_contas_pagar')
-      .select('id, descricao, fornecedor')
-      .in('id', contasIds);
-
-    if (errorContas) {
-      console.error('Erro ao buscar contas CP:', errorContas);
-    }
-
-    console.log('[CP] Contas encontradas:', contas?.length, contas);
-
-    // Mapear dados
-    const resultado = parcelas.map((p: any) => {
-      const conta = contas?.find(c => c.id === p.conta_pagar_id);
-
+    return parcelas.map((p: any) => {
+      const conta = p.admin_contas_pagar;
       return {
         id: p.id,
         numeroParcela: p.numero_parcela,
         valor_parcela: p.valor_parcela,
         valorPago: p.valor_pago || 0,
-        valorRestante: (p.valor_parcela - (p.valor_pago || 0)),
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
         dataVencimento: p.data_vencimento,
         status: p.status,
         descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
-        fornecedorNome: conta?.fornecedor || 'N/A',
+        fornecedorNome: conta?.fornecedor || '',
+        tipo: 'CP' as const,
+        matchScore: 0,
+      };
+    });
+  }, [ownerId]);
+
+  const buscarParcelasQuitadas = useCallback(async () => {
+    if (!ownerId) return [];
+
+    const [{ data: parcelasCRPagas, error: erroCR }, { data: parcelasCPPagas, error: erroCP }] = await Promise.all([
+      supabase
+        .from('admin_parcelas_receber')
+        .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, admin_contas_receber!conta_receber_id(id, descricao, cliente_id, tbl_clientes!cliente_id(id, nome, razao_social))')
+        .eq('admin_id', ownerId)
+        .eq('status', 'paga')
+        .is('mapeado_extrato_id', null)
+        .order('data_pagamento', { ascending: false }),
+      supabase
+        .from('admin_parcelas_pagar')
+        .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, admin_contas_pagar!conta_pagar_id(id, descricao, fornecedor)')
+        .eq('admin_id', ownerId)
+        .eq('status', 'paga')
+        .is('mapeado_extrato_id', null)
+        .order('data_pagamento', { ascending: false }),
+    ]);
+
+    if (erroCR) console.error('Erro ao buscar parcelas quitadas CR:', erroCR);
+    if (erroCP) console.error('Erro ao buscar parcelas quitadas CP:', erroCP);
+
+    const resultadoCR: ParcelaMatching[] = (parcelasCRPagas || []).map((p: any) => {
+      const conta = p.admin_contas_receber;
+      const cliente = conta?.tbl_clientes;
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
+        dataVencimento: p.data_pagamento || p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        clienteNome: cliente?.razao_social || cliente?.nome || '',
+        tipo: 'CR' as const,
+        matchScore: 0,
+      };
+    });
+
+    const resultadoCP: ParcelaMatching[] = (parcelasCPPagas || []).map((p: any) => {
+      const conta = p.admin_contas_pagar;
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
+        dataVencimento: p.data_pagamento || p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        fornecedorNome: conta?.fornecedor || '',
         tipo: 'CP' as const,
         matchScore: 0,
       };
     });
 
-    console.log('[CP] Resultado final:', resultado);
-
-    return resultado;
-  }, [ownerId, role]);
+    return [...resultadoCR, ...resultadoCP];
+  }, [ownerId]);
 
   // Carregar parcelas ao abrir o modal
   useEffect(() => {
@@ -210,10 +201,11 @@ export function ModalMapeamentoParcelas({
       setDescricaoRestante('');
       setFiltro('');
 
-      Promise.all([buscarParcelasCR(), buscarParcelasCP()])
-        .then(([cr, cp]) => {
+      Promise.all([buscarParcelasCR(), buscarParcelasCP(), buscarParcelasQuitadas()])
+        .then(([cr, cp, quitadas]) => {
           setParcelasCR(cr);
           setParcelasCP(cp);
+          setParcelasQuitadas(quitadas);
         })
         .catch((error) => {
           console.error('Erro ao carregar parcelas:', error);
@@ -223,7 +215,7 @@ export function ModalMapeamentoParcelas({
           setLoading(false);
         });
     }
-  }, [open, ownerId, buscarParcelasCR, buscarParcelasCP]);
+  }, [open, ownerId, buscarParcelasCR, buscarParcelasCP, buscarParcelasQuitadas]);
 
   // Filtrar parcelas
   const parcelasCRFiltradas = useMemo(() => {
@@ -251,6 +243,19 @@ export function ModalMapeamentoParcelas({
       p.dataVencimento?.includes(filtro)
     );
   }, [parcelasCP, filtro]);
+
+  const parcelasQuitadasFiltradas = useMemo(() => {
+    if (!filtro) return parcelasQuitadas;
+    const filtroLower = filtro.toLowerCase();
+    return parcelasQuitadas.filter(p =>
+      p.clienteNome?.toLowerCase().includes(filtroLower) ||
+      p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
+      p.descricao?.toLowerCase().includes(filtroLower) ||
+      p.numeroParcela?.toString().includes(filtroLower) ||
+      p.valor_parcela?.toString().includes(filtroLower) ||
+      p.dataVencimento?.includes(filtro)
+    );
+  }, [parcelasQuitadas, filtro]);
 
   // Cálculo de valores
   const valorSelecionado = useMemo(() => {
@@ -290,7 +295,7 @@ export function ModalMapeamentoParcelas({
           novo.delete(parcelaId);
         } else {
           // Buscar parcela para pegar valor
-          const parcela = [...parcelasCR, ...parcelasCP].find(p => p.id === parcelaId);
+          const parcela = [...parcelasCR, ...parcelasCP, ...parcelasQuitadas].find(p => p.id === parcelaId);
           if (parcela) {
             novo.set(parcelaId, parcela.valor_parcela);
           }
@@ -416,12 +421,15 @@ export function ModalMapeamentoParcelas({
                 {/* Tabela com Scroll */}
                 <div className="flex-1 overflow-y-auto border rounded-lg">
                   <Tabs defaultValue={tipoTransacao} className="h-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                       <TabsTrigger value="CR" disabled={transacao.tipo !== 'Entrada'}>
                         Contas a Receber ({parcelasCRFiltradas.length}/{parcelasCR.length})
                       </TabsTrigger>
                       <TabsTrigger value="CP" disabled={transacao.tipo !== 'Saida'}>
                         Contas a Pagar ({parcelasCPFiltradas.length}/{parcelasCP.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="QUITADAS">
+                        Já Quitadas ({parcelasQuitadasFiltradas.length})
                       </TabsTrigger>
                     </TabsList>
 
@@ -459,6 +467,27 @@ export function ModalMapeamentoParcelas({
                         <ParcelasTableSelecao
                           parcelas={parcelasCPFiltradas}
                           tipo="CP"
+                          parcelasSelecionadas={parcelasSelecionadas}
+                          onToggleSelecao={handleToggleSelecao}
+                          onValorChange={handleValorChange}
+                          valorTransacao={Math.abs(transacao.valor)}
+                        />
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="QUITADAS" className="mt-0 h-full overflow-y-auto">
+                      {parcelasQuitadasFiltradas.length === 0 ? (
+                        <Alert className="m-4">
+                          <AlertDescription>
+                            {filtro
+                              ? 'Nenhuma parcela encontrada com o filtro aplicado.'
+                              : 'Nenhuma parcela quitada sem conciliação encontrada.'}
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <ParcelasTableSelecao
+                          parcelas={parcelasQuitadasFiltradas}
+                          tipo={tipoTransacao}
                           parcelasSelecionadas={parcelasSelecionadas}
                           onToggleSelecao={handleToggleSelecao}
                           onValorChange={handleValorChange}

@@ -21,6 +21,7 @@ import Step4MappingTable from '@/components/conciliacao/Step4MappingTable';
 import HistoricoTab from '@/components/conciliacao/HistoricoTab';
 import { useConciliacao } from '@/hooks/useConciliacao';
 import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner';
 import { formatCurrency } from '@/utils/formatters';
 import { showError, showSuccess } from '@/utils/toast';
 import { 
@@ -34,8 +35,9 @@ import { conciliarTransacaoDireta, DadosCategorizacao } from '@/hooks/conciliaca
 
 const Conciliacao = () => {
   const { role } = useSessao();
+  const { ownerType } = useOwner();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isAdmin = role === 'Admin';
+  const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
   
   const {
     loading,

@@ -95,7 +95,7 @@ export async function buscarParcelasCandidatas(
   const dataInicio = format(subDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
   const dataFim = format(addDays(dataTransacao, diasBusca), 'yyyy-MM-dd');
 
-  const { data: parcelas, error: parcelasError } = await supabase
+  const { data: parcelasPorVencimento, error: parcelasError } = await supabase
     .from(tabelaParcelas)
     .select('*')
     .eq(ownerKey, ownerId)
@@ -104,10 +104,26 @@ export async function buscarParcelasCandidatas(
     .gte('data_vencimento', dataInicio)
     .lte('data_vencimento', dataFim);
 
-  if (parcelasError || !parcelas) {
+  if (parcelasError) {
     console.error('Erro ao buscar parcelas candidatas:', parcelasError);
     return [];
   }
+
+  const { data: parcelasPorPagamento } = await supabase
+    .from(tabelaParcelas)
+    .select('*')
+    .eq(ownerKey, ownerId)
+    .is('mapeado_extrato_id', null)
+    .eq('status', 'paga')
+    .gte('data_pagamento', dataInicio)
+    .lte('data_pagamento', dataFim);
+
+  const parcelas = [
+    ...(parcelasPorVencimento || []),
+    ...(parcelasPorPagamento || []).filter(
+      pp => !(parcelasPorVencimento || []).some(p => p.id === pp.id)
+    ),
+  ];
 
   const parcelaIds = parcelas.map(p => p.id);
   if (parcelaIds.length === 0) return [];
@@ -144,7 +160,7 @@ export async function buscarParcelasCandidatas(
       .map(c => c.cliente_id)
       .filter(Boolean) as string[];
     
-    const tabelaClientes = isAdmin ? 'tbl_clientes' : 'clientes';
+    const tabelaClientes = 'tbl_clientes';
     const { data: clientes } = await supabase
       .from(tabelaClientes)
       .select('id, nome')
@@ -299,6 +315,21 @@ export async function confirmarMapeamento(
       .single();
 
     if (fetchError || !parcela) throw fetchError || new Error('Parcela não encontrada');
+
+    if (parcela.status === 'paga') {
+      const { error: vincularError } = await supabase
+        .from(tabelaParcelas)
+        .update({ mapeado_extrato_id: transacaoId, vinculada_extrato: true })
+        .eq('id', parcelaId);
+      if (vincularError) throw vincularError;
+
+      await supabase
+        .from('extratos')
+        .update({ status_mapeamento: 'mapeado_manual' })
+        .eq('id', transacaoId);
+
+      return { success: true };
+    }
 
     const valorExtrato = Math.abs(extrato.valor);
     const valorParcela = parcela.valor_parcela;
