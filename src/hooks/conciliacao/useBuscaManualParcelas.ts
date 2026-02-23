@@ -66,6 +66,9 @@ export async function buscarParcelasPorFiltros(
     .select('*')
     .eq(ownerKey, ownerId);
 
+  // Removido: .is('mapeado_extrato_id', null)
+  // Motivo: Permitir seleção de parcelas já mapeadas para reconciliação
+
   if (filtros.status) {
     query = query.eq('status', filtros.status);
   } else {

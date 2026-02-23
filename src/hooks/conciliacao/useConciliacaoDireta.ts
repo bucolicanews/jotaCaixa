@@ -1,8 +1,4 @@
-import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
-import { useSessao } from '@/hooks/use-sessao';
-import { useOwner } from '@/hooks/use-owner';
 
 export interface DadosCategorizacao {
   id_conta_contabil: string;
@@ -38,34 +34,35 @@ export async function conciliarTransacaoDireta(
     const dataTransacao = extrato.data;
     const contaBancariaId = extrato.id_saldo_contas;
 
-    const tabelaLancamentos = isAdmin ? 'admin_lancamentos' : 'lancamentos';
-    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const tabelaLancamentos = 'lancamentos';
+    const ownerKey = 'proprietario_id';
 
     if (!isEntrada && contaBancariaId) {
       const { data: saldoConta } = await supabase
         .from('saldo_contas')
-        .select('saldo_atual, nome')
+        .select('saldo_inicial, nome')
         .eq('id', contaBancariaId)
         .single();
 
-      if (saldoConta && saldoConta.saldo_atual < valorAbsoluto) {
+      if (saldoConta && saldoConta.saldo_inicial < valorAbsoluto) {
         return {
           success: false,
-          error: `Saldo insuficiente na conta "${saldoConta.nome}". Saldo atual: R$ ${saldoConta.saldo_atual.toFixed(2)}, Valor necessário: R$ ${valorAbsoluto.toFixed(2)}`
+          error: `Saldo insuficiente na conta "${saldoConta.nome}". Saldo atual: R$ ${saldoConta.saldo_inicial.toFixed(2)}, Valor necessário: R$ ${valorAbsoluto.toFixed(2)}`
         };
       }
     }
 
     const lancamentoPrincipal: any = {
-      [ownerKey]: ownerId,
-      data_lancamento: dataTransacao,
+      proprietario_id: ownerId,
+      data_movimentacao: dataTransacao,
       valor: valorAbsoluto,
       tipo: isEntrada ? 'C' : 'D',
-      id_conta_contabil: dados.id_conta_contabil,
-      id_historico: dados.id_historico,
-      observacao: dados.observacao || `Conciliação direta - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
+      conta_contabil_id: dados.id_conta_contabil,
+      historico_id: dados.id_historico,
+      descricao: dados.observacao || `Conciliação direta - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
       origem: 'conciliacao_direta',
-      id_saldo_contas: contaBancariaId,
+      conta_bancaria_id: contaBancariaId,
+      conciliado: true,
     };
 
     const { data: lancamentoCriado, error: lancamentoError } = await supabase
@@ -80,15 +77,16 @@ export async function conciliarTransacaoDireta(
 
     if (contaBancariaId) {
       const lancamentoContrapartida: any = {
-        [ownerKey]: ownerId,
-        data_lancamento: dataTransacao,
+        proprietario_id: ownerId,
+        data_movimentacao: dataTransacao,
         valor: valorAbsoluto,
         tipo: isEntrada ? 'D' : 'C',
-        id_conta_contabil: dados.id_conta_contabil,
-        id_historico: dados.id_historico,
-        observacao: `Contrapartida bancária - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
+        conta_contabil_id: dados.id_conta_contabil,
+        historico_id: dados.id_historico,
+        descricao: `Contrapartida bancária - ${extrato.descricao || extrato.identificacao || 'Sem descrição'}`,
         origem: 'conciliacao_direta_contrapartida',
-        id_saldo_contas: contaBancariaId,
+        conta_bancaria_id: contaBancariaId,
+        conciliado: true,
       };
 
       const { error: contrapartidaError } = await supabase
@@ -106,16 +104,26 @@ export async function conciliarTransacaoDireta(
       const { error: saldoError } = await novoSaldo;
       
       if (saldoError) {
-        const operacao = isEntrada ? '+' : '-';
-        const { error: updateError } = await supabase
+        // Fallback: buscar saldo atual e atualizar manualmente
+        const { data: contaAtual } = await supabase
           .from('saldo_contas')
-          .update({ 
-            saldo_atual: supabase.raw(`saldo_atual ${operacao} ${valorAbsoluto}`)
-          })
-          .eq('id', contaBancariaId);
+          .select('saldo_inicial')
+          .eq('id', contaBancariaId)
+          .single();
 
-        if (updateError) {
-          console.warn('Erro ao atualizar saldo:', updateError);
+        if (contaAtual) {
+          const novoSaldoCalculado = isEntrada 
+            ? (contaAtual.saldo_inicial || 0) + valorAbsoluto
+            : (contaAtual.saldo_inicial || 0) - valorAbsoluto;
+
+          const { error: updateError } = await supabase
+            .from('saldo_contas')
+            .update({ saldo_inicial: novoSaldoCalculado })
+            .eq('id', contaBancariaId);
+
+          if (updateError) {
+            console.warn('Erro ao atualizar saldo:', updateError);
+          }
         }
       }
     }
@@ -123,7 +131,7 @@ export async function conciliarTransacaoDireta(
     const { error: extratoUpdateError } = await supabase
       .from('extratos')
       .update({ 
-        status_mapeamento: 'conciliado_direto',
+        status_mapeamento: 'mapeado_manual',
         conta_contabil_id: dados.id_conta_contabil
       })
       .eq('id', transacaoId);
@@ -150,16 +158,26 @@ export async function buscarHistoricosPadrao(
   isAdmin: boolean,
   ownerId: string
 ): Promise<{ id: string; descricao: string }[]> {
+  console.log('🔍 buscarHistoricosPadrao');
+  console.log('  - isAdmin:', isAdmin);
+  console.log('  - ownerId:', ownerId);
+
   const { data, error } = await supabase
     .from('historicos')
     .select('id, descricao')
     .eq('proprietario_id', ownerId)
     .order('descricao', { ascending: true });
 
+  console.log('  - Query executada');
+  console.log('  - erro:', error);
+  console.log('  - dados retornados:', data?.length || 0);
+
   if (error) {
-    console.error('Erro ao buscar históricos:', error);
+    console.error('❌ Erro ao buscar históricos:', error);
     return [];
   }
+
+  console.log('✅ Históricos encontrados:', data?.length || 0);
 
   return data || [];
 }
@@ -169,90 +187,49 @@ export async function buscarContasContabeis(
   ownerId: string,
   tipo: 'receita' | 'despesa'
 ): Promise<{ id: string; codigo: string; nome: string }[]> {
+  const tabelaPlanoContas = 'plano_contas';
   const ownerKey = 'proprietario_id';
-  const prefixo = tipo === 'receita' ? '4' : '5';
 
-  const { data, error } = await supabase
-    .from('plano_contas')
-    .select('id, Conta, Descricao, Analitica, is_conta_resultado')
+  let query = supabase
+    .from(tabelaPlanoContas)
+    .select('id, Conta, Descricao, Analitica')
     .eq(ownerKey, ownerId)
-    .eq('Analitica', 'S')
-    .like('Conta', `${prefixo}%`)
-    .order('Conta', { ascending: true });
+    .eq('Analitica', 'Sim');
+
+  console.log('🔍 buscarContasContabeis');
+  console.log('  - isAdmin:', isAdmin);
+  console.log('  - ownerId:', ownerId);
+  console.log('  - tipo:', tipo);
+  console.log('  - tabelaPlanoContas:', tabelaPlanoContas);
+  console.log('  - ownerKey:', ownerKey);
+
+  if (tipo === 'receita') {
+    query = query.like('Conta', '4.%');
+  } else {
+    // Para despesa, buscar tanto 5.x.x quanto 6.x.x
+    query = query.or('Conta.like.5.%,Conta.like.6.%');
+  }
+
+  const { data, error } = await query.order('Conta', { ascending: true });
+
+  console.log('  - Query executada');
+  console.log('  - erro:', error);
+  console.log('  - dados retornados:', data?.length || 0);
+  console.log('📊 Dados brutos da query:', data);
+  console.log('🔎 Amostra primeira conta:', data?.[0]);
 
   if (error) {
-    console.error('Erro ao buscar contas contábeis:', error);
+    console.error('❌ Erro ao buscar contas contábeis:', error);
     return [];
   }
 
-  return (data || []).map(c => ({
+  const resultado = (data || []).map(c => ({
     id: c.id,
     codigo: c.Conta,
     nome: c.Descricao
   }));
-}
+  
+  console.log('✅ Contas contábeis mapeadas:', resultado.length);
 
-export function useConciliacaoDireta(
-    transacaoAtual: any,
-    transacoesPendentes: any[],
-    setTransacoesPendentes: (updater: (prev: any[]) => any[]) => void,
-    setTransacaoAtual: (transacao: any) => void,
-    setIndiceAtual: (updater: (prev: number) => number) => void,
-    setCarregandoCandidatos: (loading: boolean) => void,
-    setCandidatosAtuais: (candidatos: any[]) => void,
-    setModalMapeamentoOpen: (open: boolean) => void
-) {
-    const { role } = useSessao();
-    const { ownerId, ownerType } = useOwner();
-    const isAdmin = role === 'Admin';
-    const [modalCategorizacaoDiretaOpen, setModalCategorizacaoDiretaOpen] = useState(false);
-
-    const handleAbrirCategorizacaoDireta = useCallback(() => {
-        setModalCategorizacaoDiretaOpen(true);
-    }, []);
-
-    const handleFecharCategorizacaoDireta = useCallback(() => {
-        setModalCategorizacaoDiretaOpen(false);
-    }, []);
-
-    const handleConfirmarCategorizacaoDireta = useCallback(async (dados: DadosCategorizacao) => {
-        if (!transacaoAtual || !ownerId) return;
-
-        const result = await conciliarTransacaoDireta(
-            transacaoAtual.id,
-            dados,
-            isAdmin,
-            ownerId
-        );
-
-        if (!result.success) {
-            showError(result.error || 'Erro ao conciliar transação');
-            return;
-        }
-
-        showSuccess('Transação conciliada diretamente com sucesso!');
-        
-        const novasPendentes = transacoesPendentes.filter(t => t.id !== transacaoAtual.id);
-        setTransacoesPendentes(() => novasPendentes);
-
-        if (novasPendentes.length > 0) {
-            const proxima = novasPendentes[0];
-            setTransacaoAtual(proxima);
-            setIndiceAtual(prev => prev + 1);
-            setModalCategorizacaoDiretaOpen(false);
-            setModalMapeamentoOpen(true);
-        } else {
-            setModalCategorizacaoDiretaOpen(false);
-            setModalMapeamentoOpen(false);
-            showSuccess('Todas as transações foram processadas!');
-        }
-    }, [transacaoAtual, transacoesPendentes, ownerId, isAdmin, ownerType, setTransacoesPendentes, setTransacaoAtual, setIndiceAtual, setCarregandoCandidatos, setCandidatosAtuais, setModalMapeamentoOpen]);
-
-    return {
-        modalCategorizacaoDiretaOpen,
-        handleAbrirCategorizacaoDireta,
-        handleFecharCategorizacaoDireta,
-        handleConfirmarCategorizacaoDireta,
-        setModalCategorizacaoDiretaOpen,
-    };
+  return resultado;
 }

@@ -144,8 +144,9 @@ export async function buscarParcelasCandidatas(
       .map(c => c.cliente_id)
       .filter(Boolean) as string[];
     
+    const tabelaClientes = isAdmin ? 'tbl_clientes' : 'clientes';
     const { data: clientes } = await supabase
-      .from('tbl_clientes')
+      .from(tabelaClientes)
       .select('id, nome')
       .in('id', clienteIds);
 
@@ -386,14 +387,14 @@ export async function confirmarMapeamento(
       const tabelaContasSinteticas = isAdmin 
         ? (tipo === 'CR' ? 'admin_contas_receber' : 'admin_contas_pagar')
         : (tipo === 'CR' ? 'contas_receber' : 'contas_pagar');
-      const campoContaIdSint = tipo === 'CR' ? 'conta_receber_id' : 'conta_pagar_id';
-      const contaSinteticaId = parcela[campoContaIdSint];
+      const campoContaId = tipo === 'CR' ? 'conta_receber_id' : 'conta_pagar_id';
+      const contaSinteticaId = parcela[campoContaId];
       
       if (contaSinteticaId) {
         const { data: todasParcelas } = await supabase
           .from(tabelaParcelas)
           .select('id, status')
-          .eq(campoContaIdSint, contaSinteticaId);
+          .eq(campoContaId, contaSinteticaId);
         
         const todasQuitadas = (todasParcelas || []).every(p => p.status === 'paga');
         
