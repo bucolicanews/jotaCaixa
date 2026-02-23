@@ -31,9 +31,11 @@ import {
   TransacaoComId 
 } from '@/hooks/conciliacao/useMapeamentoParcelas';
 import { conciliarTransacaoDireta, DadosCategorizacao } from '@/hooks/conciliacao/useConciliacaoDireta';
+import { useOwner } from '@/hooks/use-owner';
 
 const Conciliacao = () => {
   const { role } = useSessao();
+  const { ownerType } = useOwner();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = role === 'Admin';
   
@@ -148,7 +150,7 @@ const Conciliacao = () => {
 
     try {
       console.log('🔍 Buscando candidatos...');
-      const candidatos = await buscarParcelasCandidatas(primeira, proprietarioDaConfiguracao!);
+      const candidatos = await buscarParcelasCandidatas(primeira, proprietarioDaConfiguracao!, ownerType);
       console.log('✅ Candidatos encontrados:', candidatos.length);
       setCandidatosAtuais(candidatos);
     } catch (error) {
@@ -157,7 +159,7 @@ const Conciliacao = () => {
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [transacoesPendentes, proprietarioDaConfiguracao]);
+  }, [transacoesPendentes, proprietarioDaConfiguracao, ownerType]);
 
   const handleConfirmarMapeamento = useCallback(async (parcelaId: string) => {
     if (!transacaoAtual || !proprietarioDaConfiguracao) return;
@@ -193,7 +195,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, ownerType);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -204,7 +206,7 @@ const Conciliacao = () => {
       setModalMapeamentoOpen(false);
       showSuccess('Todas as transações foram mapeadas!');
     }
-  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin, ownerType]);
 
   const handlePularTransacao = useCallback(async () => {
     const restantes = transacoesPendentes.filter(t => t.id !== transacaoAtual?.id);
@@ -220,7 +222,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, ownerType);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -230,7 +232,7 @@ const Conciliacao = () => {
     } else {
       setModalMapeamentoOpen(false);
     }
-  }, [transacoesPendentes, transacaoAtual, proprietarioDaConfiguracao, historicoMapeamento]);
+  }, [transacoesPendentes, transacaoAtual, proprietarioDaConfiguracao, historicoMapeamento, ownerType]);
 
   const handleVoltarTransacao = useCallback(async () => {
     if (historicoMapeamento.length === 0) return;
@@ -244,14 +246,14 @@ const Conciliacao = () => {
     setCarregandoCandidatos(true);
 
     try {
-      const candidatos = await buscarParcelasCandidatas(anterior, proprietarioDaConfiguracao!);
+      const candidatos = await buscarParcelasCandidatas(anterior, proprietarioDaConfiguracao!, ownerType);
       setCandidatosAtuais(candidatos);
     } catch (error) {
       setCandidatosAtuais([]);
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [historicoMapeamento, transacoesPendentes, proprietarioDaConfiguracao]);
+  }, [historicoMapeamento, transacoesPendentes, proprietarioDaConfiguracao, ownerType]);
 
   const handleAbrirBuscaManual = useCallback(() => {
     setModalMapeamentoOpen(false);
@@ -284,7 +286,8 @@ const Conciliacao = () => {
       console.log('🔍 Buscando candidatos...');
       const candidatos = await buscarParcelasCandidatas(
         transacaoAtual,
-        proprietarioDaConfiguracao
+        proprietarioDaConfiguracao,
+        ownerType
       );
       console.log('✅ Candidatos encontrados:', candidatos.length, candidatos);
       setCandidatosAtuais(candidatos);
@@ -294,7 +297,7 @@ const Conciliacao = () => {
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [transacaoAtual, proprietarioDaConfiguracao]);
+  }, [transacaoAtual, proprietarioDaConfiguracao, ownerType]);
 
   const handleFecharCategorizacaoDireta = useCallback(() => {
     setModalCategorizacaoDiretaOpen(false);
@@ -328,7 +331,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, ownerType);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -343,7 +346,7 @@ const Conciliacao = () => {
       setModalMapeamentoOpen(false);
       showSuccess('Todas as transações foram processadas!');
     }
-  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin, ownerType]);
 
   const handleConfirmarVinculoParcela = useCallback(async (parcelaId: string) => {
     if (!transacaoAtual || !proprietarioDaConfiguracao) return;
@@ -370,7 +373,7 @@ const Conciliacao = () => {
         setCarregandoCandidatos(true);
         
         try {
-          const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao);
+          const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao, ownerType);
           setCandidatosAtuais(candidatos);
         } catch (error) {
           setCandidatosAtuais([]);
@@ -386,7 +389,7 @@ const Conciliacao = () => {
     } else {
       showError(result.error || 'Erro ao vincular parcela');
     }
-  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+  }, [transacaoAtual, transacoesPendentes, proprietarioDaConfiguracao, isAdmin, ownerType]);
 
   const handleOpenConfigDialog = (config: any) => {
     setConfigParaEditar(config);
