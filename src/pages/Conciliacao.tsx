@@ -148,7 +148,7 @@ const Conciliacao = () => {
 
     try {
       console.log('🔍 Buscando candidatos...');
-      const candidatos = await buscarParcelasCandidatas(primeira, proprietarioDaConfiguracao!, isAdmin);
+      const candidatos = await buscarParcelasCandidatas(primeira, proprietarioDaConfiguracao!);
       console.log('✅ Candidatos encontrados:', candidatos.length);
       setCandidatosAtuais(candidatos);
     } catch (error) {
@@ -157,7 +157,7 @@ const Conciliacao = () => {
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+  }, [transacoesPendentes, proprietarioDaConfiguracao]);
 
   const handleConfirmarMapeamento = useCallback(async (parcelaId: string) => {
     if (!transacaoAtual || !proprietarioDaConfiguracao) return;
@@ -193,7 +193,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, isAdmin);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -220,7 +220,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, isAdmin);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -230,7 +230,7 @@ const Conciliacao = () => {
     } else {
       setModalMapeamentoOpen(false);
     }
-  }, [transacoesPendentes, transacaoAtual, proprietarioDaConfiguracao, isAdmin, historicoMapeamento]);
+  }, [transacoesPendentes, transacaoAtual, proprietarioDaConfiguracao, historicoMapeamento]);
 
   const handleVoltarTransacao = useCallback(async () => {
     if (historicoMapeamento.length === 0) return;
@@ -244,14 +244,14 @@ const Conciliacao = () => {
     setCarregandoCandidatos(true);
 
     try {
-      const candidatos = await buscarParcelasCandidatas(anterior, proprietarioDaConfiguracao!, isAdmin);
+      const candidatos = await buscarParcelasCandidatas(anterior, proprietarioDaConfiguracao!);
       setCandidatosAtuais(candidatos);
     } catch (error) {
       setCandidatosAtuais([]);
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [historicoMapeamento, transacoesPendentes, proprietarioDaConfiguracao, isAdmin]);
+  }, [historicoMapeamento, transacoesPendentes, proprietarioDaConfiguracao]);
 
   const handleAbrirBuscaManual = useCallback(() => {
     setModalMapeamentoOpen(false);
@@ -284,8 +284,7 @@ const Conciliacao = () => {
       console.log('🔍 Buscando candidatos...');
       const candidatos = await buscarParcelasCandidatas(
         transacaoAtual,
-        proprietarioDaConfiguracao,
-        isAdmin
+        proprietarioDaConfiguracao
       );
       console.log('✅ Candidatos encontrados:', candidatos.length, candidatos);
       setCandidatosAtuais(candidatos);
@@ -295,7 +294,7 @@ const Conciliacao = () => {
     } finally {
       setCarregandoCandidatos(false);
     }
-  }, [transacaoAtual, proprietarioDaConfiguracao, isAdmin]);
+  }, [transacaoAtual, proprietarioDaConfiguracao]);
 
   const handleFecharCategorizacaoDireta = useCallback(() => {
     setModalCategorizacaoDiretaOpen(false);
@@ -329,7 +328,7 @@ const Conciliacao = () => {
       setCarregandoCandidatos(true);
       
       try {
-        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!, isAdmin);
+        const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao!);
         setCandidatosAtuais(candidatos);
       } catch (error) {
         setCandidatosAtuais([]);
@@ -371,7 +370,7 @@ const Conciliacao = () => {
         setCarregandoCandidatos(true);
         
         try {
-          const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao, isAdmin);
+          const candidatos = await buscarParcelasCandidatas(proxima, proprietarioDaConfiguracao);
           setCandidatosAtuais(candidatos);
         } catch (error) {
           setCandidatosAtuais([]);

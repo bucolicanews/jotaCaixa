@@ -46,20 +46,16 @@ function isPagBankTransaction(descricao: string, origem?: string): boolean {
 
 export async function buscarParcelasCandidatas(
   transacao: TransacaoExtrato,
-  ownerId: string,
-  isAdmin: boolean
+  ownerId: string
 ): Promise<ParcelaCandidato[]> {
   const tipo = transacao.tipo === 'Entrada' ? 'CR' : 'CP';
-  const tabelaParcelas = isAdmin 
-    ? (tipo === 'CR' ? 'admin_parcelas_receber' : 'admin_parcelas_pagar')
-    : (tipo === 'CR' ? 'parcelas_contas_receber' : 'parcelas_contas_pagar');
-  
-  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
-  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
-  const tabelaContasSinteticas = isAdmin 
-    ? (tipo === 'CR' ? 'admin_contas_receber' : 'admin_contas_pagar')
-    : (tipo === 'CR' ? 'contas_receber' : 'contas_pagar');
-  const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+  // Simplificado: Se há ownerId, sempre usamos as tabelas de admin.
+  // A RLS cuidará da permissão.
+  const tabelaParcelas = tipo === 'CR' ? 'admin_parcelas_receber' : 'admin_parcelas_pagar';
+  const tabelaRecebimentos = 'admin_recebimentos';
+  const tabelaPagamentos = 'admin_pagamentos';
+  const tabelaContasSinteticas = tipo === 'CR' ? 'admin_contas_receber' : 'admin_contas_pagar';
+  const ownerKey = 'admin_id';
 
   const isPagBank = isPagBankTransaction(transacao.descricao);
 
