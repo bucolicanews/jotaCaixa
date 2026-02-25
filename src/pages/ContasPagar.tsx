@@ -135,7 +135,7 @@ const ContasPagar: React.FC = () => {
     
     let query = supabase.from(tabelaParcelasCP).select(`
         *,
-        ${tabelaContasCP} ( id, fornecedor, origem, descricao ),
+        ${tabelaContasCP} ( id, fornecedor, origem, descricao, id_conta_patrimonial, id_conta_resultado ),
         pagbank_transfer_id,
         pagbank_status,
         pagbank_updated_at
@@ -202,8 +202,12 @@ const ContasPagar: React.FC = () => {
     let query = supabase.from(tabelaPagamentosCP).select(`
         *,
         saldo_contas ( nome ),
+        historicos ( descricao ),
         ${tabelaParcelasCP}!parcela_id (
+            id,
             numero_parcela,
+            valor_parcela,
+            valor_pago,
             ${tabelaContasCP} ( id, descricao, origem, fornecedor )
         )
     `).eq(ownerKey, proprietarioId);
@@ -500,6 +504,7 @@ const ContasPagar: React.FC = () => {
                   loading={loading}
                   contas={contas}
                   isSupervisao={isAdmin}
+                  proprietarioId={proprietarioId}
                   handleOpenDetalhes={handleOpenDetalhes}
                   handleOpenForm={handleOpenForm}
                   handleDelete={handleDelete}
@@ -519,10 +524,12 @@ const ContasPagar: React.FC = () => {
                   formatCurrency={formatCurrency}
                   formatarOrigem={formatarOrigem}
                   getBadgeVariant={getBadgeVariant as any}
+                  proprietarioId={proprietarioId}
                   onRealizarPagamentoPagBank={(parcela) => {
                     setSelectedParcelaPagar(parcela);
                     setPagbankTransferDialogOpen(true);
                   }}
+                  onDataChange={() => { fetchContas(); fetchParcelas(); }}
               />
           </TabsContent>
           

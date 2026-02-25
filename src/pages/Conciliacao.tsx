@@ -70,6 +70,7 @@ const Conciliacao = () => {
     handleContaContabilLoteChange,
     handleApplyLote,
     handleSaveConciliacao,
+    handleMapeamentoConcluido,
     handleDeleteHistorico,
     handleViewHistoricoDetails,
     setHistoricoDetalhesOpen,
@@ -494,6 +495,7 @@ const Conciliacao = () => {
                             onContaContabilLoteChange={handleContaContabilLoteChange}
                             onApplyLote={handleApplyLote}
                             onSaveConciliacao={handleSaveConciliacao}
+                            onMapeamentoParcelas={handleMapeamentoConcluido}
                         />
                     </div>
                 )}

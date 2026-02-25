@@ -1,0 +1,177 @@
+[
+  {
+    "id": "2aad8c73-99e3-4f35-a199-4276a6af4329",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "recebimento",
+    "conta_contabil_id": null,
+    "criado_em": "2025-12-14 01:15:22.149514+00"
+  },
+  {
+    "id": "1043305a-182d-44a1-a667-62446c29c781",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "recebimento_resultado",
+    "conta_contabil_id": null,
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "edc6e084-8438-4494-913c-a05083b518ce",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "desconto",
+    "conta_contabil_id": null,
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "d1f8a36e-5f71-407d-8c5f-6d1ee469d720",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "tipo_registro": "a_receber",
+    "conta_contabil_id": "199850ea-a65f-4bf5-bedb-d58211304a74",
+    "criado_em": "2025-12-26 02:00:39.802336+00"
+  },
+  {
+    "id": "e976e9dc-c367-4fe5-a1da-865b38115c9c",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "tipo_registro": "parcela",
+    "conta_contabil_id": "1213ecb9-3417-42de-9d59-d8538465ae6d",
+    "criado_em": "2025-12-26 02:00:39.802336+00"
+  },
+  {
+    "id": "f6c735dd-7598-4817-90cb-9ac2296a7c90",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "tipo_registro": "desconto_concedido",
+    "conta_contabil_id": "1f1a15f8-f63c-4eec-bd25-66f83fdb10d2",
+    "criado_em": "2025-12-26 02:00:39.802336+00"
+  },
+  {
+    "id": "67ec1598-3755-401a-aa94-c0916d358b3c",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "tipo_registro": "estorno_desconto_concedido",
+    "conta_contabil_id": "493a2b58-9457-4cf8-b2c0-d4ae154e8fe5",
+    "criado_em": "2025-12-26 02:00:39.802336+00"
+  },
+  {
+    "id": "1aa09d1a-eeb6-4033-9e7b-9d568de86b24",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "tipo_registro": "a_receber",
+    "conta_contabil_id": "06a41b6b-8071-4dc8-ad49-e4176b1db4fb",
+    "criado_em": "2025-12-26 02:12:17.498429+00"
+  },
+  {
+    "id": "e98248b9-69ab-44d7-a223-9452c17768ac",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "tipo_registro": "parcela",
+    "conta_contabil_id": "93b7a730-2c40-491d-b216-cc2c3f8c7559",
+    "criado_em": "2025-12-26 02:12:17.498429+00"
+  },
+  {
+    "id": "39ea35c5-f637-4f50-bb66-6127416933db",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "tipo_registro": "desconto_concedido",
+    "conta_contabil_id": "c89a2c9f-2184-428c-bcc2-04044d7c15a8",
+    "criado_em": "2025-12-26 02:12:17.498429+00"
+  },
+  {
+    "id": "008f926c-2c9d-4c82-8701-cefe521ccbec",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "tipo_registro": "estorno_desconto_concedido",
+    "conta_contabil_id": "b2706921-7077-41fb-a487-5475bf2b5651",
+    "criado_em": "2025-12-26 02:12:17.498429+00"
+  },
+  {
+    "id": "5c42a282-9370-4dc4-9bb1-71b5a54d29f7",
+    "proprietario_id": "948119a2-0f0d-43db-886f-ace107d2cdee",
+    "tipo_registro": "a_receber",
+    "conta_contabil_id": "7128db12-35bc-4b8b-83e5-54d190d666a9",
+    "criado_em": "2025-12-29 11:31:59.063146+00"
+  },
+  {
+    "id": "de955700-4c76-434a-a271-901a49c88fd1",
+    "proprietario_id": "948119a2-0f0d-43db-886f-ace107d2cdee",
+    "tipo_registro": "parcela",
+    "conta_contabil_id": "bae82efe-9a48-4dc5-a952-283c4cefa160",
+    "criado_em": "2025-12-29 11:31:59.063146+00"
+  },
+  {
+    "id": "a1ee3142-67c5-411b-8420-f5e029b5d472",
+    "proprietario_id": "948119a2-0f0d-43db-886f-ace107d2cdee",
+    "tipo_registro": "desconto_concedido",
+    "conta_contabil_id": "c3d35f73-ad88-486b-b6ba-c3bf59894ae5",
+    "criado_em": "2025-12-29 11:31:59.063146+00"
+  },
+  {
+    "id": "0744726f-22d2-4f19-b3e3-5836fddc042e",
+    "proprietario_id": "948119a2-0f0d-43db-886f-ace107d2cdee",
+    "tipo_registro": "estorno_desconto_concedido",
+    "conta_contabil_id": "c2497c65-783c-4217-8c3c-b54ae1fb3352",
+    "criado_em": "2025-12-29 11:31:59.063146+00"
+  },
+  {
+    "id": "586aaae8-cf6b-439d-a516-cfcdfbdf0bfe",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "a_receber",
+    "conta_contabil_id": "cc49beef-e497-45e4-bb45-560d89eb29be",
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "981017b7-2b2e-496d-8f47-46f36c441569",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "parcela",
+    "conta_contabil_id": "692f5639-1923-4049-ae28-862dd3803c95",
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "c699d924-8a1f-4f2c-b778-1f7667462db5",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "desconto_concedido",
+    "conta_contabil_id": "b1cee1e0-f6a5-4225-a084-6926b01262ce",
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "0f5fcffc-69ed-4ecc-9701-e3cc2a8055c5",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "estorno_desconto_concedido",
+    "conta_contabil_id": "cb95ff7e-03ef-4f2d-8983-d31ec398ba5e",
+    "criado_em": "2025-11-30 23:45:34.518865+00"
+  },
+  {
+    "id": "6f77cc14-4c35-4eed-bb4a-e372d2296fae",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "tipo_registro": "taxas_bancarias",
+    "conta_contabil_id": "937b595c-e598-4c9a-b016-42b1c9c9926c",
+    "criado_em": "2026-01-20 17:53:06.802964+00"
+  },
+  {
+    "id": "8dda699a-e491-4177-b72a-95b19387c082",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "tipo_registro": "a_receber",
+    "conta_contabil_id": "2d9dabc1-cb60-407b-bf1a-a6ffed215990",
+    "criado_em": "2026-01-31 14:15:15.094903+00"
+  },
+  {
+    "id": "2281ae71-f234-432d-b5fd-24422bceb2ae",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "tipo_registro": "parcela",
+    "conta_contabil_id": "4ae77d68-df5a-4cff-8767-b7ae4d68019f",
+    "criado_em": "2026-01-31 14:15:15.094903+00"
+  },
+  {
+    "id": "e891205e-dce5-435f-bca0-b912f8c4ab43",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "tipo_registro": "desconto_concedido",
+    "conta_contabil_id": "3ce01443-25e5-4ab4-a339-5b95effc7a51",
+    "criado_em": "2026-01-31 14:15:15.094903+00"
+  },
+  {
+    "id": "d6479c93-08cf-4b6b-a6e1-082e501274ba",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "tipo_registro": "estorno_desconto_concedido",
+    "conta_contabil_id": "f51f551f-7840-4cda-8c6b-9e70bf8c16c9",
+    "criado_em": "2026-01-31 14:15:15.094903+00"
+  },
+  {
+    "id": "05983ea0-5359-4f44-a1d9-c586aab2dd68",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "tipo_registro": "taxas_bancarias",
+    "conta_contabil_id": "820f3beb-7496-4c42-8a14-b5f71358f6e2",
+    "criado_em": "2026-01-31 14:15:15.094903+00"
+  }
+]

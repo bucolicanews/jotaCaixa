@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
-import { Checkbox } from '../ui/checkbox'; // Importando Checkbox
+import { Checkbox } from '../ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface EditableCellProps {
   id: string; // ID da conta
@@ -26,6 +27,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
   isEditable,
 }) => {
   const isBoolean = fieldName === 'is_conta_caixa_banco' || fieldName === 'is_conta_patrimonial' || fieldName === 'is_conta_resultado' || fieldName === 'is_caixa' || fieldName === 'is_banco' || fieldName === 'is_a_receber' || fieldName === 'is_a_pagar';
+  const isSelect = fieldName === 'saldo_tipo';
   const initialBooleanValue = isBoolean ? !!initialValue : false;
   
   const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +108,52 @@ const EditableCell: React.FC<EditableCellProps> = ({
                   onCheckedChange={handleToggle} 
                   disabled={loading || !isEditable}
               />
+              {loading && <Loader2 className="h-4 w-4 animate-spin ml-2 text-primary" />}
+          </div>
+      );
+  }
+
+  // Lógica para Select (saldo_tipo)
+  if (isSelect) {
+      const handleSelectChange = async (newValue: string) => {
+          if (!isEditable || loading) return;
+          
+          setLoading(true);
+          
+          const payload = {
+              [fieldName]: newValue,
+              atualizado_em: new Date().toISOString(),
+          };
+
+          try {
+              const { error } = await supabase
+                  .from('plano_contas')
+                  .update(payload)
+                  .eq('id', id);
+
+              if (error) throw error;
+
+              showSuccess('Conta atualizada!');
+              onSaveSuccess();
+          } catch (error: any) {
+              console.error('Erro ao salvar edição inline:', error);
+              showError('Falha ao salvar: ' + error.message);
+          } finally {
+              setLoading(false);
+          }
+      };
+
+      return (
+          <div className="flex justify-center items-center h-full">
+              <Select defaultValue={String(initialValue || '')} onValueChange={handleSelectChange} disabled={loading || !isEditable}>
+                  <SelectTrigger className="h-8 w-[120px]">
+                      <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="devedora">Devedora</SelectItem>
+                      <SelectItem value="credora">Credora</SelectItem>
+                  </SelectContent>
+              </Select>
               {loading && <Loader2 className="h-4 w-4 animate-spin ml-2 text-primary" />}
           </div>
       );

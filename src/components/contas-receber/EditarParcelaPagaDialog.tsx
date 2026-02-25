@@ -176,7 +176,8 @@ export async function saveRecebimentoAndLancamentos({
         conta_bancaria_id: values.conta_id,
         conta_contabil_id: contaContabilCaixaBanco,
         historico_id: values.historico_id,
-        origem: 'recebimento_manual',
+        origem: `recebimento_manual:${parcela.id}`,
+        documento: parcela.id,
         conta_resultado_id: idPatrimonial,
     });
     
@@ -191,7 +192,8 @@ export async function saveRecebimentoAndLancamentos({
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_patrimonial_id,
             historico_id: values.historico_id,
-            origem: 'recebimento_manual',
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
             conta_resultado_id: idAtivo,
         });
     }
@@ -213,7 +215,8 @@ export async function saveRecebimentoAndLancamentos({
             tipo: 'Entrada' as const,
             conta_bancaria_id: null,
             conta_contabil_id: contaDespesaTaxa,
-            origem: 'recebimento_manual',
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
             historico_id: historicoTaxa || values.historico_id,
             conta_resultado_id: idTaxaCredito,
         });
@@ -228,7 +231,8 @@ export async function saveRecebimentoAndLancamentos({
             conta_bancaria_id: values.conta_id,
             conta_contabil_id: contaContabilCaixaBanco,
             historico_id: historicoTaxa || values.historico_id,
-            origem: 'recebimento_manual',
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
             conta_resultado_id: idTaxaDespesa,
         });
     }
@@ -250,7 +254,8 @@ export async function saveRecebimentoAndLancamentos({
                 tipo: 'Entrada' as const,
                 conta_bancaria_id: null,
                 conta_contabil_id: contaDesconto,
-                origem: 'desconto_cr',
+                origem: `desconto_cr:${parcela.id}`,
+                documento: parcela.id,
                 historico_id: values.historico_id,
                 conta_resultado_id: idDescontoPatrimonial,
             });
@@ -265,7 +270,8 @@ export async function saveRecebimentoAndLancamentos({
                 conta_bancaria_id: null,
                 conta_contabil_id: values.conta_patrimonial_id,
                 historico_id: values.historico_id,
-                origem: 'desconto_cr',
+                origem: `desconto_cr:${parcela.id}`,
+                documento: parcela.id,
                 conta_resultado_id: idDescontoDespesa,
             });
         }
@@ -286,7 +292,8 @@ export async function saveRecebimentoAndLancamentos({
             tipo: 'Entrada' as const,
             conta_bancaria_id: values.conta_id,
             conta_contabil_id: contaContabilCaixaBanco,
-            origem: 'recebimento_manual',
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
             historico_id: values.historico_id,
             conta_resultado_id: idAcrescimoReceita,
         });
@@ -301,7 +308,8 @@ export async function saveRecebimentoAndLancamentos({
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_acrescimo_id,
             historico_id: values.historico_id,
-            origem: 'recebimento_manual',
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
             conta_resultado_id: idAcrescimoBanco,
         });
     }

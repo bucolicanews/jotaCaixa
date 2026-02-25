@@ -392,6 +392,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
                     origem: origemVincular,
+                    documento: parcela.id,
                     historico_id: historicoId,
                     conta_resultado_id: idPatrimonial,
                 };
@@ -408,6 +409,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
                         origem: origemVincular,
+                        documento: parcela.id,
                         historico_id: historicoId,
                         conta_resultado_id: idAtivo,
                     };
@@ -436,7 +438,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             tipo: 'Entrada' as const,
                             conta_bancaria_id: null,
                             conta_contabil_id: contaPatrimonial,
-                            origem: 'pagamento_manual',
+                            origem: `desconto_cp:${parcela.id}`,
+                            documento: parcela.id,
                             historico_id: historicoId,
                             conta_resultado_id: idDescontoReceita,
                         };
@@ -451,7 +454,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             tipo: 'Saida' as const,
                             conta_bancaria_id: null,
                             conta_contabil_id: contaDescontoObtido,
-                            origem: 'pagamento_manual',
+                            origem: `desconto_cp:${parcela.id}`,
+                            documento: parcela.id,
                             historico_id: historicoId,
                             conta_resultado_id: idDescontoPassivo,
                         };

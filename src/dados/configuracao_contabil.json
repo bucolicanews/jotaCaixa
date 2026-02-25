@@ -1,0 +1,170 @@
+[
+  {
+    "id": "b1b01a7e-60e0-407b-9845-8a32b771e078",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "1",
+    "tipo_natureza": "Ativo",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "cfcdc739-94c3-44d8-979a-898fbb2d0be0",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "2",
+    "tipo_natureza": "Passivo",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "10a79e7e-4772-4283-bdfd-ddfda75b4cfe",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "3",
+    "tipo_natureza": "Patrimonio Liquido",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "98204240-a27a-4297-a9f1-4d13e990ad01",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "4",
+    "tipo_natureza": "Receita",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "e0381302-182b-4a34-af2d-cb89adfcb198",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "5",
+    "tipo_natureza": "Custo",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "517ed7e8-cfbc-4fff-9d00-4c3a3a1f8528",
+    "proprietario_id": "77332f51-9da8-4d2c-9b13-f8311affca0b",
+    "codigo_nivel_1": "6",
+    "tipo_natureza": "Despesa",
+    "criado_em": "2025-12-26 02:00:31.429962+00"
+  },
+  {
+    "id": "351cb13a-1609-499a-86f0-a9da6f613414",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "1",
+    "tipo_natureza": "Ativo",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "2c4e3ad8-28e2-44ca-a8d3-d775ecf829bd",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "2",
+    "tipo_natureza": "Passivo",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "dce9ffd2-6a9e-44b3-bbc3-c065743d6f39",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "3",
+    "tipo_natureza": "Patrimonio Liquido",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "fdd0bff4-0b20-4d0e-b96c-381289376ef3",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "4",
+    "tipo_natureza": "Receita",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "484fa118-e12f-45ca-b660-8db317e24e9f",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "5",
+    "tipo_natureza": "Custo",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "f11982d1-90e1-48d0-90bf-4f770f8d0125",
+    "proprietario_id": "1d0efd5e-c41d-4ac5-9aef-9b407dc3e288",
+    "codigo_nivel_1": "6",
+    "tipo_natureza": "Despesa",
+    "criado_em": "2025-12-26 02:12:00.378685+00"
+  },
+  {
+    "id": "44c480d9-7221-4681-9e30-156436c27ec0",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "1",
+    "tipo_natureza": "Ativo",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "82bea8fb-f035-4a4b-b916-d47d9c36a9dd",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "2",
+    "tipo_natureza": "Passivo",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "bf45505a-7122-439e-9d75-f3732d1c9d60",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "3",
+    "tipo_natureza": "Patrimonio Liquido",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "9d167db7-6ebd-453b-8261-7251d1e28df2",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "4",
+    "tipo_natureza": "Receita",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "0b388076-6232-40be-af00-47fcf77e1ae5",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "5",
+    "tipo_natureza": "Custo",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "46ce6bc1-63bc-493c-8ea0-990484763160",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "codigo_nivel_1": "6",
+    "tipo_natureza": "Despesa",
+    "criado_em": "2025-12-26 01:53:12.970974+00"
+  },
+  {
+    "id": "fafbe883-ceb1-48b3-b1e0-9ab0e725fdc9",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "1",
+    "tipo_natureza": "Ativo",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  },
+  {
+    "id": "731766d6-56e0-4019-a47d-96ef516c558c",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "2",
+    "tipo_natureza": "Passivo",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  },
+  {
+    "id": "972c6adc-eb24-449d-a4e8-0022e3432486",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "3",
+    "tipo_natureza": "Patrimonio Liquido",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  },
+  {
+    "id": "b1eb94be-7bbf-4b1b-b391-29de59c202be",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "4",
+    "tipo_natureza": "Receita",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  },
+  {
+    "id": "b2007ec8-702b-4a16-85e4-06b83a793421",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "5",
+    "tipo_natureza": "Custo",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  },
+  {
+    "id": "304214f9-cfd7-4366-bb63-7b9ed42f08c8",
+    "proprietario_id": "7b082dac-62e9-4078-bb23-2fc83d09ac21",
+    "codigo_nivel_1": "6",
+    "tipo_natureza": "Despesa",
+    "criado_em": "2026-01-31 14:14:51.586179+00"
+  }
+]

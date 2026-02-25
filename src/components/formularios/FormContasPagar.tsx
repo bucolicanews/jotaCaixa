@@ -303,15 +303,12 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         const { error: deleteParcelasError } = await supabase.from(tabelaParcelasPagar).delete().eq('conta_pagar_id', contaPagarId);
         if (deleteParcelasError) throw deleteParcelasError;
         
-        // 2. Deletar lançamentos contábeis antigos (usando a descrição da conta sintética original)
-        const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-        const oldReceitaDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-        
+        // 2. Deletar lançamentos contábeis antigos
         await supabase.from('lancamentos')
             .delete()
             .eq('origem', 'lancamento_cp')
             .eq('proprietario_id', proprietarioId)
-            .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%,descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+            .eq('documento', contaPagarId);
             
       } else {
         const { data, error } = await supabase.from(tabelaContasPagar).insert(contaPagarPayload).select('id').single();
@@ -343,12 +340,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_movimentacao: dataMovimentacao,
           descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Saida' as const, // CRÉDITO (Saída) no Passivo (Aumenta Passivo Credora)
+          tipo: 'Saida' as const,
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_patrimonial_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
           conta_resultado_id: idDespesa,
+          documento: contaPagarId,
       };
       
       lancamentosPayload.push(lancamentoPatrimonialPayload);
@@ -360,12 +358,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_movimentacao: dataMovimentacao,
           descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Entrada' as const, // DÉBITO (Entrada) na Despesa (Credora)
+          tipo: 'Entrada' as const,
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_resultado_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
           conta_resultado_id: idPatrimonial,
+          documento: contaPagarId,
       };
       
       lancamentosPayload.push(lancamentoDespesaPayload);

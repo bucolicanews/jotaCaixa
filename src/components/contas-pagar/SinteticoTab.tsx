@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -6,14 +6,21 @@ import { Edit, Trash2, Eye } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { ContaPagar, ContaPagarComProgresso } from '@/types/contas-pagar';
+import { supabase } from '@/integrations/supabase/client';
 
-// Definindo o tipo ContaStatus para incluir os status de parcela para uso no getBadgeVariant
 type ContaStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelada' | 'aberta' | 'parcial' | 'reprogramada';
+
+interface PlanoContasResumo {
+    id: string;
+    Conta: string;
+    Descricao: string;
+}
 
 interface SinteticoTabProps {
     loading: boolean;
     contas: (ContaPagar | ContaPagarComProgresso)[];
     isSupervisao: boolean;
+    proprietarioId: string | null;
     handleOpenDetalhes: (conta: ContaPagarComProgresso) => void;
     handleOpenForm: (conta: ContaPagarComProgresso) => void;
     handleDelete: (id: string) => void;
@@ -26,6 +33,7 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
     loading,
     contas,
     isSupervisao,
+    proprietarioId,
     handleOpenDetalhes,
     handleOpenForm,
     handleDelete,
@@ -33,6 +41,32 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
     formatCurrency,
     getBadgeVariant,
 }) => {
+    const [planoContasMap, setPlanoContasMap] = useState<Record<string, PlanoContasResumo>>({});
+
+    const carregarPlanoContas = useCallback(async () => {
+        if (contas.length === 0) return;
+        const ids = [...new Set(contas.flatMap(c => [
+            (c as any).id_conta_patrimonial,
+            (c as any).id_conta_resultado,
+        ]).filter(Boolean))];
+        if (ids.length === 0) return;
+
+        const { data } = await supabase
+            .from('plano_contas')
+            .select('id, "Conta", "Descricao"')
+            .in('id', ids);
+
+        const map: Record<string, PlanoContasResumo> = {};
+        (data || []).forEach((c: any) => { map[c.id] = c; });
+        setPlanoContasMap(map);
+    }, [contas]);
+
+    useEffect(() => {
+        carregarPlanoContas();
+    }, [carregarPlanoContas]);
+
+    const colSpan = isSupervisao ? 9 : 8;
+
     return (
         <Card>
             <CardHeader><CardTitle>Lançamentos Sintéticos</CardTitle></CardHeader>
@@ -48,22 +82,24 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                 <TableHead className="text-right">Valor Total</TableHead>
                                 <TableHead>Progresso</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Contábil</TableHead>
                                 <TableHead className="text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 7} className="text-center">Carregando...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={colSpan} className="text-center">Carregando...</TableCell></TableRow>
                             ) : contas.length === 0 ? (
-                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 7} className="text-center">Nenhuma conta a pagar encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={colSpan} className="text-center">Nenhuma conta a pagar encontrada no período.</TableCell></TableRow>
                             ) : (
                                 contas.map((conta) => {
-                                    // Converta para ContaPagarComProgresso para acesso seguro às parcelas
                                     const contaComProgresso = conta as ContaPagarComProgresso;
-
-                                    // RESTRIÇÃO: Não pode editar/excluir se já houver parcelas pagas (> 0)
                                     const parcelasPagas = contaComProgresso.parcelas_pagas || 0;
                                     const podeEditarOuExcluir = parcelasPagas === 0;
+                                    const patrimonialId = (conta as any).id_conta_patrimonial;
+                                    const resultadoId = (conta as any).id_conta_resultado;
+                                    const contaPatrimonial = patrimonialId ? planoContasMap[patrimonialId] : null;
+                                    const contaResultado = resultadoId ? planoContasMap[resultadoId] : null;
 
                                     return (
                                         <TableRow key={conta.id}>
@@ -80,29 +116,42 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                                     {conta.status}
                                                 </Badge>
                                             </TableCell>
+                                            <TableCell>
+                                                {(contaResultado || contaPatrimonial) ? (
+                                                    <div className="flex flex-col gap-0.5 min-w-[160px]">
+                                                        {contaResultado && (
+                                                            <span className="text-xs text-muted-foreground leading-tight">
+                                                                <span className="font-semibold text-blue-600">D</span>
+                                                                {' '}{contaResultado.Conta} {contaResultado.Descricao}
+                                                            </span>
+                                                        )}
+                                                        {contaPatrimonial && (
+                                                            <span className="text-xs text-muted-foreground leading-tight">
+                                                                <span className="font-semibold text-orange-600">C</span>
+                                                                {' '}{contaPatrimonial.Conta} {contaPatrimonial.Descricao}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right space-x-2">
-                                                
-                                                {/* Botão Detalhes */}
                                                 <Button variant="outline" size="sm" onClick={() => handleOpenDetalhes(contaComProgresso)}>
                                                     <Eye className="w-4 h-4" />
                                                 </Button>
-
-                                                {/* Botão Editar (Restrição aplicada) */}
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
                                                     onClick={() => handleOpenForm(contaComProgresso)}
-                                                    disabled={!podeEditarOuExcluir}
-                                                    title={!podeEditarOuExcluir ? "Não é possível editar lançamentos com parcelas já pagas." : "Editar lançamento"}
+                                                    title="Editar lançamento"
                                                 >
                                                     <Edit className="w-4 h-4" />
                                                 </Button>
-
-                                                {/* Botão Excluir (Restrição aplicada) */}
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
-                                                        <Button 
-                                                            variant="destructive" 
+                                                        <Button
+                                                            variant="destructive"
                                                             size="sm"
                                                             disabled={!podeEditarOuExcluir}
                                                             title={!podeEditarOuExcluir ? "Não é possível excluir lançamentos com parcelas já pagas." : "Excluir lançamento"}
@@ -123,7 +172,7 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                                 </AlertDialog>
                                             </TableCell>
                                         </TableRow>
-                                    )
+                                    );
                                 })
                             )}
                         </TableBody>

@@ -690,6 +690,7 @@ const PlanoContasPage = () => {
                       <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead className="w-[100px] text-center">Analítica</TableHead>
+                      <TableHead className="w-[120px] text-center">Tipo Saldo</TableHead>
                       <TableHead className="w-[100px] text-center">CR</TableHead>
                       <TableHead className="w-[100px] text-center">CP</TableHead>
                       <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
@@ -702,14 +703,14 @@ const PlanoContasPage = () => {
                   <tbody className="[&_tr:last-child]:border-0">
                     {carregandoContas ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8">
+                        <TableCell colSpan={12} className="text-center py-8">
                           <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                         </TableCell>
                       </TableRow>
                     ) : contas.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={11}
+                          colSpan={12}
                           className="text-center py-4 text-muted-foreground"
                         >
                           Nenhuma conta encontrada com os filtros aplicados.
@@ -773,6 +774,17 @@ const PlanoContasPage = () => {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   {conta.Analitica}
+                                </TableCell>
+                                
+                                {/* NOVO CAMPO: SALDO_TIPO */}
+                                <TableCell className="text-center">
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.saldo_tipo}
+                                    fieldName="saldo_tipo"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                  />
                                 </TableCell>
                                 
                                 {/* NOVO CAMPO: IS A RECEBER */}

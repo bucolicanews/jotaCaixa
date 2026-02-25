@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, AlertTriangle, Link, Sparkles } from 'lucide-react';
+import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, Link, Sparkles } from 'lucide-react';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ModalMapeamentoParcelas } from './ModalMapeamentoParcelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner';
 import { showSuccess, showError } from '@/utils/toast';
 
 interface Step4MappingTableProps {
@@ -64,7 +65,9 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const [modalMapeamentoOpen, setModalMapeamentoOpen] = useState(false);
   const [transacaoSelecionada, setTransacaoSelecionada] = useState<{ transacao: TransacaoExtrato & { id: string }, index: number } | null>(null);
   
-  const { usuario, role, ownerId } = useSessao();
+  const { usuario } = useSessao();
+  const { ownerId, ownerType } = useOwner();
+  const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
   
   const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
   const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
@@ -75,7 +78,13 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const handleAbrirMapeamentoParcelas = async (transacao: TransacaoExtrato, index: number) => {
     try {
       if (transacao.id) {
-        setTransacaoSelecionada({ transacao: transacao as TransacaoExtrato & { id: string }, index });
+        const { data: extratoExistente } = await supabase
+          .from('extratos')
+          .select('id, empresa_id, id_saldo_contas')
+          .eq('id', transacao.id)
+          .single();
+        const transacaoCompleta = { ...transacao, ...(extratoExistente || {}) } as TransacaoExtrato & { id: string };
+        setTransacaoSelecionada({ transacao: transacaoCompleta, index });
         setModalMapeamentoOpen(true);
         return;
       }
@@ -90,7 +99,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         return;
       }
       
-      const dadosInsert = {
+      const dadosInsert: any = {
         empresa_id: ownerId,
         id_saldo_contas: contaSelecionadaId,
         data: converterDataParaISO(transacao.data),
@@ -114,7 +123,12 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         return;
       }
       
-      const transacaoComId = { ...transacao, id: extratoSalvo.id };
+      const transacaoComId = {
+        ...transacao,
+        id: extratoSalvo.id,
+        empresa_id: extratoSalvo.empresa_id,
+        id_saldo_contas: extratoSalvo.id_saldo_contas,
+      };
       setTransacaoSelecionada({ transacao: transacaoComId as TransacaoExtrato & { id: string }, index });
       setModalMapeamentoOpen(true);
       
@@ -123,132 +137,230 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
     }
   };
   
-  const handleConfirmarMapeamento = async (mapeamentos: any[], valorRestante?: any) => {
+  const handleConfirmarMapeamento = async (
+    mapeamentos: any[],
+    valorRestante?: any,
+    modoExcedente: 'restante' | 'redistribuir' = 'restante'
+  ) => {
     if (!transacaoSelecionada) return;
-    
+
     try {
-      const vinculosPromises = mapeamentos.map(async (m) => {
-        const { error } = await supabase
+      const mapeamentosMutaveis = mapeamentos.map(m => ({
+        ...m,
+        valorAplicar: Number(m.valorAplicar || 0),
+      }));
+
+      let excedenteAcumulado = 0;
+      let valorTotalAplicado = 0;
+
+      for (let i = 0; i < mapeamentosMutaveis.length; i++) {
+        const m = mapeamentosMutaveis[i];
+
+        if (modoExcedente === 'redistribuir' && excedenteAcumulado > 0) {
+          m.valorAplicar = m.valorAplicar + excedenteAcumulado;
+          excedenteAcumulado = 0;
+        }
+
+        const tabela = m.tipo === 'CR'
+          ? (isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber')
+          : (isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar');
+
+        const { data: parcelaAtual, error: errorBusca } = await supabase
+          .from(tabela)
+          .select('valor_parcela, valor_pago, valor_vinculado, status, data_pagamento, conta_pagar_id, conta_receber_id')
+          .eq('id', m.parcelaId)
+          .single();
+
+        if (errorBusca) throw errorBusca;
+
+        const valorPagoAtual = Number(parcelaAtual.valor_pago || 0);
+        const valorParcela = Number(parcelaAtual.valor_parcela || 0);
+        const valorVinculadoAtual = Number(parcelaAtual.valor_vinculado || 0);
+
+        const saldoRestante = valorParcela - valorPagoAtual;
+        const valorAplicadoReal = saldoRestante > 0 ? Math.min(m.valorAplicar, saldoRestante) : 0;
+        const excedenteAtual = m.valorAplicar - valorAplicadoReal;
+
+        if (excedenteAtual > 0.001) {
+          if (modoExcedente === 'redistribuir' && i < mapeamentosMutaveis.length - 1) {
+            excedenteAcumulado += excedenteAtual;
+          } else {
+            excedenteAcumulado += excedenteAtual;
+          }
+        }
+
+        if (valorAplicadoReal <= 0) continue;
+
+        valorTotalAplicado += valorAplicadoReal;
+
+        let idContaResultado: string | null = null;
+        const tabelaConta = m.tipo === 'CR' ? 'admin_contas_receber' : 'admin_contas_pagar';
+        const fkConta = m.tipo === 'CR' ? parcelaAtual.conta_receber_id : parcelaAtual.conta_pagar_id;
+        if (fkConta) {
+          const { data: contaData } = await supabase
+            .from(tabelaConta)
+            .select('id_conta_resultado')
+            .eq('id', fkConta)
+            .single();
+          idContaResultado = contaData?.id_conta_resultado || null;
+        }
+
+        const jaQuitada = (m.tipo === 'CR' ? parcelaAtual.status === 'recebida' : parcelaAtual.status === 'paga') && !!parcelaAtual.data_pagamento;
+        let jaTemBaixa = false;
+        if (jaQuitada) {
+          const tabelaPgtoVerif = m.tipo === 'CR' ? 'admin_recebimentos' : 'admin_pagamentos';
+          const { data: baixaExistente } = await supabase
+            .from(tabelaPgtoVerif)
+            .select('id')
+            .eq('parcela_id', m.parcelaId)
+            .limit(1);
+          jaTemBaixa = (baixaExistente?.length ?? 0) > 0;
+        }
+
+        const { error: errorVinculo } = await supabase
           .from('extrato_parcela_vinculo')
           .insert({
             transacao_extrato_id: transacaoSelecionada.transacao.id,
             parcela_id: m.parcelaId,
             tipo_parcela: m.tipo,
-            valor_aplicado: m.valorAplicar,
+            valor_aplicado: valorAplicadoReal,
             usuario_vinculacao_id: usuario?.id,
             data_vinculacao: new Date().toISOString(),
+            empresa_id: transacaoSelecionada.transacao.empresa_id || ownerId,
           });
-        
-        if (error) throw error;
-      });
-      
-      await Promise.all(vinculosPromises);
-      
-      for (const m of mapeamentos) {
-        const tabela = m.tipo === 'CR' 
-          ? (role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber')
-          : (role === 'Admin' ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar');
-        
-        const { data: parcelaAtual, error: errorBusca } = await supabase
-          .from(tabela)
-          .select('valor_parcela, valor_pago')
-          .eq('id', m.parcelaId)
-          .single();
-        
-        if (errorBusca) throw errorBusca;
-        
-        const valorPagoAtual = parcelaAtual.valor_pago || 0;
-        const novoValorPago = valorPagoAtual + m.valorAplicar;
-        const valorParcela = parcelaAtual.valor_parcela;
-        
-        let novoStatus = '';
-        let dataBaixa = null;
-        
-        if (novoValorPago >= valorParcela) {
-          novoStatus = m.tipo === 'CR' ? 'recebida' : 'paga';
-          dataBaixa = converterDataParaISO(transacaoSelecionada.transacao.data);
-        } else {
-          novoStatus = 'parcialmente_paga';
-        }
-        
+        if (errorVinculo) throw errorVinculo;
+
+        const novoValorPago = valorPagoAtual + valorAplicadoReal;
+        const quitou = novoValorPago >= valorParcela;
+        const novoStatus = quitou
+          ? (m.tipo === 'CR' ? 'recebida' : 'paga')
+          : 'parcialmente_paga';
+        const dataBaixa = quitou
+          ? converterDataParaISO(transacaoSelecionada.transacao.data)
+          : null;
+
         const updateData: any = {
           vinculada_extrato: true,
-          valor_vinculado: m.valorAplicar,
+          valor_vinculado: valorVinculadoAtual + valorAplicadoReal,
           valor_pago: novoValorPago,
           status: novoStatus,
         };
-        
         if (dataBaixa) updateData.data_pagamento = dataBaixa;
-        
+
         const { error: errorUpdate } = await supabase
-          .from(tabela)
-          .update(updateData)
-          .eq('id', m.parcelaId);
-        
+          .from(tabela).update(updateData).eq('id', m.parcelaId);
         if (errorUpdate) throw errorUpdate;
-        
-        const tabelaPagamento = m.tipo === 'CR'
-          ? (role === 'Admin' ? 'admin_recebimentos' : 'recebimentos')
-          : (role === 'Admin' ? 'admin_pagamentos' : 'pagamentos');
-        
-        const dataMovimentacao = converterDataParaISO(transacaoSelecionada.transacao.data);
-        const dadosPagamento: any = { parcela_id: m.parcelaId, conta_id: contaSelecionadaId };
-        
-        if (role === 'Admin' && ownerId) dadosPagamento.admin_id = ownerId;
-        
-        if (m.tipo === 'CR') {
-          dadosPagamento.valor_recebido = m.valorAplicar;
-          dadosPagamento.data_recebimento = dataMovimentacao;
-          dadosPagamento.tipo_recebimento = 'TRANSFERENCIA_BANCARIA';
-          dadosPagamento.forma_pagamento = 'PIX';
-        } else {
-          dadosPagamento.valor_pago = m.valorAplicar;
-          dadosPagamento.data_pagamento = dataMovimentacao;
-          dadosPagamento.tipo_pagamento = 'TRANSFERENCIA_BANCARIA';
-          dadosPagamento.forma_pagamento = 'PIX';
+
+        if (!jaTemBaixa) {
+          const tabelaPagamento = m.tipo === 'CR'
+            ? (isAdmin ? 'admin_recebimentos' : 'recebimentos')
+            : (isAdmin ? 'admin_pagamentos' : 'pagamentos');
+
+          const dataMovimentacao = converterDataParaISO(transacaoSelecionada.transacao.data);
+          const dadosPagamento: any = { parcela_id: m.parcelaId, conta_id: contaSelecionadaId };
+          if (isAdmin && ownerId) dadosPagamento.admin_id = ownerId;
+          if (idContaResultado) dadosPagamento.id_conta_contabil = idContaResultado;
+
+          if (m.tipo === 'CR') {
+            dadosPagamento.valor_recebido    = valorAplicadoReal;
+            dadosPagamento.data_recebimento  = dataMovimentacao;
+            dadosPagamento.tipo_recebimento  = 'TRANSFERENCIA_BANCARIA';
+            dadosPagamento.forma_pagamento   = 'PIX';
+          } else {
+            dadosPagamento.valor_pago        = valorAplicadoReal;
+            dadosPagamento.data_pagamento    = dataMovimentacao;
+            dadosPagamento.tipo_pagamento    = 'TRANSFERENCIA_BANCARIA';
+            dadosPagamento.forma_pagamento   = 'PIX';
+          }
+
+          const { error: errorPagamento } = await supabase.from(tabelaPagamento).insert(dadosPagamento);
+          if (errorPagamento) throw errorPagamento;
+
+          if (idContaResultado) {
+            const { error: errorLancamento } = await supabase.from('lancamentos').insert({
+              proprietario_id: transacaoSelecionada.transacao.empresa_id || ownerId,
+              data_movimentacao: converterDataParaISO(transacaoSelecionada.transacao.data),
+              descricao: `Conciliação: ${transacaoSelecionada.transacao.descricao || ''}`.trim(),
+              valor: valorAplicadoReal,
+              tipo: transacaoSelecionada.transacao.tipo,
+              conta_bancaria_id: transacaoSelecionada.transacao.id_saldo_contas || contaSelecionadaId,
+              conta_contabil_id: idContaResultado,
+              conciliado: true,
+              origem: 'conciliacao_extrato_parcela',
+              documento: transacaoSelecionada.transacao.id,
+            });
+            if (errorLancamento) throw errorLancamento;
+          }
         }
-        
-        const { error: errorPagamento } = await supabase.from(tabelaPagamento).insert(dadosPagamento);
-        if (errorPagamento) throw errorPagamento;
       }
-      
+
+      let valorRestanteAjustado = valorRestante;
+      if (excedenteAcumulado > 0.001 && valorRestanteAjustado?.contaContabilId) {
+        valorRestanteAjustado = {
+          ...valorRestanteAjustado,
+          valor: valorRestanteAjustado.valor + excedenteAcumulado,
+        };
+      }
+
       const { data: contaAtual, error: errorConta } = await supabase
         .from('saldo_contas')
         .select('saldo_inicial')
         .eq('id', contaSelecionadaId)
         .single();
-      
+
       if (errorConta) throw errorConta;
-      
-      const valorTotalMapeado = mapeamentos.reduce((acc, m) => acc + m.valorAplicar, 0);
-      const valorMovimentacao = transacaoSelecionada.transacao.tipo === 'Entrada' ? valorTotalMapeado : -valorTotalMapeado;
-      const novoSaldo = (contaAtual.saldo_inicial || 0) + valorMovimentacao;
-      
+
+      const valorMovimentacao = transacaoSelecionada.transacao.tipo === 'Entrada' ? valorTotalAplicado : -valorTotalAplicado;
+      const novoSaldo = Number(contaAtual.saldo_inicial || 0) + valorMovimentacao;
+
       await supabase.from('saldo_contas').update({ saldo_inicial: novoSaldo }).eq('id', contaSelecionadaId);
-      
-      if (valorRestante && valorRestante.valor > 0) {
-        await supabase.from('conciliacao_lancamentos_avulsos').insert({
-            transacao_extrato_id: transacaoSelecionada.transacao.id,
-            conta_contabil_id: valorRestante.contaContabilId,
-            valor: valorRestante.valor,
-            descricao: valorRestante.descricao || 'Diferença de conciliação',
-            tipo: transacaoSelecionada.transacao.tipo === 'Entrada' ? 'ENTRADA' : 'SAIDA',
-            usuario_id: usuario?.id,
-            data_lancamento: new Date().toISOString(),
+
+      if (valorRestanteAjustado && valorRestanteAjustado.valor > 0) {
+        const { error: errorAvulso } = await supabase.from('conciliacao_lancamentos_avulsos').insert({
+          transacao_extrato_id: transacaoSelecionada.transacao.id,
+          conta_contabil_id: valorRestanteAjustado.contaContabilId,
+          valor: valorRestanteAjustado.valor,
+          descricao: valorRestanteAjustado.descricao || 'Diferença de conciliação',
+          tipo: transacaoSelecionada.transacao.tipo === 'Entrada' ? 'ENTRADA' : 'SAIDA',
+          usuario_id: usuario?.id,
+          data_lancamento: new Date().toISOString(),
+          empresa_id: transacaoSelecionada.transacao.empresa_id || ownerId,
+        });
+        if (errorAvulso) throw errorAvulso;
+
+        if (valorRestanteAjustado.contaContabilId) {
+          const { error: errorLancAvulso } = await supabase.from('lancamentos').insert({
+            proprietario_id: transacaoSelecionada.transacao.empresa_id || ownerId,
+            data_movimentacao: converterDataParaISO(transacaoSelecionada.transacao.data),
+            descricao: valorRestanteAjustado.descricao || 'Diferença de conciliação',
+            valor: valorRestanteAjustado.valor,
+            tipo: transacaoSelecionada.transacao.tipo,
+            conta_bancaria_id: transacaoSelecionada.transacao.id_saldo_contas || contaSelecionadaId,
+            conta_contabil_id: valorRestanteAjustado.contaContabilId,
+            conciliado: true,
+            origem: 'conciliacao_extrato_avulso',
+            documento: transacaoSelecionada.transacao.id,
           });
+          if (errorLancAvulso) throw errorLancAvulso;
+        }
       }
-      
-      const valorTotal = mapeamentos.reduce((acc, m) => acc + m.valorAplicar, 0) + (valorRestante?.valor || 0);
-      const statusConciliacao = valorTotal >= Math.abs(transacaoSelecionada.transacao.valor) ? 'CONCILIADA' : 'PARCIALMENTE_CONCILIADA';
-      
-      await supabase.from('extratos').update({ status_conciliacao: statusConciliacao, valor_conciliado: valorTotal }).eq('id', transacaoSelecionada.transacao.id);
-      
-      showSuccess(`✅ Baixa realizada com sucesso! ${mapeamentos.length} parcela(s) quitada(s).`);
+
+      const valorTotal = valorTotalAplicado + (valorRestanteAjustado?.valor || 0);
+      const statusConciliacao = valorTotal >= Math.abs(Number(transacaoSelecionada.transacao.valor))
+        ? 'CONCILIADA'
+        : 'PARCIALMENTE_CONCILIADA';
+
+      await supabase.from('extratos').update({
+        status_conciliacao: statusConciliacao,
+        valor_conciliado: valorTotal,
+      }).eq('id', transacaoSelecionada.transacao.id);
+
+      showSuccess(`✅ Baixa realizada com sucesso! ${mapeamentosMutaveis.length} parcela(s) processada(s).`);
       setModalMapeamentoOpen(false);
       setTransacaoSelecionada(null);
-      
+
       if (onMapeamentoParcelas) onMapeamentoParcelas(transacaoSelecionada.transacao, transacaoSelecionada.index);
-      
+
     } catch (erro: any) {
       showError('❌ Erro ao realizar baixa: ' + (erro.message || 'Erro desconhecido'));
     }
@@ -261,11 +373,11 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
       <CardContent>
         
         {transacoesRejeitadas.length > 0 && (
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
-                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center mb-2">
-                    <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
+            <div className="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 rounded-md mb-4">
+                <h3 className="font-semibold text-green-700 dark:text-green-300 flex items-center mb-2">
+                    <CheckCircle2 className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Já Mapeadas
                 </h3>
-                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
+                <ul className="list-disc list-inside text-sm text-green-600 dark:text-green-400">
                     {transacoesRejeitadas.map((t, i) => (
                         <li key={i}>
                             Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
@@ -331,7 +443,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                     
                     return (
                         <TableRow key={i} className={cn(
-                          t.isDuplicated ? 'bg-red-500/30 opacity-60' : 
+                          t.isDuplicated ? 'bg-green-500/10 opacity-70' : 
                           (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'),
                           isSelected && 'bg-blue-100/50 dark:bg-blue-900/20',
                           t.tem_sugestao && 'border-l-4 border-l-green-500'
@@ -363,12 +475,13 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
                                 {t.isDuplicated ? (
-                                    <span className="text-xs font-medium text-red-700 flex items-center">
-                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
+                                    <span className="text-xs font-medium text-green-700 flex items-center">
+                                        <CheckCircle2 className="w-4 h-4 mr-1" /> Já Mapeada
                                     </span>
                                 ) : isMapeada ? (
                                     <span className="text-xs font-medium text-green-700 flex items-center">
-                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
+                                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                                        {t.conta_contabil_id === 'MAPEADO_PARCELAS' ? 'Parcelas Mapeadas' : contaContabil?.Conta}
                                     </span>
                                 ) : (
                                     <div className="flex flex-col gap-2">

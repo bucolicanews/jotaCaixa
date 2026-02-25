@@ -175,6 +175,7 @@ const ContasReceber = () => {
         .select(`
           *,
           saldo_contas ( nome ),
+          historicos ( descricao ),
           admin_parcelas_receber (
             numero_parcela,
             valor_parcela,
@@ -848,6 +849,7 @@ const ContasReceber = () => {
             handleDelete={handleDelete}
             formatCurrency={formatCurrencyLocal}
             formatDate={formatDateLocal}
+            proprietarioId={proprietarioId}
           />
         </TabsContent>
         
@@ -894,6 +896,7 @@ const ContasReceber = () => {
             onGerarBoleto={handleGerarBoleto}
             onRefreshData={buscarDados}
             onSyncStatus={handleSyncStatus}
+            proprietarioId={proprietarioId}
           />
         </TabsContent>
         

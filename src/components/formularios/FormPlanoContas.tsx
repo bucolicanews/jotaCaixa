@@ -44,12 +44,31 @@ const validateMask = (code: string, mask: string): boolean => {
     return true;
 };
 
+// Função para determinar saldo_tipo padrão baseado no prefixo da conta
+const getSaldoTipoPorGrupo = (conta: string): 'devedora' | 'credora' => {
+  if (!conta) return 'devedora';
+  const prefixo = conta.charAt(0);
+  
+  switch (prefixo) {
+    case '1': return 'devedora';     // Ativo
+    case '2': return 'credora';      // Passivo
+    case '3': return 'credora';      // Patrimônio Líquido
+    case '4': return 'credora';      // Receita
+    case '5': return 'devedora';     // Custo
+    case '6': return 'credora';      // Despesa
+    default: return 'devedora';
+  }
+};
+
 const formSchema = z.object({
   Conta: z.string().min(1, 'O código é obrigatório.'),
   codigo_reduzido: z.string().optional().or(z.literal('')),
   Descricao: z.string().min(1, 'A descrição é obrigatória.'),
   Analitica: z.enum(['Sim', 'Não'], {
     required_error: 'O tipo é obrigatório.',
+  }),
+  saldo_tipo: z.enum(['devedora', 'credora'], {
+    required_error: 'O tipo de saldo é obrigatório.',
   }),
   is_conta_caixa_banco: z.boolean().default(false),
   is_conta_patrimonial: z.boolean().default(false),
@@ -81,7 +100,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
       Descricao: contaInicial?.Descricao || '',
       Analitica: contaInicial?.Analitica || 'Não',
-      // As flags agora usam o .default(false) do Zod schema
+      saldo_tipo: contaInicial?.saldo_tipo || 'devedora',
       is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco ?? false,
       is_conta_patrimonial: contaInicial?.is_conta_patrimonial ?? false,
       is_conta_resultado: contaInicial?.is_conta_resultado ?? false,
@@ -96,6 +115,14 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const contaCodigo = form.watch('Conta');
   const isCaixa = form.watch('is_caixa');
   const isBanco = form.watch('is_banco');
+  
+  // Efeito para atualizar saldo_tipo quando a conta mudar (apenas para novas contas)
+  useEffect(() => {
+    if (!isEditing && contaCodigo) {
+      const novoSaldoTipo = getSaldoTipoPorGrupo(contaCodigo);
+      form.setValue('saldo_tipo', novoSaldoTipo, { shouldDirty: false });
+    }
+  }, [contaCodigo, isEditing, form]);
   
   // Efeito para preencher o Código Reduzido automaticamente
   useEffect(() => {
@@ -163,6 +190,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: values.codigo_reduzido || null,
       Descricao: values.Descricao,
       Analitica: values.Analitica,
+      saldo_tipo: values.saldo_tipo,
       is_conta_caixa_banco: finalIsContaCaixaBanco, // VALOR SINCRONIZADO
       is_conta_patrimonial: isAnalitica ? values.is_conta_patrimonial : false,
       is_conta_resultado: isAnalitica ? values.is_conta_resultado : false,
@@ -271,6 +299,31 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
                   <SelectItem value="Não">Não</SelectItem>
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="saldo_tipo"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo de Saldo</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo de saldo" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="devedora">Devedora (Ativo/Custo)</SelectItem>
+                  <SelectItem value="credora">Credora (Passivo/PL/Receita/Despesa)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                {contaCodigo && `Sugestão para grupo ${contaCodigo.charAt(0)}: ${getSaldoTipoPorGrupo(contaCodigo)}`}
+              </p>
               <FormMessage />
             </FormItem>
           )}

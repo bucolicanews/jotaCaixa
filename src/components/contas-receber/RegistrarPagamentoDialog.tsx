@@ -93,6 +93,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const { contas: contasDestino, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
+  const valorInicial = saldoDevedor > 0.01 ? saldoDevedor : (parcela?.valor_pago || 0);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -204,7 +205,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
     
     reset({
-        valor_recebido: saldoDevedor,
+        valor_recebido: valorInicial,
         taxa_bancaria: 0,
         data_pagamento: new Date(),
         forma_pagamento: 'Pix',
@@ -221,7 +222,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     setIsInitialized(true);
     
-  }, [parcela, proprietarioDaSessao, reset, tabelaContasReceber, contasDestino, saldoDevedor]);
+  }, [parcela, proprietarioDaSessao, reset, tabelaContasReceber, contasDestino, valorInicial]);
 
   useEffect(() => {
       if (open && !isInitialized) {

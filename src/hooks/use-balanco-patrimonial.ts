@@ -43,39 +43,29 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   }, []);
 
   const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas, saldoInicial: number) => {
-    let saldo = saldoInicial; // INCLUINDO SALDO INICIAL
-    
-    // Determine if the account is Devedora (Ativo) or Credora (Passivo, PL, Receita, Custo, Despesa)
-    const contaPrefix = conta.Conta.split('.')[0];
-    
-    // Contas Devedoras: Ativo (1)
-    const isDevedora = [configMap.Ativo].includes(contaPrefix); 
-    
+    let debitos = 0;
+    let creditos = 0;
+
     for (const lancamento of lancamentos) {
-        const valor = Math.abs(parseFloat(lancamento.valor)); // GARANTINDO VALOR POSITIVO
-        
-        // CRÍTICO: Ignora lançamentos de estorno e lançamentos originais estornados
+        const valor = Math.abs(parseFloat(String(lancamento.valor)));
         const origem = lancamento.origem || '';
         if (origem.includes('estorno') || origem.includes('estornada')) continue;
-        
-        if (isDevedora) {
-            // Contas Devedoras (Ativo): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
-            if (lancamento.tipo === 'Entrada') {
-                saldo += valor;
-            } else if (lancamento.tipo === 'Saida') {
-                saldo -= valor;
-            }
-        } else {
-            // Contas Credoras (Passivo, PL, Resultado): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)
-            if (lancamento.tipo === 'Entrada') {
-                saldo -= valor;
-            } else if (lancamento.tipo === 'Saida') {
-                saldo += valor;
-            }
+
+        if (lancamento.tipo === 'Entrada') {
+            debitos += valor;
+        } else if (lancamento.tipo === 'Saida') {
+            creditos += valor;
         }
     }
-    return saldo;
-  }, [configMap]);
+
+    const isDevedora = (conta as any).saldo_tipo === 'devedora';
+
+    if (isDevedora) {
+        return saldoInicial + debitos - creditos;
+    } else {
+        return saldoInicial + creditos - debitos;
+    }
+  }, []);
 
   const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[], saldosIniciais: SaldoInicialMap): ContaBP[] => {
     
@@ -87,17 +77,24 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
                 l.origem !== 'movimentacao_direta_estornada' // IGNORA LANÇAMENTOS ORIGINAIS ESTORNADOS
             );
             
-            const saldoInicial = saldosIniciais[conta.id] || 0; // Obtém o saldo inicial
-            const saldo = calcularSaldo(lancamentosDaConta, conta, saldoInicial); // Passa o saldo inicial
+            const saldoInicial = saldosIniciais[conta.id] || 0;
+            const saldo = calcularSaldo(lancamentosDaConta, conta, saldoInicial);
             
-            // Determine the main type based on prefix
-            const prefix = conta.Conta.split('.')[0];
             let tipo_principal: ContaBP['tipo_principal'] = 'Outros';
+            const saldoTipo = (conta as any).saldo_tipo;
+            const prefix = conta.Conta.split('.')[0];
             
-            if (prefix === (configMap.Ativo || '1')) tipo_principal = 'Ativo';
-            else if (prefix === (configMap.Passivo || '2')) tipo_principal = 'Passivo';
-            else if (prefix === (configMap['Patrimonio Liquido'] || '3')) tipo_principal = 'Patrimonio Liquido';
-            else if (conta.is_conta_resultado) tipo_principal = 'Resultado'; // Contas 4, 5, 6
+            if (prefix === (configMap.Ativo || '1')) {
+                tipo_principal = 'Ativo';
+            } else if (prefix === (configMap.Passivo || '2')) {
+                tipo_principal = 'Passivo';
+            } else if (prefix === (configMap['Patrimonio Liquido'] || '3')) {
+                tipo_principal = 'Patrimonio Liquido';
+            } else if (prefix === (configMap.Receita || '4')) {
+                tipo_principal = 'Resultado';
+            } else if (prefix === (configMap.Despesa || '5')) {
+                tipo_principal = 'Resultado';
+            }
 
             return {
                 ...conta,
@@ -186,13 +183,12 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   };
   
   const totalReceita = getSomaPorTipo(balanco, configMap.Receita || '4');
+  const totalDespesa = getSomaPorTipo(balanco, configMap.Despesa || '5');
   
-  // CORREÇÃO CRÍTICA: Força o valor absoluto para Custo e Despesa antes de subtrair
-  // Isso garante que o valor seja tratado como um custo positivo na DRE.
-  const totalCusto = Math.abs(getSomaPorTipo(balanco, configMap.Custo || '5'));
-  const totalDespesa = Math.abs(getSomaPorTipo(balanco, configMap.Despesa || '6'));
-  
-  const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
+  // Resultado Líquido = Receita - Despesa
+  // Receita (credora) tem sinal negativo, Despesa (devedora) tem sinal negativo
+  // Fórmula: -Receita - Despesa
+  const resultadoLiquido = -totalReceita - totalDespesa;
   
   // Total Passivo + PL (incluindo o resultado líquido)
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;

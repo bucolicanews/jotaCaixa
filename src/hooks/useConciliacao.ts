@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSessao } from './use-sessao';
 import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
+import { showError, showSuccess, showInfo } from '@/utils/toast';
 import { SaldoConta } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
@@ -49,6 +49,7 @@ interface ConciliacaoHook {
     handleViewHistoricoDetails: (h: ConciliacaoHistorico) => void;
     setHistoricoDetalhesOpen: (open: boolean) => void;
     fetchConfigs: () => Promise<void>;
+    handleMapeamentoConcluido: (_transacao: TransacaoExtrato, index: number) => void;
 }
 
 export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
@@ -102,10 +103,10 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         
         const { data, error } = await supabase
             .from('plano_contas')
-            .select('id, Conta, Descricao, Analitica, is_conta_resultado')
+            .select('id, Conta, Descricao, Analitica, is_conta_resultado, is_caixa, is_banco')
             .eq('proprietario_id', proprietarioDaConfiguracao)
             .eq('Analitica', 'Sim')
-            .eq('is_conta_resultado', true)
+            .or('is_conta_resultado.eq.true,is_caixa.eq.true,is_banco.eq.true')
             .order('Conta');
             
         if (error) {
@@ -371,10 +372,9 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                 .eq('empresa_id', proprietarioDaConfiguracao)
                 .eq('extrato_hash', contentHash);
             
-            if ((hashCount || 0) > 0) {
-                showError('Este arquivo já foi importado anteriormente.');
-                setLoading(false);
-                return;
+            const jaImportado = (hashCount || 0) > 0;
+            if (jaImportado) {
+                showInfo('Este extrato já foi importado anteriormente. Exibindo status de cada transação.');
             }
             
             setFileHash(contentHash);
@@ -443,9 +443,10 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                         
                         setTransacoes(() => transacoesCompletas);
                         
-                        let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
-                        if (rawTransacoes.filter(t => t.isDuplicated).length > 0) {
-                            successMessage += ` ${rawTransacoes.filter(t => t.isDuplicated).length} rejeitadas por duplicidade.`;
+                        const jaMapedas = rawTransacoes.filter(t => t.isDuplicated).length;
+                        let successMessage = `${transacoesValidas.length} transações novas encontradas.`;
+                        if (jaMapedas > 0) {
+                            successMessage += ` ${jaMapedas} já mapeadas anteriormente.`;
                         }
                         showSuccess(successMessage);
                     } catch (innerErr: any) {
@@ -595,6 +596,14 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         }
     }, [contaSelecionadaId, proprietarioDaConfiguracao, file, fileHash, transacoes, usuarioId, fetchHistorico, handleReset, contaSelecionada?.plano_contas?.id]);
 
+    const handleMapeamentoConcluido = useCallback((_transacao: TransacaoExtrato, index: number) => {
+        setTransacoes(prev => prev.map((t, i) =>
+            i === index
+                ? { ...t, conta_contabil_id: 'MAPEADO_PARCELAS', conciliada: true }
+                : t
+        ));
+    }, []);
+
     const handleDeleteHistorico = useCallback(async () => {
         if (!usuarioId) return;
         
@@ -643,6 +652,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         handleContaContabilLoteChange,
         handleApplyLote,
         handleSaveConciliacao,
+        handleMapeamentoConcluido,
         handleDeleteHistorico,
         handleViewHistoricoDetails,
         setHistoricoDetalhesOpen: handleSetHistoricoDetalhesOpen,

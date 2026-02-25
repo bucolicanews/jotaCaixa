@@ -31,6 +31,8 @@ export interface TransacaoExtrato {
     sugestao_parcela_id?: string | null;
     tem_sugestao?: boolean;
     nivel_confianca?: 'alta' | 'media' | 'baixa';
+    empresa_id?: string;
+    id_saldo_contas?: string;
 }
 
 export interface ConciliacaoRegra {

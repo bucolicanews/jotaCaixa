@@ -230,7 +230,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             tipo: 'Saida' as const,
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaPagamento,
-            origem: 'pagamento_manual',
+            origem: `pagamento_cp:${parcela.id}`,
+            documento: parcela.id,
             historico_id: values.historico_id, // NOVO CAMPO
         };
         

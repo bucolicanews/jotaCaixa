@@ -28,19 +28,22 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                             <TableRow>
                                 <TableHead>Data Recebimento</TableHead>
                                 <TableHead className="w-[100px]">ID Conta</TableHead>
+                                <TableHead className="w-[90px]">ID Parcela</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
-                                <TableHead className="text-right">Valor Principal</TableHead> {/* NOVA COLUNA */}
+                                <TableHead className="text-right">Valor Principal</TableHead>
                                 <TableHead className="text-right">Juros</TableHead>
                                 <TableHead className="text-right">Valor Recebido</TableHead>
                                 <TableHead>Forma Pagamento</TableHead>
                                 <TableHead>Conta/Caixa</TableHead>
+                                <TableHead>Histórico</TableHead>
+                                <TableHead>Tipo</TableHead>
                                 <TableHead>Origem</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {recebimentosFiltrados.length === 0 ? (
-                                <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={13} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                             ) : (
                                 recebimentosFiltrados.map((r) => {
                                     const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
@@ -49,8 +52,10 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                     const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
                                     const contaDestino = r.saldo_contas?.nome || 'N/A';
                                     const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A';
+                                    const parcelaId = (r as any).parcela_id || null;
+                                    const historicoDescricao = (r as any).historicos?.descricao || '-';
+                                    const tipoRecebimento = (r as any).tipo_recebimento || null;
                                     
-                                    // Lógica de Valores
                                     const valorPrincipal = r.admin_parcelas_receber?.valor_parcela || 0;
                                     const valorTotalRecebido = r.valor_recebido;
                                     const juros = valorTotalRecebido > valorPrincipal ? valorTotalRecebido - valorPrincipal : 0;
@@ -59,26 +64,32 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                         <TableRow key={r.id}>
                                             <TableCell>{dataRecebimentoDisplay}</TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell>
+                                            <TableCell className="font-mono text-xs text-muted-foreground" title={parcelaId || ''}>{parcelaId ? parcelaId.substring(0, 8) : '-'}</TableCell>
                                             <TableCell className="font-medium">{clienteNome}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                             
-                                            {/* Valor Principal */}
                                             <TableCell className="text-right font-medium">
                                                 {formatCurrency(valorPrincipal)}
                                             </TableCell>
 
-                                            {/* Juros */}
                                             <TableCell className={cn("text-right font-medium", juros > 0 ? "text-red-600" : "text-muted-foreground")}>
                                                 {juros > 0 ? `+ ${formatCurrency(juros)}` : '-'}
                                             </TableCell>
 
-                                            {/* Valor Total Recebido */}
                                             <TableCell className="text-right font-bold text-green-600">
                                                 {formatCurrency(valorTotalRecebido)}
                                             </TableCell>
 
                                             <TableCell>{r.forma_pagamento}</TableCell>
                                             <TableCell>{contaDestino}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">{historicoDescricao}</TableCell>
+                                            <TableCell>
+                                                {tipoRecebimento ? (
+                                                    <Badge variant={tipoRecebimento === 'total' ? 'success' : 'warning'} className="text-xs">
+                                                        {tipoRecebimento === 'total' ? 'Total' : 'Parcial'}
+                                                    </Badge>
+                                                ) : '-'}
+                                            </TableCell>
                                             <TableCell><Badge variant="secondary">{origem}</Badge></TableCell>
                                         </TableRow>
                                     );

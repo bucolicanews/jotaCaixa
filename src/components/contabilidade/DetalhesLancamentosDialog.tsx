@@ -21,6 +21,8 @@ interface Lancamento {
   descricao: string;
   valor: number;
   tipo: 'Entrada' | 'Saida';
+  origem?: string;
+  fonte?: 'lancamento' | 'extrato';
 }
 
 interface DetalhesLancamentosDialogProps {
@@ -43,22 +45,19 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     if (!conta) return;
     setLoading(true);
     
-    // Determina se a conta é uma conta de caixa/banco ou uma conta patrimonial pura
     const isCaixaBanco = conta.plano_contas?.is_conta_caixa_banco;
     
+    let lancamentosResult: Lancamento[] = [];
+
     let query = supabase
       .from('lancamentos')
       .select('id, data_movimentacao, descricao, valor, tipo, origem')
       
-    // Se for Caixa/Banco, filtra por conta_bancaria_id
     if (isCaixaBanco) {
         query = query.eq('conta_bancaria_id', conta.id);
-    } 
-    // Se for Patrimonial Pura, filtra por conta_contabil_id
-    else if (conta.conta_contabil_id) {
+    } else if (conta.conta_contabil_id) {
         query = query.eq('conta_contabil_id', conta.conta_contabil_id);
     } else {
-        // Se não for nenhum dos dois, não há lançamentos diretos
         setLancamentos([]);
         setLoading(false);
         return;
@@ -68,22 +67,38 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
     if (error) {
       showError('Erro ao carregar lançamentos: ' + error.message);
-      setLancamentos([]);
     } else {
-  // FILTRAR LANÇAMENTOS ESTORNADOS
-  const lancamentosValidos = (data as Lancamento[]).filter(l => {
-    const origem = l.origem || '';
-    const isEstornado = origem.toLowerCase().includes('estorn');
-    
-    if (isEstornado) {
-      console.log(`[EXTRATO] Ignorando lançamento estornado: ${l.id} - ${l.descricao} (${l.valor})`);
+      lancamentosResult = ((data as Lancamento[]) || [])
+        .filter(l => {
+          const origem = l.origem || '';
+          return !origem.toLowerCase().includes('estorn');
+        })
+        .map(l => ({ ...l, fonte: 'lancamento' as const }));
     }
-    
-    return !isEstornado;
-  });
-  
-  setLancamentos(lancamentosValidos);
-}
+
+    if (isCaixaBanco) {
+      const { data: extratoData, error: extratoError } = await supabase
+        .from('extratos')
+        .select('id, data, descricao, valor, tipo')
+        .eq('id_saldo_contas', conta.id)
+        .eq('conciliado', false)
+        .order('data', { ascending: false });
+
+      if (!extratoError && extratoData) {
+        const extratoLancamentos: Lancamento[] = extratoData.map((e: any) => ({
+          id: e.id,
+          data_movimentacao: e.data + 'T00:00:00',
+          descricao: e.descricao || 'Extrato bancário',
+          valor: parseFloat(e.valor) || 0,
+          tipo: e.tipo as 'Entrada' | 'Saida',
+          fonte: 'extrato' as const,
+        }));
+        lancamentosResult = [...lancamentosResult, ...extratoLancamentos];
+        lancamentosResult.sort((a, b) => b.data_movimentacao.localeCompare(a.data_movimentacao));
+      }
+    }
+
+    setLancamentos(lancamentosResult);
     setLoading(false);
   }, [conta]);
 
@@ -219,7 +234,14 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                     lancamentos.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell>{formatDate(l.data_movimentacao)}</TableCell>
-                        <TableCell>{l.descricao}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <span>{l.descricao}</span>
+                            {l.fonte === 'extrato' && (
+                              <span className="text-xs text-muted-foreground">Extrato bancário (não conciliado)</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={l.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                             {l.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
@@ -230,6 +252,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                           {formatCurrency(l.valor)}
                         </TableCell>
                         <TableCell className="text-right">
+                            {l.fonte !== 'extrato' && (
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="icon" disabled={isDeleting} title="Excluir Lançamento">
@@ -251,6 +274,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
+                            )}
                         </TableCell>
                       </TableRow>
                     ))

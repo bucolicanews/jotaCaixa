@@ -19,6 +19,7 @@ export interface ContaReceber {
   clientes: Cliente;
   historico_id?: string | null;
   id_conta_patrimonial?: string | null;
+  id_conta_resultado?: string | null;
 }
 
 export interface Parcela {
@@ -79,12 +80,15 @@ export interface AdminRecebimento {
     forma_pagamento: string;
     cliente_id: string;
     conta_id: string;
+    parcela_id?: string | null;
+    tipo_recebimento?: string | null;
     saldo_contas: { nome: string } | null;
     historico_id?: string | null;
+    historicos?: { descricao: string } | null;
     id_conta_resultado?: string | null;
     admin_parcelas_receber: {
         numero_parcela: number;
-        valor_parcela: number; // ADICIONADO PARA CÁLCULO DE JUROS
+        valor_parcela: number;
         admin_contas_receber: {
             id: string;
             descricao: string;

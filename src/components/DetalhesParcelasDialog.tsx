@@ -11,11 +11,14 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
 import { Progress } from './ui/progress';
 import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
+import EditarParcelaPagaDialog from '@/components/contas-receber/EditarParcelaPagaDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2, Unlink } from 'lucide-react';
+import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2, Unlink, BookOpen } from 'lucide-react';
 import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
 import { Badge } from '@/components/ui/badge';
 import { desvincularMapeamento } from '@/hooks/conciliacao/useMapeamentoParcelas';
+import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
+import { useOwner } from '@/hooks/use-owner';
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -49,8 +52,11 @@ interface DetalhesParcelasDialogProps {
   onDataChange: () => void;
 }
 
+interface LancamentoResumo { tipo: string; conta_codigo: string; conta_descricao: string; origem: string | null; }
+
 const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
   const { role, usuario, perfil } = useSessao();
+  const { ownerId } = useOwner();
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
@@ -59,9 +65,15 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   // Estados para edição
   const [edicaoDialogOpen, setEdicaoDialogOpen] = useState(false);
   const [parcelaParaEdicao, setParcelaParaEdicao] = useState<Parcela | null>(null);
+  const [editarPagaDialogOpen, setEditarPagaDialogOpen] = useState(false);
+  const [parcelaIdParaEditarPaga, setParcelaIdParaEditarPaga] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isUnlinking, setIsUnlinking] = useState(false);
+  const [parcelasComLancamento, setParcelasComLancamento] = useState<Set<string>>(new Set());
+  const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: Parcela | null }>({ open: false, parcela: null });
+
+  const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
 
   // Determina a tabela correta com base na role (Admin direto OU funcionário do admin)
   const isDirectAdmin = role === 'Admin';
@@ -97,6 +109,120 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     }
   }, [conta, open, fetchParcelas]);
 
+  useEffect(() => {
+    if (!open || parcelas.length === 0 || !usuario?.id || !ownerId) return;
+    const carregarLancamentos = async () => {
+      const ids = parcelas.map(p => p.id);
+
+      // Query 1: por documento (lançamentos novos)
+      const { data: porDocumento } = await supabase
+        .from('lancamentos')
+        .select('documento, tipo, conta_contabil_id, origem')
+        .eq('proprietario_id', ownerId)
+        .in('documento', ids)
+        .not('origem', 'ilike', '%estornada%');
+
+      // Query 2: fallback por origem contendo o ID (lançamentos antigos sem documento)
+      const idsComLancamento = new Set((porDocumento || []).map(l => l.documento).filter(Boolean));
+      const idsNaoEncontrados = ids.filter(id => !idsComLancamento.has(id));
+      let porOrigem: any[] = [];
+      if (idsNaoEncontrados.length > 0) {
+        const orFiltros = idsNaoEncontrados.map(id => `origem.ilike.%${id}%`).join(',');
+        const { data: fallback } = await supabase
+          .from('lancamentos')
+          .select('documento, tipo, conta_contabil_id, origem')
+          .eq('proprietario_id', ownerId)
+          .or(orFiltros)
+          .not('origem', 'ilike', '%estornada%');
+        porOrigem = fallback || [];
+      }
+
+      const lancamentosData = [...(porDocumento || []), ...porOrigem];
+
+      // Monta contasMap a partir de plano_contas
+      const contaIds = [...new Set(lancamentosData.map((l: any) => l.conta_contabil_id).filter(Boolean))];
+      let contasMap: Record<string, { Conta: string; Descricao: string }> = {};
+      if (contaIds.length > 0) {
+        const { data: contasData } = await supabase
+          .from('plano_contas')
+          .select('id, "Conta", "Descricao"')
+          .in('id', contaIds);
+        (contasData || []).forEach((c: any) => { contasMap[c.id] = c; });
+      }
+
+      const agrupado: Record<string, LancamentoResumo[]> = {};
+
+      // Preenche lançamentos reais
+      for (const l of lancamentosData as any[]) {
+        const parcelaId = l.documento || ids.find(id => l.origem?.includes(id));
+        if (!parcelaId) continue;
+        if (!agrupado[parcelaId]) agrupado[parcelaId] = [];
+        agrupado[parcelaId].push({
+          tipo: l.tipo,
+          conta_codigo: contasMap[l.conta_contabil_id]?.Conta || '',
+          conta_descricao: contasMap[l.conta_contabil_id]?.Descricao || '',
+          origem: l.origem,
+        });
+      }
+
+      // Fallback: parcelas pagas sem lançamento — busca em admin_recebimentos
+      const idsSemLancamento = ids.filter(id => !agrupado[id] && parcelas.find(p => p.id === id && (p.status === 'paga' || p.status === 'parcial')));
+      if (idsSemLancamento.length > 0) {
+        const tabelaRec = isAdminOrEmployee ? 'admin_recebimentos' : 'recebimentos';
+        const { data: recebimentos } = await supabase
+          .from(tabelaRec)
+          .select('parcela_id, conta_id, saldo_contas(nome)')
+          .in('parcela_id', idsSemLancamento);
+
+        if (recebimentos) {
+          // Busca conta patrimonial via conta sintética
+          const contaPatrimonialId = (conta as any)?.id_conta_patrimonial;
+          let contaPatrimonialNome = '';
+          let contaPatrimonialCodigo = '';
+          if (contaPatrimonialId) {
+            const { data: pcData } = await supabase
+              .from('plano_contas')
+              .select('id, "Conta", "Descricao"')
+              .eq('id', contaPatrimonialId)
+              .single();
+            if (pcData) {
+              contaPatrimonialCodigo = (pcData as any).Conta || '';
+              contaPatrimonialNome = (pcData as any).Descricao || '';
+            }
+          }
+
+          for (const r of recebimentos as any[]) {
+            const pid = r.parcela_id;
+            if (!pid) continue;
+            if (!agrupado[pid]) agrupado[pid] = [];
+            // D: Banco/Caixa (Entrada)
+            agrupado[pid].push({
+              tipo: 'Entrada',
+              conta_codigo: '',
+              conta_descricao: r.saldo_contas?.nome || '',
+              origem: 'recebimento_recebimentos',
+            });
+            // C: Conta Patrimonial (Saída)
+            if (contaPatrimonialId) {
+              agrupado[pid].push({
+                tipo: 'Saida',
+                conta_codigo: contaPatrimonialCodigo,
+                conta_descricao: contaPatrimonialNome,
+                origem: 'recebimento_recebimentos',
+              });
+            }
+          }
+        }
+      }
+
+      setParcelasComLancamento(new Set(
+        lancamentosData.filter(l => ['lancamento_manual_cp', 'lancamento_manual_cr'].includes(l.origem || '')).map(l => l.documento).filter(Boolean) as string[]
+      ));
+      setLancamentosPorParcela(agrupado);
+    };
+    carregarLancamentos();
+  }, [parcelas, open, usuario?.id, ownerId, isAdminOrEmployee, conta]);
+
   const handleOpenPagamento = (parcela: Parcela) => {
     if (!conta) return;
     
@@ -114,8 +240,13 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   };
   
   const handleOpenEdicao = (parcela: Parcela) => {
-      if (parcela.status === 'paga' || parcela.status === 'cancelada' || parcela.status === 'bloqueada') {
-          showError('Não é possível editar parcelas pagas, canceladas ou bloqueadas.');
+      if (parcela.status === 'paga') {
+          setParcelaIdParaEditarPaga(parcela.id);
+          setEditarPagaDialogOpen(true);
+          return;
+      }
+      if (parcela.status === 'cancelada' || parcela.status === 'bloqueada') {
+          showError('Não é possível editar parcelas canceladas ou bloqueadas.');
           return;
       }
       setParcelaParaEdicao(parcela);
@@ -171,10 +302,10 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   };
   
   const handleUndoPayment = async (parcela: Parcela) => {
-    if (!usuario?.id || !conta) return;
+    if (!ownerId || !conta) return;
     setIsUndoing(true);
     
-    const ownerId = conta.empresa_id;
+    const contaOwnerId = conta.empresa_id;
     const contaReceberId = conta.id;
     const contaReceberIdShort = contaReceberId.substring(0, 8);
     
@@ -198,7 +329,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     const { data: extratoExistente, error: extratoError } = await supabase
                         .from('extratos')
                         .select('id')
-                        .eq('empresa_id', ownerId)
+                        .eq('empresa_id', contaOwnerId)
                         .eq('id_saldo_contas', receb.conta_id)
                         .eq('valor', Math.abs(receb.valor_recebido))
                         .eq('tipo', 'Entrada');
@@ -239,21 +370,35 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         const { data: configData } = await supabase
             .from('configuracao_contas_receber')
             .select('tipo_registro, conta_contabil_id')
-            .eq('proprietario_id', usuario.id)
+            .eq('proprietario_id', ownerId)
             .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
             
         contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
         contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
-        // Busca por: origem = 'recebimento_manual' E origem = 'desconto_cp:ID'
-        const { data: originalLaunches, error: fetchLaunchError } = await supabase
+        // Primeiro tenta por documento (lançamentos novos), depois fallback por origem com sufixo
+        let { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
-            .eq('proprietario_id', usuario.id)
-            .or(`origem.eq.recebimento_manual,origem.like.desconto_cp:${parcela.id}%`); // Filtra pelo ID da parcela no desconto
-            
+            .eq('proprietario_id', ownerId)
+            .eq('documento', parcela.id)
+            .not('origem', 'like', '%_estornada');
+
         if (fetchLaunchError) throw fetchLaunchError;
+
+        if (!originalLaunches || originalLaunches.length === 0) {
+            const origemRecebimento = `recebimento_manual:${parcela.id}`;
+            const origemDesconto = `desconto_cr:${parcela.id}`;
+            const { data: fallbackLaunches, error: fallbackError } = await supabase
+                .from('lancamentos')
+                .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
+                .eq('proprietario_id', ownerId)
+                .or(`origem.eq.${origemRecebimento},origem.eq.${origemDesconto}`)
+                .not('origem', 'like', '%_estornada');
+            if (fallbackError) throw fallbackError;
+            originalLaunches = fallbackLaunches;
+        }
         
         const lancamentosEstornoPayload: any[] = [];
         const originalLaunchIds = (originalLaunches || []).map(l => l.id);
@@ -275,14 +420,14 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         // 5. Gerar Lançamentos de Estorno (Reversão)
         
         // 5.1. Estorno do Recebimento (Caixa/Clientes)
-        for (const orig of originalLaunches.filter(l => l.origem === 'recebimento_manual')) {
+        for (const orig of originalLaunches.filter(l => l.origem?.startsWith('recebimento_manual') && !l.origem?.includes('_estornada'))) {
             const inverseId = crypto.randomUUID();
             const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada';
             
             // Lançamento de Estorno
             const lancInvert = {
                 id: inverseId,
-                proprietario_id: usuario.id,
+                proprietario_id: ownerId,
                 data_movimentacao: dataEstornoISO,
                 descricao: `ESTORNO: ${orig.descricao}`,
                 valor: orig.valor,
@@ -309,7 +454,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             // D: Clientes a Receber Avulso (Ativo) - ENTRADA (Aumenta Ativo Devedor)
             const lancamentoEstornoPatrimonial = {
                 id: idEstornoAtivo,
-                proprietario_id: usuario.id,
+                proprietario_id: ownerId,
                 data_movimentacao: dataEstornoISO,
                 descricao: `ESTORNO DESCONTO CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                 valor: valorDesconto,
@@ -325,7 +470,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             // Lançamento 2: C: Receita Estorno do Desconto (Resultado) - CRÉDITO (Saída)
             const lancamentoEstornoReceita = {
                 id: idEstornoReceita,
-                proprietario_id: usuario.id,
+                proprietario_id: ownerId,
                 data_movimentacao: dataEstornoISO,
                 descricao: `RECEITA ESTORNO DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                 valor: valorDesconto,
@@ -485,6 +630,8 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                         <TableHead className="w-[100px]">Vlr Pago</TableHead>
                         <TableHead className="w-[100px]">Data Pagamento</TableHead>
                         <TableHead className="w-[100px]">Status</TableHead>
+                        <TableHead className="w-[160px]">Conta D</TableHead>
+                        <TableHead className="w-[160px]">Conta C</TableHead>
                         <TableHead className="w-[180px] text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -513,6 +660,16 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                         )}
                                     </div>
                                 </TableCell>
+                                <TableCell className="text-xs align-top">
+                                    {(lancamentosPorParcela[p.id] || []).filter(l => l.tipo === 'Entrada').map((l, i) => (
+                                        <div key={i} className="whitespace-nowrap text-blue-700">{l.conta_codigo} {l.conta_descricao}</div>
+                                    ))}
+                                </TableCell>
+                                <TableCell className="text-xs align-top">
+                                    {(lancamentosPorParcela[p.id] || []).filter(l => l.tipo === 'Saida').map((l, i) => (
+                                        <div key={i} className="whitespace-nowrap text-orange-700">{l.conta_codigo} {l.conta_descricao}</div>
+                                    ))}
+                                </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
                                         {p.mapeado_extrato_id && (
@@ -539,7 +696,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                             </AlertDialog>
                                         )}
                                         
-                                        {canEditOrDelete && (
+                                        {!isCanceled && (
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenEdicao(p)} title="Editar Parcela">
                                                 <Edit className="w-4 h-4" />
                                             </Button>
@@ -570,8 +727,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                         )}
                                         
                                         {isPaga ? (
-                                            p.mapeado_extrato_id ? (
-                                                <Button 
+                                            p.mapeado_extrato_id ? (                                                <Button 
                                                     variant="destructive" 
                                                     size="icon" 
                                                     disabled={true}
@@ -609,6 +765,16 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                                 </Button>
                                             )
                                         )}
+                                        {usuario?.id && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => setLancamentoDialog({ open: true, parcela: p })}
+                                                title={parcelasComLancamento.has(p.id) ? 'Lançamento contábil registrado' : 'Registrar lançamento contábil'}
+                                            >
+                                                <BookOpen className={`w-4 h-4 ${parcelasComLancamento.has(p.id) ? 'text-green-600' : 'text-gray-400'}`} />
+                                            </Button>
+                                        )}
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -638,6 +804,38 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
               parcelaInicial={parcelaParaEdicao}
               onSaveComplete={handleEdicaoCompleta}
               tabelaParcelas={tabelaParcelas}
+          />
+      )}
+
+      <EditarParcelaPagaDialog
+          parcelaId={parcelaIdParaEditarPaga}
+          open={editarPagaDialogOpen}
+          onOpenChange={setEditarPagaDialogOpen}
+          onSaveComplete={() => {
+              setEditarPagaDialogOpen(false);
+              fetchParcelas();
+              onDataChange();
+          }}
+      />
+
+      {lancamentoDialog.open && lancamentoDialog.parcela && ownerId && (
+          <LancamentoContabilDialog
+              open={lancamentoDialog.open}
+              onOpenChange={(open) => setLancamentoDialog({ open, parcela: open ? lancamentoDialog.parcela : null })}
+              parcelaId={lancamentoDialog.parcela.id}
+              parcelaDescricao={conta?.descricao || 'Conta a Receber'}
+              parcelaValor={lancamentoDialog.parcela.valor_parcela}
+              parcelaData={lancamentoDialog.parcela.data_vencimento}
+              origemTipo="contas_receber"
+              proprietarioId={ownerId}
+              contaPatrimonialId={conta?.id_conta_patrimonial}
+              contaResultadoId={(conta as any)?.id_conta_resultado}
+              onSaved={() => {
+                  if (lancamentoDialog.parcela) {
+                      setParcelasComLancamento(prev => new Set([...prev, lancamentoDialog.parcela!.id]));
+                  }
+                  setLancamentoDialog({ open: false, parcela: null });
+              }}
           />
       )}
     </>

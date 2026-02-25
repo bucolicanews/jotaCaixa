@@ -83,6 +83,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos', false);
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
+  const valorInicial = saldoDevedor > 0.01 ? saldoDevedor : (parcela?.valor_pago || 0);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -221,7 +222,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 data_pagamento: new Date(),
                 forma_pagamento: 'Pix',
                 pagamentos: contasOrigem.length > 0 
-                    ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
+                    ? [{ conta_id: contasOrigem[0].id, valor_pago: valorInicial }]
                     : [],
                 historico_id: defaultHistoricoId,
                 salvar_como_padrao: false,
@@ -238,18 +239,106 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     if (!open) {
         setIsInitialized(false);
     }
-  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, reset, fetchHistoricoPadrao, parcela, tabelaContasPagar, proprietarioId]);
+  }, [open, loadingContas, contasOrigem, valorInicial, isInitialized, reset, fetchHistoricoPadrao, parcela, tabelaContasPagar, proprietarioId]);
 
   useEffect(() => {
     if (open && !loadingContas && isInitialized && fields.length === 0 && contasOrigem.length > 0) {
-      append({ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor });
+      append({ conta_id: contasOrigem[0].id, valor_pago: valorInicial });
     }
-  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
+  }, [open, loadingContas, contasOrigem, valorInicial, isInitialized, append, fields.length]);
 
   const saveDirectPayment = async (values: FormValues, comprovanteUrl: string | null = null) => {
-    // Lógica de salvamento movida para o componente de extrato manual
-    // para centralizar a criação de lançamentos.
-    // Esta função agora apenas chama o onSaveComplete.
+    if (!parcela || !proprietarioId) return;
+
+    const dataPagamento = values.data_pagamento;
+    const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
+    const dataPagamentoISO = dataNoonUTC.toISOString();
+    const totalPago = values.pagamentos.reduce((s, p) => s + p.valor_pago, 0);
+    const origemVincular = `pagamento_cp:${parcela.id}`;
+
+    const { data: contaSintetica } = await supabase
+        .from(tabelaContasPagar)
+        .select('id_conta_patrimonial')
+        .eq('id', parcela.conta_pagar_id)
+        .single();
+    const contaPatrimonial = contaSintetica?.id_conta_patrimonial || null;
+
+    for (const pagamento of values.pagamentos) {
+        const pagamentoPayload = {
+            parcela_id: parcela.id,
+            [isAdminOrEmployee ? 'admin_id' : 'empresa_id']: proprietarioId,
+            valor_pago: pagamento.valor_pago,
+            conta_id: pagamento.conta_id,
+            data_pagamento: dataPagamentoISO,
+            forma_pagamento: values.forma_pagamento,
+            tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total',
+            historico_id: values.historico_id,
+        };
+        const { error: pagErr } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
+        if (pagErr) { showError('Erro ao registrar pagamento: ' + pagErr.message); return; }
+
+        const contaSelecionada = contasOrigem.find(c => c.id === pagamento.conta_id);
+        const contaContabilBanco = (contaSelecionada as any)?.plano_contas?.id || null;
+
+        const idAtivo = crypto.randomUUID();
+        const idPassivo = crypto.randomUUID();
+
+        const lancamentos: any[] = [{
+            id: idAtivo,
+            proprietario_id: proprietarioId,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
+            valor: pagamento.valor_pago,
+            tipo: 'Saida' as const,
+            conta_bancaria_id: pagamento.conta_id,
+            conta_contabil_id: contaContabilBanco,
+            origem: origemVincular,
+            documento: parcela.id,
+            historico_id: values.historico_id,
+            conta_resultado_id: idPassivo,
+        }];
+
+        if (contaPatrimonial) {
+            lancamentos.push({
+                id: idPassivo,
+                proprietario_id: proprietarioId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Baixa Passivo CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const,
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial,
+                origem: origemVincular,
+                documento: parcela.id,
+                historico_id: values.historico_id,
+                conta_resultado_id: idAtivo,
+            });
+        }
+
+        const { error: lancErr } = await supabase.from('lancamentos').insert(lancamentos);
+        if (lancErr) { showError('Erro ao gerar lançamentos: ' + lancErr.message); return; }
+    }
+
+    const novoValorPago = (parcela.valor_pago || 0) + totalPago;
+    const saldoApos = parcela.valor_parcela - novoValorPago;
+    const novoStatus = saldoApos <= 0.01 ? 'paga' : 'parcial';
+
+    await supabase.from(tabelaParcelas).update({
+        status: novoStatus,
+        valor_pago: novoValorPago,
+        data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
+    }).eq('id', parcela.id);
+
+    if (novoStatus === 'paga') {
+        const { count } = await supabase.from(tabelaParcelas)
+            .select('id', { count: 'exact', head: true })
+            .eq('conta_pagar_id', parcela.conta_pagar_id)
+            .in('status', ['aberta', 'parcial', 'reprogramada']);
+        if (count === 0) {
+            await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
+        }
+    }
+
     onSaveComplete();
   };
 

@@ -5,6 +5,7 @@ export interface PlanoContas {
   Descricao: string; // Nome da Conta
   codigo_reduzido: string | null;
   Analitica: 'Sim' | 'Não'; // Sim ou Não
+  saldo_tipo?: 'devedora' | 'credora'; // Tipo de saldo da conta
   is_conta_caixa_banco?: boolean; // RENOMEADO: Antigo is_conta_saldo
   is_conta_patrimonial?: boolean; // NOVO CAMPO
   is_conta_resultado?: boolean; // NOVO CAMPO

@@ -70,10 +70,11 @@ export interface ContaPagarComProgresso extends AdminContaPagar {
 
 export interface ExtendedParcelaPagar extends AdminParcelaPagar {
     admin_contas_pagar: {
-        id: string; // CORRIGIDO: Adicionado ID
-        fornecedor: string; // Adicionado para corrigir TS2339
+        id: string;
+        fornecedor: string;
         descricao: string;
         origem: AdminContaPagar['origem'];
-        id_conta_patrimonial: string | null; // ADICIONADO
+        id_conta_patrimonial: string | null;
+        id_conta_resultado?: string | null;
     } | null;
 }

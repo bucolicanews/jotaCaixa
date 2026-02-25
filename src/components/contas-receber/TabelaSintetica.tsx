@@ -1,17 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ListChecks, Edit, Trash2, Eye } from 'lucide-react';
+import { ListChecks, Edit, Trash2 } from 'lucide-react';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { ContaReceberComProgresso } from '@/types/contas-receber';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
-// Tipos importados do ContasReceber.tsx
-// Removido: type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
+
+interface PlanoContasResumo {
+    id: string;
+    Conta: string;
+    Descricao: string;
+}
 
 interface TabelaSinteticaProps {
     contasFiltradas: ContaReceberComProgresso[];
@@ -20,6 +25,7 @@ interface TabelaSinteticaProps {
     handleDelete: (contaId: string) => void;
     formatCurrency: (value: number) => string;
     formatDate: (dateString: string) => string;
+    proprietarioId?: string | null;
 }
 
 const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
@@ -29,9 +35,32 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
     handleDelete,
     formatCurrency,
     formatDate,
+    proprietarioId,
 }) => {
-    
-    // Recriando a lógica de status localmente
+    const [planoContasMap, setPlanoContasMap] = useState<Record<string, PlanoContasResumo>>({});
+
+    const carregarPlanoContas = useCallback(async () => {
+        if (contasFiltradas.length === 0) return;
+        const ids = [...new Set(contasFiltradas.flatMap(c => [
+            (c as any).id_conta_patrimonial,
+            (c as any).id_conta_resultado,
+        ]).filter(Boolean))];
+        if (ids.length === 0) return;
+
+        const { data } = await supabase
+            .from('plano_contas')
+            .select('id, "Conta", "Descricao"')
+            .in('id', ids);
+
+        const map: Record<string, PlanoContasResumo> = {};
+        (data || []).forEach((c: any) => { map[c.id] = c; });
+        setPlanoContasMap(map);
+    }, [contasFiltradas]);
+
+    useEffect(() => {
+        carregarPlanoContas();
+    }, [carregarPlanoContas]);
+
     const getStatusInfo = (conta: ContaReceberComProgresso) => {
         const total = conta.parcelas_total ?? 0;
         const pagas = conta.parcelas_pagas ?? 0;
@@ -43,10 +72,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
             displayStatus = 'quitada';
             statusVariant = 'success';
         } else {
-            // O componente usa `data_vencimento` que é string. Precisa de 'T00:00:00' para parsear corretamente.
             const vencimento = parseISO(conta.data_vencimento + 'T00:00:00');
-            
-            // Verifica se está no passado e não é hoje
             if (isPast(vencimento) && !isToday(vencimento)) {
                 statusVariant = 'destructive';
                 displayStatus = 'atrasada';
@@ -60,7 +86,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
         }
         return { displayStatus, statusVariant };
     };
-    
+
     return (
         <Card>
             <CardHeader><CardTitle>Lançamentos Sintéticos ({contasFiltradas.length})</CardTitle></CardHeader>
@@ -78,54 +104,50 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                 <TableHead>Progresso</TableHead>
                                 <TableHead className="hidden sm:table-cell">Status</TableHead>
                                 <TableHead className="hidden sm:table-cell">Origem</TableHead>
+                                <TableHead>Contábil</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {contasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
                             ) : (
                                 contasFiltradas.map((conta) => {
-                                    
                                     const { displayStatus, statusVariant } = getStatusInfo(conta);
                                     const total = conta.parcelas_total ?? 0;
                                     const pagas = conta.parcelas_pagas ?? 0;
                                     const progresso = total ? `${pagas}/${total}` : 'N/A';
-                                    
-                                    // *** RESTRIÇÃO DE EDIÇÃO/EXCLUSÃO ***
-                                    // Desabilita se houver alguma parcela paga (pagas > 0)
-                                    const podeEditarOuExcluir = pagas === 0;
-
+                                    const podeExcluir = pagas === 0;
                                     const origemDisplay = conta.origem === 'assinatura_recorrente' ? 'Assinatura' : (conta.origem === 'contrato' ? 'Contrato' : 'Manual');
+
+                                    const patrimonialId = (conta as any).id_conta_patrimonial;
+                                    const resultadoId = (conta as any).id_conta_resultado;
+                                    const contaPatrimonial = patrimonialId ? planoContasMap[patrimonialId] : null;
+                                    const contaResultado = resultadoId ? planoContasMap[resultadoId] : null;
 
                                     return (
                                         <TableRow key={conta.id}>
                                             <TableCell className="text-left min-w-[120px]">
                                                 <div className="flex space-x-1">
-                                                    
-                                                    {/* Botão Ver Parcelas */}
                                                     <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas">
                                                         <ListChecks className="h-4 w-4" />
                                                     </Button>
 
-                                                    {/* Botão Editar (Restrição Aplicada) */}
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => handleEdit(conta)} 
-                                                        title={podeEditarOuExcluir ? "Editar Lançamento" : "Não é possível editar lançamentos com parcelas já recebidas."}
-                                                        disabled={!podeEditarOuExcluir}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleEdit(conta)}
+                                                        title="Editar Lançamento"
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
 
-                                                    {/* Botão Excluir (Restrição Aplicada) */}
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                title={podeEditarOuExcluir ? "Excluir Lançamento" : "Não é possível excluir lançamentos com parcelas já recebidas."}
-                                                                disabled={!podeEditarOuExcluir}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title={podeExcluir ? "Excluir Lançamento" : "Não é possível excluir lançamentos com parcelas já recebidas."}
+                                                                disabled={!podeExcluir}
                                                             >
                                                                 <Trash2 className="w-4 h-4 text-red-500" />
                                                             </Button>
@@ -159,6 +181,26 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                             </TableCell>
                                             <TableCell className="hidden sm:table-cell">
                                                 <Badge variant="secondary">{origemDisplay}</Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {(contaResultado || contaPatrimonial) ? (
+                                                    <div className="flex flex-col gap-0.5 min-w-[160px]">
+                                                        {contaPatrimonial && (
+                                                            <span className="text-xs text-muted-foreground leading-tight">
+                                                                <span className="font-semibold text-blue-600">D</span>
+                                                                {' '}{contaPatrimonial.Conta} {contaPatrimonial.Descricao}
+                                                            </span>
+                                                        )}
+                                                        {contaResultado && (
+                                                            <span className="text-xs text-muted-foreground leading-tight">
+                                                                <span className="font-semibold text-orange-600">C</span>
+                                                                {' '}{contaResultado.Conta} {contaResultado.Descricao}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     );

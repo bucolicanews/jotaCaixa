@@ -284,6 +284,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           conta_bancaria_id: values.conta_id,
           conta_contabil_id: contaRecebimento,
           historico_id: values.historico_id, // NOVO CAMPO
+          origem: `recebimento_manual:${parcela.id}`,
+          documento: parcela.id,
       };
       
       await supabase.from('lancamentos').insert(lancamentoPayload);

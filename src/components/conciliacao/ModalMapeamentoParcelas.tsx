@@ -9,6 +9,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Search } from 'lucide-react';
@@ -32,7 +35,8 @@ interface ModalMapeamentoParcelasProps {
       valor: number;
       contaContabilId: string;
       descricao: string;
-    }
+    },
+    modoExcedente?: 'restante' | 'redistribuir'
   ) => Promise<void>;
 }
 
@@ -49,6 +53,8 @@ export function ModalMapeamentoParcelas({
   const [parcelasCP, setParcelasCP] = useState<ParcelaMatching[]>([]);
   const [parcelasQuitadas, setParcelasQuitadas] = useState<ParcelaMatching[]>([]);
   const [filtro, setFiltro] = useState('');
+  const [filtroMes, setFiltroMes] = useState('todos');
+  const [abaAtiva, setAbaAtiva] = useState<string>('');
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<Map<string, number>>(
     new Map()
   );
@@ -56,6 +62,7 @@ export function ModalMapeamentoParcelas({
   const [descricaoRestante, setDescricaoRestante] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [modoExcedente, setModoExcedente] = useState<'restante' | 'redistribuir'>('restante');
 
   // Buscar Parcelas de Contas a Receber
   const buscarParcelasCR = useCallback(async () => {
@@ -200,6 +207,9 @@ export function ModalMapeamentoParcelas({
       setContaContabilRestante('');
       setDescricaoRestante('');
       setFiltro('');
+      setFiltroMes('todos');
+      setModoExcedente('restante');
+      setAbaAtiva(transacao.tipo === 'Entrada' ? 'CR' : 'CP');
 
       Promise.all([buscarParcelasCR(), buscarParcelasCP(), buscarParcelasQuitadas()])
         .then(([cr, cp, quitadas]) => {
@@ -221,36 +231,59 @@ export function ModalMapeamentoParcelas({
 
   // Filtrar parcelas
   const parcelasCRFiltradas = useMemo(() => {
-    if (!filtro) return parcelasCR;
-    
+    let lista = parcelasCR;
+    if (filtroMes !== 'todos') {
+      lista = lista.filter(p => {
+        if (!p.dataVencimento) return false;
+        const d = new Date(p.dataVencimento);
+        return String(d.getMonth() + 1).padStart(2, '0') === filtroMes;
+      });
+    }
+    if (!filtro) return lista;
     const filtroLower = filtro.toLowerCase();
-    return parcelasCR.filter(p => 
+    return lista.filter(p =>
       p.clienteNome?.toLowerCase().includes(filtroLower) ||
       p.descricao?.toLowerCase().includes(filtroLower) ||
       p.numeroParcela?.toString().includes(filtroLower) ||
       p.valor_parcela?.toString().includes(filtroLower) ||
       p.dataVencimento?.includes(filtro)
     );
-  }, [parcelasCR, filtro]);
+  }, [parcelasCR, filtro, filtroMes]);
 
   const parcelasCPFiltradas = useMemo(() => {
-    if (!filtro) return parcelasCP;
-    
+    let lista = parcelasCP;
+    if (filtroMes !== 'todos') {
+      lista = lista.filter(p => {
+        if (!p.dataVencimento) return false;
+        const d = new Date(p.dataVencimento);
+        return String(d.getMonth() + 1).padStart(2, '0') === filtroMes;
+      });
+    }
+    if (!filtro) return lista;
     const filtroLower = filtro.toLowerCase();
-    return parcelasCP.filter(p => 
+    return lista.filter(p =>
       p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
       p.descricao?.toLowerCase().includes(filtroLower) ||
       p.numeroParcela?.toString().includes(filtroLower) ||
       p.valor_parcela?.toString().includes(filtroLower) ||
       p.dataVencimento?.includes(filtro)
     );
-  }, [parcelasCP, filtro]);
+  }, [parcelasCP, filtro, filtroMes]);
 
   const parcelasQuitadasFiltradas = useMemo(() => {
-    const porTipo = parcelasQuitadas.filter(p => p.tipo === tipoTransacao);
-    if (!filtro) return porTipo;
+    let lista = parcelasQuitadas.filter(p => p.tipo === tipoTransacao);
+
+    if (filtroMes !== 'todos') {
+      lista = lista.filter(p => {
+        if (!p.dataVencimento) return false;
+        const d = new Date(p.dataVencimento);
+        return String(d.getMonth() + 1).padStart(2, '0') === filtroMes;
+      });
+    }
+
+    if (!filtro) return lista;
     const filtroLower = filtro.toLowerCase();
-    return porTipo.filter(p =>
+    return lista.filter(p =>
       p.clienteNome?.toLowerCase().includes(filtroLower) ||
       p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
       p.descricao?.toLowerCase().includes(filtroLower) ||
@@ -258,7 +291,7 @@ export function ModalMapeamentoParcelas({
       p.valor_parcela?.toString().includes(filtroLower) ||
       p.dataVencimento?.includes(filtro)
     );
-  }, [parcelasQuitadas, filtro, tipoTransacao]);
+  }, [parcelasQuitadas, filtro, filtroMes, tipoTransacao]);
 
   // Cálculo de valores
   const valorSelecionado = useMemo(() => {
@@ -347,7 +380,7 @@ export function ModalMapeamentoParcelas({
         : undefined;
 
     try {
-      await onConfirmar(mapeamentos, valorRestanteObj);
+      await onConfirmar(mapeamentos, valorRestanteObj, modoExcedente);
       onClose();
     } catch (error) {
       console.error('Erro ao confirmar mapeamento:', error);
@@ -406,21 +439,45 @@ export function ModalMapeamentoParcelas({
             <div className="grid grid-cols-3 gap-4 flex-1 overflow-hidden">
               {/* COLUNA ESQUERDA: Lista de Parcelas (2/3 da largura) */}
               <div className="col-span-2 flex flex-col overflow-hidden">
-                {/* Campo de Busca */}
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Buscar por cliente, fornecedor, descrição, valor..."
-                    value={filtro}
-                    onChange={(e) => setFiltro(e.target.value)}
-                    className="pl-10"
-                  />
+                {/* Campo de Busca + Filtro de Mês */}
+                <div className="flex gap-2 mb-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Buscar por cliente, fornecedor, descrição, valor..."
+                      value={filtro}
+                      onChange={(e) => setFiltro(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  {abaAtiva !== '' && (
+                    <Select value={filtroMes} onValueChange={setFiltroMes}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos os meses</SelectItem>
+                        <SelectItem value="01">Janeiro</SelectItem>
+                        <SelectItem value="02">Fevereiro</SelectItem>
+                        <SelectItem value="03">Março</SelectItem>
+                        <SelectItem value="04">Abril</SelectItem>
+                        <SelectItem value="05">Maio</SelectItem>
+                        <SelectItem value="06">Junho</SelectItem>
+                        <SelectItem value="07">Julho</SelectItem>
+                        <SelectItem value="08">Agosto</SelectItem>
+                        <SelectItem value="09">Setembro</SelectItem>
+                        <SelectItem value="10">Outubro</SelectItem>
+                        <SelectItem value="11">Novembro</SelectItem>
+                        <SelectItem value="12">Dezembro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {/* Tabela com Scroll */}
                 <div className="flex-1 overflow-y-auto border rounded-lg">
-                  <Tabs defaultValue={tipoTransacao} className="h-full">
+                  <Tabs defaultValue={tipoTransacao} className="h-full" onValueChange={setAbaAtiva}>
                     <TabsList className="grid w-full grid-cols-3">
                       <TabsTrigger value="CR" disabled={transacao.tipo !== 'Entrada'}>
                         Contas a Receber ({parcelasCRFiltradas.length}/{parcelasCR.length})
@@ -492,6 +549,7 @@ export function ModalMapeamentoParcelas({
                           onToggleSelecao={handleToggleSelecao}
                           onValorChange={handleValorChange}
                           valorTransacao={Math.abs(transacao.valor)}
+                          labelData="Dt. Pagamento"
                         />
                       )}
                     </TabsContent>
@@ -544,6 +602,34 @@ export function ModalMapeamentoParcelas({
                     </Alert>
                   )}
                 </div>
+
+                {/* Seletor Modo Excedente */}
+                {parcelasSelecionadas.size > 0 && (
+                  <div className="border rounded-lg p-4 bg-blue-50">
+                    <h3 className="text-sm font-bold text-blue-800 mb-2">Tratamento do Excedente</h3>
+                    <p className="text-xs text-blue-600 mb-3">
+                      Se o valor aplicado exceder o saldo de uma parcela, o que fazer?
+                    </p>
+                    <RadioGroup
+                      value={modoExcedente}
+                      onValueChange={(v) => setModoExcedente(v as 'restante' | 'redistribuir')}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="restante" id="modo-restante" />
+                        <Label htmlFor="modo-restante" className="text-xs cursor-pointer">
+                          <span className="font-semibold">Valor Restante</span> — registrar como lançamento avulso
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="redistribuir" id="modo-redistribuir" />
+                        <Label htmlFor="modo-redistribuir" className="text-xs cursor-pointer">
+                          <span className="font-semibold">Redistribuir</span> — aplicar nas demais parcelas selecionadas
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
 
                 {/* Formulário de Lançamento Avulso */}
                 {valorRestante > 0 && parcelasSelecionadas.size > 0 && (

@@ -34,6 +34,7 @@ interface Props {
   onValorChange: (parcelaId: string, valor: number) => void;
   valorTransacao: number;
   loading?: boolean;
+  labelData?: string;
 }
 
 const formatCurrency = (value: number) =>
@@ -50,6 +51,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
   onValorChange,
   valorTransacao,
   loading = false,
+  labelData = 'Vencimento',
 }) => {
   const handleCheckboxChange = (parcelaId: string, checked: boolean) => {
     onToggleSelecao(parcelaId, checked);
@@ -93,7 +95,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
           <TableHead>{tipo === 'CR' ? 'Cliente' : 'Fornecedor'}</TableHead>
           <TableHead>Descrição</TableHead>
           <TableHead>Nº</TableHead>
-          <TableHead>Vencimento</TableHead>
+          <TableHead>{labelData}</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Valor Original</TableHead>
           <TableHead>Valor Pago</TableHead>

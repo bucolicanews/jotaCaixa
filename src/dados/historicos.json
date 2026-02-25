@@ -1,0 +1,702 @@
+[
+  {
+    "id": "766a851f-8a40-4064-a8aa-6664919817fa",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Capiatal Integralizado",
+    "criado_em": "2025-12-15 23:53:28.717198+00",
+    "codigo": "5625"
+  },
+  {
+    "id": "2a13b333-39c1-46ef-a0b3-5c0a3d14d733",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Capital a Integralizar",
+    "criado_em": "2025-12-15 23:53:47.890601+00",
+    "codigo": "54258"
+  },
+  {
+    "id": "a9875976-0be7-4425-a2e6-9d685eabd2f8",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Combustível",
+    "criado_em": "2025-12-15 23:57:18.0787+00",
+    "codigo": "558452"
+  },
+  {
+    "id": "0ba8285a-cfac-493f-8a6a-3f887b6e8fc4",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Material de Escritório",
+    "criado_em": "2025-12-15 23:57:46.210984+00",
+    "codigo": "7856"
+  },
+  {
+    "id": "96c57ddd-25e1-4dce-8ec8-5a18d17ecf6d",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Reforma",
+    "criado_em": "2025-12-15 23:58:01.82904+00",
+    "codigo": "78556"
+  },
+  {
+    "id": "86a78ed4-a1de-465a-a011-ad49ba370523",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Médicas",
+    "criado_em": "2025-12-15 23:58:14.418928+00",
+    "codigo": "566955"
+  },
+  {
+    "id": "6b4d6694-d1d7-46a0-93e8-87ab0bd80a70",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Alimentação",
+    "criado_em": "2025-12-15 23:58:28.466323+00",
+    "codigo": "78556"
+  },
+  {
+    "id": "a573bf8a-e6fe-4cfb-af4c-3e83804570fb",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa com Uber",
+    "criado_em": "2025-12-15 23:59:04.067692+00",
+    "codigo": "547455"
+  },
+  {
+    "id": "74214513-13cf-4291-829b-e2288a8bb8d6",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa com Moto-Taxi",
+    "criado_em": "2025-12-16 00:00:00.111872+00",
+    "codigo": "659"
+  },
+  {
+    "id": "2bd9ae99-63d5-40c1-b50d-665cc57d8d40",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Pago Salários REF",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55846"
+  },
+  {
+    "id": "e02605b4-7c42-4490-b0f9-35a0733c3060",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Receita Cleintes Strip",
+    "criado_em": "2025-11-07 14:40:24.931179+00",
+    "codigo": "55555"
+  },
+  {
+    "id": "e06c6b39-8e72-4fb8-aedf-dabcdf0c9819",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa Com Alimentação",
+    "criado_em": "2025-12-15 23:59:27.027503+00",
+    "codigo": "7855"
+  },
+  {
+    "id": "e93f69c0-0752-4da9-8f70-38df10dbd24e",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Transferencia pra Reserva de Capital",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55848"
+  },
+  {
+    "id": "8d8476c3-ac4d-4932-be52-6f79414f7681",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Simples Nacional Mensal",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55861"
+  },
+  {
+    "id": "343d9dfd-a282-43a2-8f74-20e78f47e12e",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Receita de Serviços Gdoor",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55853"
+  },
+  {
+    "id": "4cfcc04b-c83c-4f40-a8b4-c0c4e7074254",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "INSS s/ Pró - Labore",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55852"
+  },
+  {
+    "id": "038141eb-e3c8-472b-8d0e-fe07c3251fc8",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesas com Onibus",
+    "criado_em": "2025-12-15 23:58:51.623679+00",
+    "codigo": "782255"
+  },
+  {
+    "id": "8695e8e5-4d32-4f53-8dbb-13b0bb7c0a6f",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Provisão Férias",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55882"
+  },
+  {
+    "id": "cc25f6d1-2f68-4a0a-bb11-2de5deb4157c",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Provisão Abono Fim e Ano",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55863"
+  },
+  {
+    "id": "91f6aeee-39c3-4a53-a19d-25113995edc4",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Provisão Emergência",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55866"
+  },
+  {
+    "id": "56ba789a-90b4-4957-9dc3-e5f19e517d59",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa INSS s/ Pró- Labore",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55870"
+  },
+  {
+    "id": "27453c3f-d7c6-4815-9b32-0d6dac899588",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Honorários de Serviços Contábeis Contrato",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55883"
+  },
+  {
+    "id": "3efa4202-803c-4e96-93a9-4b5550c30041",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa Parcelamento Receita Federal",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55872"
+  },
+  {
+    "id": "0fa2d9b2-f40a-469c-9e9f-76ee4f64d2a7",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Despesa Parcelamento Divida Ativa",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55873"
+  },
+  {
+    "id": "11fec322-5c2f-4bbc-bb36-a53183648c7b",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Parcela do Carro",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55874"
+  },
+  {
+    "id": "55cec69a-f5e8-40e6-9a63-0d67f5a2b23a",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Retenção do IRPF dos Sócios s/ Prá-Labore",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55854"
+  },
+  {
+    "id": "000d969f-5256-473a-a5a8-4b72e0bfda60",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Investimento em Marketing",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55849"
+  },
+  {
+    "id": "21f8078d-239a-4025-8911-055955271a41",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Simples Nacional Mensal a Pagar",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55871"
+  },
+  {
+    "id": "090cb994-1661-482c-813e-7d01895af04f",
+    "proprietario_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "descricao": "Transferência Bancária",
+    "criado_em": "2025-11-07 14:35:23.509658+00",
+    "codigo": "55881"
+  },
+  {
+    "id": "2400ed5b-1f51-4510-83db-f4ce095c7e02",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "1 PARC. 13º SALARIO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55856"
+  },
+  {
+    "id": "f06d464a-e617-465e-8d86-cd435e7e9899",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "2º PARC. 13º SALÁRIO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55857"
+  },
+  {
+    "id": "7fb0af59-bcb2-48d9-b425-306d64987b8d",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "ADIANTAMENTO 13º SALARIO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55858"
+  },
+  {
+    "id": "d1041aff-810f-4efd-9857-5e73ac6de5c1",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "ADIANTAMENTO SALARIAL",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55859"
+  },
+  {
+    "id": "df844ddf-af69-4fd2-ab76-37428a62aa82",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Capiatal Integralizado",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "5625"
+  },
+  {
+    "id": "22dd3436-7d59-4d3d-9069-a53e2d219c7b",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Capital a Integralizar",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "54258"
+  },
+  {
+    "id": "1babf1ff-5c71-4322-b658-08644059abf0",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF IRRF",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55860"
+  },
+  {
+    "id": "6eca5c8e-0b95-49fc-9899-ae59f782d787",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF PIS FOLHA",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55861"
+  },
+  {
+    "id": "6c3f3d1c-65a4-46b6-a489-5c418d2094b4",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF PIS S/FOLHA",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55853"
+  },
+  {
+    "id": "54b13b65-b80e-47c3-9e7b-7ca05cc685fc",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa Com Lanche",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "7855"
+  },
+  {
+    "id": "c2ebd5ba-1fd4-4b6d-b3ba-9cc0db7ea6e2",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa com Moto-Taxi",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "659"
+  },
+  {
+    "id": "689cc125-0ca8-412a-9796-b613ba8ea9de",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa com Uber",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "547455"
+  },
+  {
+    "id": "048baf0a-1948-45f5-be9c-b1bea4aa32fb",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DESPESA GPS DO MÊS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55852"
+  },
+  {
+    "id": "41d2d9e6-1397-4c2c-9cf8-7cd275b9bbd4",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Alimentação",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "78556"
+  },
+  {
+    "id": "48a9a974-5183-41c5-a0da-46a64d6b2cff",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Combustível",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "558452"
+  },
+  {
+    "id": "d267dad4-3dd7-4434-98eb-c9b4546aa91b",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Condomínio",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "782255"
+  },
+  {
+    "id": "393031dd-ed7d-48f0-822d-e880ad959417",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Material de Escritório",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "7856"
+  },
+  {
+    "id": "5a51a3e8-feb1-4239-9f92-3c84c45f5142",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Médicas",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "566955"
+  },
+  {
+    "id": "427cef67-a0c3-4b05-be71-9c715078bf57",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Reforma",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "78556"
+  },
+  {
+    "id": "43ebd05f-98cb-47a6-a3d3-4d2bdc56f23d",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Dinheiro da Mae",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "5422596"
+  },
+  {
+    "id": "eb98ed38-c0e2-4c94-947c-499ac23913ed",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Dinheiro do Pai",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "56235"
+  },
+  {
+    "id": "d8d02a1b-93e3-4daf-94d1-9981dd30d1f8",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FALTAS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55862"
+  },
+  {
+    "id": "33884b07-50ef-4f69-bdac-7175b2efd7a5",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FÉRIAS - INDENIZADA",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55882"
+  },
+  {
+    "id": "f178e4dc-429d-4e2e-a834-099be6a72cba",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FÉRIAS DO MES",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55863"
+  },
+  {
+    "id": "776ca3a2-b741-423f-a4c6-660f7c0fe4da",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FGTS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55865"
+  },
+  {
+    "id": "4b285b2d-327b-4ee9-9375-6bf6c3bef8f1",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FGTS A PAGAR",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55866"
+  },
+  {
+    "id": "43762ac6-e89a-42d4-8ad6-9c2712cf38dd",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FGTS PAGO NA RESCISÃO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55867"
+  },
+  {
+    "id": "56a44287-999e-47ba-88e5-b7fe11bdb8de",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "FOLHA PAGAMENTO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55868"
+  },
+  {
+    "id": "655de6d3-c802-4f99-9a48-ecfbea3a346c",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "GUIA DE RECOLHIMENTO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55869"
+  },
+  {
+    "id": "342a3a6f-d592-4b27-b885-4cdf6ad66853",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "INSS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55870"
+  },
+  {
+    "id": "1603aab6-c06d-4e8c-8aca-f1d04afbfe72",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "INSS A PAGAR",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55871"
+  },
+  {
+    "id": "a022dfe9-c126-485a-a908-88c45597fe60",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "INSS PRO LABORE",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55872"
+  },
+  {
+    "id": "73d0083c-c45e-44e3-9ffb-a78aac4e4083",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "INSS S/ 13º SALÁRIO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55873"
+  },
+  {
+    "id": "0fe8376c-6660-4df6-b04f-2364021b1e14",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "INSS S/FÉRIAS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55874"
+  },
+  {
+    "id": "624a21f3-0175-4c94-b68a-6d4c07eb9e58",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "IRRF",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55854"
+  },
+  {
+    "id": "2ec1f35e-2bff-4378-b9d3-d0d4f485ac42",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "IRRF EMPREGADO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55875"
+  },
+  {
+    "id": "34c8764c-1640-4b13-ae2a-b68636a848da",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Lançamento Padrão",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55845"
+  },
+  {
+    "id": "1ee3a425-48e7-4e0a-8644-c9b9d344bbb4",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "OUTRAS DESPESAS DARF",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55855"
+  },
+  {
+    "id": "76b14aae-e394-4464-bd85-303789eb2379",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PAGAMENTO 13º SALARIO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55876"
+  },
+  {
+    "id": "894a599b-ba72-4dce-9546-3f420c62c68d",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PAGAMENTO DE SALARIO MES",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55877"
+  },
+  {
+    "id": "71807854-a589-4ba0-90d7-3f57fd36d058",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PAGAMENTO GPS DO MÊS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55884"
+  },
+  {
+    "id": "1a93f0dc-e790-48da-9df3-d5edcce7f3bc",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PAGAMENTO SALÁRIOS REF",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55878"
+  },
+  {
+    "id": "ec0c747c-b799-4b8d-a973-bb64b17e005b",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PAGO RETIRADA DE SOCIO(A)",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55879"
+  },
+  {
+    "id": "64679d84-55bf-467a-a14f-136b01095204",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Pago Salários REF",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55846"
+  },
+  {
+    "id": "deec5bbc-8df0-479e-b59c-7d71f067ba92",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PROVISÃO 13º SALARIO DO PERÍODO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55849"
+  },
+  {
+    "id": "193665ca-923b-4c29-9f28-134769d1d852",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PROVISÃO DE ENCARGO S/FÉRIAS PERÍODO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55848"
+  },
+  {
+    "id": "ba0a47f6-6f58-44ef-9dcf-4a462c3eeffa",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PROVISÃO DE FERIAS DO PERÍODO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55847"
+  },
+  {
+    "id": "81308040-5b8c-4938-be37-546378b22ef5",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PROVISÃO ENCARGO S/13º SAL. PERÍODO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55850"
+  },
+  {
+    "id": "e1cf775a-1b59-4fa7-9923-fd6e30aa9ba7",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "PROVISÃO IMPOSTO DE RENDA",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55880"
+  },
+  {
+    "id": "0640f0c2-3167-4200-a754-6391a6501834",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Receita Cleintes Strip",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55555"
+  },
+  {
+    "id": "8d74947d-8863-4e25-aef7-7d5339f5df4e",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "RETIRADA PRO LABORE",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55881"
+  },
+  {
+    "id": "ad582fad-a06f-4678-9018-fac7b0cba7d2",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "SALARIO DO MES FOLHA PAGAMENTO",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55851"
+  },
+  {
+    "id": "cbe33660-e5fc-4945-93a8-1ef4d8bbb67f",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "SERVIÇOS PRESTADOS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55883"
+  },
+  {
+    "id": "2f6efd1e-4419-4877-bd22-a8dad07cb756",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "VALOR PAGO FÉRIAS",
+    "criado_em": "2025-12-19 15:10:02.864271+00",
+    "codigo": "55864"
+  },
+  {
+    "id": "1f2a48b7-77ee-4509-90b9-7e6b3810e3bb",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "1 PARC. 13º SALARIO",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55856"
+  },
+  {
+    "id": "322283a6-e409-495d-bc55-a872c6f302bb",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "2º PARC. 13º SALÁRIO",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55857"
+  },
+  {
+    "id": "79956cea-7ae2-48e6-bd1a-4f05c1c8a387",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "ADIANTAMENTO 13º SALARIO",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55858"
+  },
+  {
+    "id": "4041a554-29d0-40d0-a8e1-eb82c2a00518",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "ADIANTAMENTO SALARIAL",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55859"
+  },
+  {
+    "id": "8ba143d4-f522-4140-b7be-db8b55bbae8c",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Capiatal Integralizado",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "5625"
+  },
+  {
+    "id": "fdddc13d-7ab2-4385-a0d9-f365cb1622ac",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Capital a Integralizar",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "54258"
+  },
+  {
+    "id": "b482f09d-c930-4815-8ef0-be0a22d2ddaa",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF IRRF",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55860"
+  },
+  {
+    "id": "ba89f742-2b52-43e0-a4d2-00ce81f3a0d0",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF PIS FOLHA",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55861"
+  },
+  {
+    "id": "5f990188-3aa5-4313-982e-d40912843a5c",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DARF PIS S/FOLHA",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55853"
+  },
+  {
+    "id": "2fcc3ce1-95b6-4a2b-983a-77c205e862f7",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa Com Lanche",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "7855"
+  },
+  {
+    "id": "e1743650-0830-49f8-a18f-4e8907736392",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa com Moto-Taxi",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "659"
+  },
+  {
+    "id": "2f48d109-2beb-4aa5-a4ae-ea76a397f6a5",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesa com Uber",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "547455"
+  },
+  {
+    "id": "db928f49-fd6a-4a02-b899-3d634a4df578",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "DESPESA GPS DO MÊS",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "55852"
+  },
+  {
+    "id": "9a9afb6a-e695-4203-a20b-c6266a33b69f",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Alimentação",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "78556"
+  },
+  {
+    "id": "35db7345-e3b6-4430-b51f-5c9d7f20fbe7",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Combustível",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "558452"
+  },
+  {
+    "id": "c567ff08-b43c-46f9-bb43-783a0104505f",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Condomínio",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "782255"
+  },
+  {
+    "id": "7b88c8fa-9069-493e-8c98-43a1f7c253be",
+    "proprietario_id": "0a1cc352-852f-4f2a-a9b7-82d13ee467b4",
+    "descricao": "Despesas com Material de Escritório",
+    "criado_em": "2025-12-19 15:14:09.209569+00",
+    "codigo": "7856"
+  }
+]

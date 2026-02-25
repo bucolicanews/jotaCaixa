@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart, Edit } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart, Edit, BookOpen, ListChecks } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
 import { cn } from '@/lib/utils';
 import { PagBankPaymentStatus } from '@/components/contas-receber/PagBankPaymentStatus';
 import { VisualizarCodigoDialog } from '@/components/ui/VisualizarCodigoDialog';
 import ReciboRecebimentoDialog from './ReciboRecebimentoDialog';
 import EditarParcelaPagaDialog from './EditarParcelaPagaDialog';
+import DetalhesRecebimentoParcelaDialog from './DetalhesRecebimentoParcelaDialog';
 import { ExtendedParcelaDetalhada } from '@/types/contas-receber';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -28,6 +31,7 @@ interface TabelaParcelasProps {
     onGerarBoleto?: (parcela: ExtendedParcelaDetalhada) => void;
     onRefreshData?: () => void;
     onSyncStatus?: (parcelaId: string) => void;
+    proprietarioId?: string;
 }
 
 const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
@@ -43,12 +47,23 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
     onGerarBoleto,
     onRefreshData,
     onSyncStatus,
+    proprietarioId,
 }) => {
     const [codigoParaVisualizar, setCodigoParaVisualizar] = useState<{ title: string; description?: string, code: string } | null>(null);
     const [reciboDialogOpen, setReciboDialogOpen] = useState(false);
     const [parcelaParaRecibo, setParcelaParaRecibo] = useState<string | null>(null);
     const [editarDialogOpen, setEditarDialogOpen] = useState(false);
     const [parcelaParaEditar, setParcelaParaEditar] = useState<string | null>(null);
+    const [parcelasComLancamento, setParcelasComLancamento] = useState<Set<string>>(new Set());
+    const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: ExtendedParcelaDetalhada | null }>({ open: false, parcela: null });
+
+    interface LancamentoResumo {
+        tipo: string;
+        conta_codigo: string;
+        conta_descricao: string;
+        origem: string;
+    }
+    const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
 
     const isLinkExpirado = (parcela: ExtendedParcelaDetalhada): boolean => {
         if (!parcela.pagbank_link_expira_em) return false;
@@ -64,6 +79,46 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
         setParcelaParaEditar(parcelaId);
         setEditarDialogOpen(true);
     };
+
+    useEffect(() => {
+        if (!proprietarioId || parcelasFiltradas.length === 0) return;
+        const carregarLancamentos = async () => {
+            const ids = parcelasFiltradas.map(p => p.id);
+            const { data: lancamentosData } = await supabase
+                .from('lancamentos')
+                .select('documento, tipo, conta_contabil_id, origem')
+                .eq('proprietario_id', proprietarioId)
+                .in('documento', ids)
+                .not('origem', 'ilike', '%estornada%');
+
+            if (!lancamentosData || lancamentosData.length === 0) return;
+
+            const contaIds = [...new Set(lancamentosData.map((l: any) => l.conta_contabil_id).filter(Boolean))];
+            const { data: contasData } = await supabase
+                .from('plano_contas')
+                .select('id, "Conta", "Descricao"')
+                .in('id', contaIds);
+            const contasMap: Record<string, { Conta: string; Descricao: string }> = {};
+            (contasData || []).forEach((c: any) => { contasMap[c.id] = c; });
+
+            const porParcela: Record<string, LancamentoResumo[]> = {};
+            for (const l of lancamentosData as any[]) {
+                if (!l.documento) continue;
+                if (!porParcela[l.documento]) porParcela[l.documento] = [];
+                porParcela[l.documento].push({
+                    tipo: l.tipo,
+                    conta_codigo: contasMap[l.conta_contabil_id]?.Conta || '',
+                    conta_descricao: contasMap[l.conta_contabil_id]?.Descricao || '',
+                    origem: l.origem || '',
+                });
+            }
+            setLancamentosPorParcela(porParcela);
+            setParcelasComLancamento(new Set(Object.keys(porParcela)));
+        };
+        carregarLancamentos();
+    }, [parcelasFiltradas, proprietarioId]);
+
+    const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean; parcela: ExtendedParcelaDetalhada | null }>({ open: false, parcela: null });
 
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
@@ -103,12 +158,13 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 <TableHead>Conta Patrimonial</TableHead>
                                 <TableHead>Conta Resultado</TableHead>
                                 <TableHead>Histórico</TableHead>
+                                <TableHead className="text-center">Contábil</TableHead>
                                 <TableHead>PagBank</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={16} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={17} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -131,6 +187,17 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                         <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
                                             <TableCell className="text-left min-w-[120px]">
                                                 <div className="flex flex-col space-y-1">
+                                                    {p.status !== 'cancelada' && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setDetalhesDialog({ open: true, parcela: p })}
+                                                            className="border-purple-500 text-purple-600 hover:bg-purple-50"
+                                                            title="Ver detalhes de recebimentos"
+                                                        >
+                                                            <ListChecks className="w-4 h-4 mr-2" /> Detalhes
+                                                        </Button>
+                                                    )}
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
@@ -239,9 +306,44 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 {contaResultado ? `${contaResultado.Conta}` : '-'}
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground" title={historicoRecebimento?.descricao}>
-                                                {historicoRecebimento ? `[${historicoRecebimento.codigo || ''}]` : '-'}
+                                                {historicoRecebimento ? (
+                                                    <span>{historicoRecebimento.codigo ? `[${historicoRecebimento.codigo}] ` : ''}{historicoRecebimento.descricao}</span>
+                                                ) : '-'}
                                             </TableCell>
                                             
+                                            <TableCell>
+                                                {(() => {
+                                                    const lancamentos = lancamentosPorParcela[p.id] || [];
+                                                    return lancamentos.length > 0 ? (
+                                                        <div className="flex flex-col gap-0.5 min-w-[160px]">
+                                                            {lancamentos.map((l, i) => (
+                                                                <span key={i} className="text-xs text-muted-foreground leading-tight">
+                                                                    <span className={`font-semibold ${l.tipo === 'Entrada' ? 'text-blue-600' : 'text-orange-600'}`}>
+                                                                        {l.tipo === 'Entrada' ? 'D' : 'C'}
+                                                                    </span>
+                                                                    {' '}{l.conta_codigo} {l.conta_descricao}
+                                                                    {' '}
+                                                                    <span className="text-[10px] text-muted-foreground opacity-60">
+                                                                        {l.origem?.startsWith('recebimento') ? '(rec)' : l.origem?.startsWith('lancamento_cr') || l.origem === 'CR (Inicial)' ? '(prov)' : ''}
+                                                                    </span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        proprietarioId ? (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => setLancamentoDialog({ open: true, parcela: p })}
+                                                                title="Registrar lançamento contábil"
+                                                            >
+                                                                <BookOpen className="w-4 h-4 text-gray-400" />
+                                                            </Button>
+                                                        ) : <span className="text-muted-foreground text-sm">-</span>
+                                                    );
+                                                })()}
+                                            </TableCell>
+
                                             <TableCell>
                                                 {p.pagbank_status === 'PAID' ? (
                                                     <PagBankPaymentStatus status={p.pagbank_status as any} />
@@ -376,6 +478,39 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                     }
                 }}
             />
+
+            {lancamentoDialog.open && lancamentoDialog.parcela && proprietarioId && (
+                <LancamentoContabilDialog
+                    open={lancamentoDialog.open}
+                    onOpenChange={(open) => setLancamentoDialog({ open, parcela: open ? lancamentoDialog.parcela : null })}
+                    parcelaId={lancamentoDialog.parcela.id}
+                    parcelaDescricao={lancamentoDialog.parcela.contas_receber?.descricao || 'Conta a Receber'}
+                    parcelaValor={lancamentoDialog.parcela.valor_parcela}
+                    parcelaData={lancamentoDialog.parcela.data_vencimento}
+                    origemTipo="contas_receber"
+                    proprietarioId={proprietarioId}
+                    contaPatrimonialId={lancamentoDialog.parcela.contas_receber?.id_conta_patrimonial}
+                    contaResultadoId={lancamentoDialog.parcela.contas_receber?.id_conta_resultado}
+                    onSaved={() => {
+                        if (lancamentoDialog.parcela) {
+                            setParcelasComLancamento(prev => new Set([...prev, lancamentoDialog.parcela!.id]));
+                        }
+                        setLancamentoDialog({ open: false, parcela: null });
+                    }}
+                />
+            )}
+
+            {detalhesDialog.open && detalhesDialog.parcela && proprietarioId && (
+                <DetalhesRecebimentoParcelaDialog
+                    open={detalhesDialog.open}
+                    onOpenChange={(open) => setDetalhesDialog({ open, parcela: open ? detalhesDialog.parcela : null })}
+                    parcela={detalhesDialog.parcela}
+                    proprietarioId={proprietarioId}
+                    onDataChange={() => {
+                        if (onRefreshData) onRefreshData();
+                    }}
+                />
+            )}
         </Card>
     );
 };
