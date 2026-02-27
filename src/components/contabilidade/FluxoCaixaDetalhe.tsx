@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit, Undo2 } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit, Undo2, Link2, Unlink, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
@@ -21,6 +21,7 @@ import FluxoCaixaPrint from './FluxoCaixaPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import FormMovimentacaoDiretaDialog, { LancamentoPrimario } from '@/components/formularios/FormMovimentacaoDiretaDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+import { useOwner } from '@/hooks/use-owner';
 
 // Interface for the primary launch (linked to the bank account)
 interface Lancamento extends LancamentoPrimario {
@@ -43,10 +44,13 @@ interface FluxoCaixaDetalheProps {
 
 const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo, logoUrl, ownerName, refetchSaldos }) => {
   const { printContent } = usePrint();
+  const { ownerType } = useOwner();
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
-  const [isUndoing, setIsUndoing] = useState(false); // NOVO ESTADO
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [parcelasMap, setParcelasMap] = useState<Record<string, { numero_parcela: number }>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   
   // Filtros
   const [filtroContaId, setFiltroContaId] = useState('todos');
@@ -68,11 +72,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     
     // 1. Determinar as contas a serem consideradas
     const contasFiltradasIds = filtroContaId === 'todos' 
-        ? contasCaixa.map(c => c.id) // USANDO APENAS CAIXA
+        ? contasCaixa.map(c => c.id)
         : [filtroContaId];
         
     if (contasFiltradasIds.length === 0) {
         setLancamentos([]);
+        setParcelasMap({});
         setLoadingLancamentos(false);
         return;
     }
@@ -96,10 +101,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('proprietario_id', empresaId)
-      .in('conta_bancaria_id', contasFiltradasIds) // Filtra por contas selecionadas
+      .in('conta_bancaria_id', contasFiltradasIds)
       .order('data_movimentacao', { ascending: false });
       
-    // Filtro de data para os lançamentos
     if (filtroPeriodo?.from) {
         query = query.gte('data_movimentacao', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
@@ -112,17 +116,14 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     if (error) {
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
+      setParcelasMap({});
     } else {
       let fetchedData = data as Lancamento[];
       
-      // 3. Filtro de Tipo e Texto (aplicado no frontend)
-      
-      // Filtro de Tipo
       if (filtroTipo !== 'todos') {
           fetchedData = fetchedData.filter(l => l.tipo === filtroTipo);
       }
       
-      // Filtro de texto no frontend (para IDs de lançamento ou conta bancária)
       if (filtroTextoDebounced) {
           const termo = filtroTextoDebounced.toLowerCase();
           fetchedData = fetchedData.filter(l => 
@@ -134,9 +135,31 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       }
       
       setLancamentos(fetchedData);
+
+      // 3. Buscar parcelas vinculadas pelos documentoIds
+      const documentoIds = [...new Set(fetchedData.map(l => l.documento).filter((d): d is string => !!d))];
+
+      if (documentoIds.length > 0) {
+        const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
+        const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+
+        const [resCR, resCP] = await Promise.all([
+          supabase.from(tabelaParcelasReceber as any).select('id, numero_parcela').in('id', documentoIds),
+          supabase.from(tabelaParcelasPagar as any).select('id, numero_parcela').in('id', documentoIds),
+        ]);
+
+        const map: Record<string, { numero_parcela: number }> = {};
+        [...(resCR.data || []), ...(resCP.data || [])].forEach((p: any) => {
+          map[p.id] = { numero_parcela: p.numero_parcela };
+        });
+        setParcelasMap(map);
+      } else {
+        setParcelasMap({});
+      }
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixa]);
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixa, ownerType]);
 
   useEffect(() => {
     fetchLancamentos();
@@ -254,8 +277,23 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       refetchSaldos(); // CRÍTICO: Força o recálculo do saldo total
   };
   
-  const handleEstorno = async (lancamento: Lancamento) => {
-    if (!window.confirm('Tem certeza que deseja estornar este lançamento? Isso criará um lançamento de estorno e marcará o original como estornado.')) return;
+  const handleDeletar = async (lancamento: Lancamento) => {
+    setDeletingId(lancamento.id);
+    try {
+      await supabase.from('extratos').delete().eq('id_parcela_rb', lancamento.id);
+      const { error } = await supabase.from('lancamentos').delete().eq('id', lancamento.id);
+      if (error) throw error;
+      showSuccess('Lançamento deletado com sucesso.');
+      fetchLancamentos();
+      refetchSaldos();
+    } catch (error: any) {
+      showError('Falha ao deletar: ' + error.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleEstorno = async (lancamento: Lancamento) => {    if (!window.confirm('Tem certeza que deseja estornar este lançamento? Isso criará um lançamento de estorno e marcará o original como estornado.')) return;
     
     setIsUndoing(true);
     
@@ -466,15 +504,16 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                   <TableHead className="w-[150px]">Conta/Caixa</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="w-[100px] text-center">Tipo</TableHead>
+                  <TableHead className="w-[130px] text-center">Parcela</TableHead>
                   <TableHead className="w-[120px] text-right">Valor</TableHead>
                   <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingLancamentos ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                 ) : lancamentosDoPeriodo.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
                 ) : (
                   lancamentosDoPeriodo.map((l) => {
                     const isDirectMovement = l.origem === 'movimentacao_direta';
@@ -492,11 +531,25 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                                     {l.tipo}
                                 </Badge>
                             </TableCell>
+                            <TableCell className="text-center">
+                                {l.documento ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <Link2 className="w-4 h-4 text-green-500" title="Vinculado a parcela" />
+                                        {parcelasMap[l.documento] && (
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                                Nº {parcelasMap[l.documento].numero_parcela} — {l.documento.substring(0, 8)}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Unlink className="w-4 h-4 text-gray-400 mx-auto" title="Sem vínculo" />
+                                )}
+                            </TableCell>
                             <TableCell className={cn("text-right font-semibold", l.valor >= 0 ? 'text-green-600' : 'text-red-600')}>
                                 {formatCurrency(Math.abs(l.valor))}
                             </TableCell>
                             <TableCell className="w-[100px] text-right">
-                                <div className="flex justify-end space-x-2">
+                                <div className="flex justify-end space-x-1">
                                     {isDirectMovement && !isEstornada && (
                                         <>
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
@@ -519,6 +572,38 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                                                         <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
                                                         <AlertDialogAction onClick={() => handleEstorno(l)} disabled={isUndoing}>
                                                             {isUndoing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Estorno'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </>
+                                    )}
+                                    {!l.documento && !isDirectMovement && !isEstorno && !isEstornada && (
+                                        <>
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Lançamento">
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" disabled={!!deletingId} title="Deletar Lançamento">
+                                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Confirmar Exclusão?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta ação irá deletar permanentemente o lançamento e o extrato vinculado (se houver). Esta operação não pode ser desfeita.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel disabled={!!deletingId}>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => handleDeletar(l)}
+                                                            disabled={!!deletingId}
+                                                            className="bg-destructive hover:bg-destructive/90"
+                                                        >
+                                                            {deletingId === l.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Exclusão'}
                                                         </AlertDialogAction>
                                                     </AlertDialogFooter>
                                                 </AlertDialogContent>
