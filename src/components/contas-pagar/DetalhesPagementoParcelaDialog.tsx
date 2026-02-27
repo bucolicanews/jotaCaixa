@@ -577,35 +577,18 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
                           >
                             <Pencil className="w-4 h-4 text-blue-500" />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Estornar este pagamento"
-                                disabled={estornandoPagamento === pg.id}
-                              >
-                                {estornandoPagamento === pg.id
-                                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                                  : <Undo2 className="w-4 h-4 text-orange-500" />
-                                }
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Estornar Pagamento</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Estornar {formatCurrency(pg.valor_pago)} pago em {formatarData(pg.data_pagamento)}? Os lançamentos contábeis serão revertidos.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleEstornarPagamento(pg.id)}>
-                                  Confirmar Estorno
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Estornar este pagamento"
+                            disabled={estornandoPagamento === pg.id}
+                            onClick={() => handleEstornarPagamento(pg.id)}
+                          >
+                            {estornandoPagamento === pg.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Undo2 className="w-4 h-4 text-orange-500" />
+                            }
+                          </Button>
                         </div>
                       </div>
                     )}
