@@ -33,6 +33,7 @@ export interface TransacaoExtrato {
     nivel_confianca?: 'alta' | 'media' | 'baixa';
     empresa_id?: string;
     id_saldo_contas?: string;
+    id_parcela_pg?: string | null;
 }
 
 export interface ConciliacaoRegra {

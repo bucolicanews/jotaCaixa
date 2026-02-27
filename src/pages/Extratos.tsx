@@ -354,12 +354,13 @@ const Extratos: React.FC = () => {
                   <TableHead className="w-[80px] text-center">Tipo</TableHead>
                   <TableHead className="w-[120px] text-right">Valor</TableHead>
                   <TableHead className="w-[150px]">Conta Contábil</TableHead>
+                  <TableHead className="w-[110px]">Parcela CP</TableHead>
                   <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {extratos.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-4 text-muted-foreground">Nenhum extrato salvo.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-4 text-muted-foreground">Nenhum extrato salvo.</TableCell></TableRow>
                 ) : (
                   extratos.map((e) => (
                     <TableRow key={e.id}>
@@ -376,6 +377,7 @@ const Extratos: React.FC = () => {
                         {formatCurrency(Math.abs(e.valor))}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{e.conta_contabil_id || 'N/A'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">{(e as any).id_parcela_pg ? (e as any).id_parcela_pg.substring(0, 8) : '-'}</TableCell>
                       <TableCell className="text-right space-x-2">
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(e)} title="Editar Extrato">
                               <Edit className="w-4 h-4" />
