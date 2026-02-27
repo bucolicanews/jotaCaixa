@@ -75,6 +75,15 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
     const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
     const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null }>({ open: false, parcela: null });
     const [parcelaEstornando, setParcelaEstornando] = useState<string | null>(null);
+    const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
+        open: boolean;
+        parcela: ExtendedParcelaPagar | null;
+        extratoId: string | null;
+        extratoDescricao: string;
+        extratoValor: number;
+        extratoData: string;
+        extratoContaNome: string;
+    }>({ open: false, parcela: null, extratoId: null, extratoDescricao: '', extratoValor: 0, extratoData: '', extratoContaNome: '' });
     const [pagamentosInfo, setPagamentosInfo] = useState<Record<string, PagamentoInfo>>({});
     const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null }>({ open: false, parcela: null });
 
@@ -213,6 +222,34 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
     }, [carregarPagamentosInfo]);
 
     const handleUndoPayment = async (p: ExtendedParcelaPagar) => {
+        if (!ownerId) return;
+        setParcelaEstornando(p.id);
+        try {
+            const { data: extratoVinculado } = await supabase
+                .from('extratos')
+                .select('id, descricao, valor, data, id_saldo_contas, saldo_contas(nome)')
+                .eq('id_parcela_pg', p.id)
+                .eq('conciliado', false)
+                .limit(1)
+                .maybeSingle();
+            if (extratoVinculado) {
+                setParcelaEstornando(null);
+                setConfirmEstornoDialog({
+                    open: true,
+                    parcela: p,
+                    extratoId: extratoVinculado.id,
+                    extratoDescricao: extratoVinculado.descricao || '',
+                    extratoValor: extratoVinculado.valor,
+                    extratoData: extratoVinculado.data,
+                    extratoContaNome: (extratoVinculado as any).saldo_contas?.nome || '',
+                });
+                return;
+            }
+        } catch (e) { /* sem extrato, segue normal */ }
+        await executarUndoPayment(p, null);
+    };
+
+    const executarUndoPayment = async (p: ExtendedParcelaPagar, extratoId: string | null) => {
         if (!ownerId) return;
         const parcelaId = p.id;
         const contaDescricao = p.admin_contas_pagar?.descricao || 'Conta a Pagar';
@@ -354,19 +391,9 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                 .in('id', pagamentoIds);
             if (deletePagamentosError) throw deletePagamentosError;
 
-            // Deletar extratos correspondentes se existirem (pagamentos via banco)
-            for (const pag of pagamentos) {
-                if (pag.conta_id && pag.data_pagamento) {
-                    const dataFormatada = pag.data_pagamento.substring(0, 10);
-                    const valorExtrato = -Math.abs(pag.valor_pago);
-                    await supabase
-                        .from('extratos')
-                        .delete()
-                        .eq('id_saldo_contas', pag.conta_id)
-                        .eq('data', dataFormatada)
-                        .eq('valor', valorExtrato)
-                        .eq('conciliado', false);
-                }
+            // Deletar extrato vinculado se informado
+            if (extratoId) {
+                await supabase.from('extratos').delete().eq('id', extratoId);
             }
 
             const { error: resetError } = await supabase
@@ -578,35 +605,18 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                                                     <Undo2 className="w-4 h-4 text-gray-300" />
                                                                 </Button>
                                                             ) : (
-                                                                <AlertDialog>
-                                                                    <AlertDialogTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            title="Estornar Pagamento"
-                                                                            disabled={parcelaEstornando === p.id}
-                                                                        >
-                                                                            {parcelaEstornando === p.id
-                                                                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                                                : <Undo2 className="w-4 h-4 text-orange-500" />
-                                                                            }
-                                                                        </Button>
-                                                                    </AlertDialogTrigger>
-                                                                    <AlertDialogContent>
-                                                                        <AlertDialogHeader>
-                                                                            <AlertDialogTitle>Estornar Pagamento</AlertDialogTitle>
-                                                                            <AlertDialogDescription>
-                                                                                Tem certeza que deseja estornar o pagamento desta parcela? Os lançamentos contábeis serão revertidos.
-                                                                            </AlertDialogDescription>
-                                                                        </AlertDialogHeader>
-                                                                        <AlertDialogFooter>
-                                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                            <AlertDialogAction onClick={() => handleUndoPayment(p)}>
-                                                                                Confirmar Estorno
-                                                                            </AlertDialogAction>
-                                                                        </AlertDialogFooter>
-                                                                    </AlertDialogContent>
-                                                                </AlertDialog>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    title="Estornar Pagamento"
+                                                                    disabled={parcelaEstornando === p.id}
+                                                                    onClick={() => handleUndoPayment(p)}
+                                                                >
+                                                                    {parcelaEstornando === p.id
+                                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                        : <Undo2 className="w-4 h-4 text-orange-500" />
+                                                                    }
+                                                                </Button>
                                                             )
                                                         )}
                                                     </div>
@@ -653,6 +663,38 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                     }}
                 />
             )}
+      <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Foi encontrado um lançamento no extrato bancário vinculado a este pagamento. Deseja removê-lo também?</p>
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Conta:</span><span className="font-medium">{confirmEstornoDialog.extratoContaNome}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Data:</span><span className="font-medium">{confirmEstornoDialog.extratoData}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Descrição:</span><span className="font-medium">{confirmEstornoDialog.extratoDescricao}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Valor:</span><span className="font-medium text-red-600">{formatCurrency(Math.abs(confirmEstornoDialog.extratoValor))}</span></div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmEstornoDialog(prev => ({ ...prev, open: false }))}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={async () => {
+                setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
+                if (confirmEstornoDialog.parcela) {
+                    await executarUndoPayment(confirmEstornoDialog.parcela, confirmEstornoDialog.extratoId);
+                }
+              }}
+            >
+              Estornar e Remover Extrato
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
         </div>
     );
 };
