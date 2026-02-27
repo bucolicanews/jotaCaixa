@@ -289,6 +289,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const valorQuitado = Math.min(totalPago, saldoDevedor);
     const valorExcedente = totalPago - valorQuitado;
 
+    console.log('[DEBUG PAGAMENTO]', { totalPago, saldoDevedor, valorQuitado, valorExcedente, conta_despesa_excedente_id: values.conta_despesa_excedente_id });
+
     const allLancamentos: any[] = [];
     const contaBancoFirstPayment = values.pagamentos[0]?.conta_id || null;
     const contaSelecionadaBanco = contasOrigem.find(c => c.id === contaBancoFirstPayment);
