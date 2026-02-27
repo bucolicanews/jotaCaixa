@@ -289,6 +289,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const valorQuitado = Math.min(totalPago, saldoDevedor);
     const valorExcedente = totalPago - valorQuitado;
 
+    const allLancamentos: any[] = [];
+    const contaBancoFirstPayment = values.pagamentos[0]?.conta_id || null;
+    const contaSelecionadaBanco = contasOrigem.find(c => c.id === contaBancoFirstPayment);
+    const contaContabilBancoMain = (contaSelecionadaBanco as any)?.plano_contas?.id || null;
+    const idBancoCredito = crypto.randomUUID();
+
     for (const pagamento of values.pagamentos) {
         const pagamentoPayload = {
             parcela_id: parcela.id,
@@ -303,29 +309,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const { error: pagErr } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
         if (pagErr) { showError('Erro ao registrar pagamento: ' + pagErr.message); return; }
 
-        const contaSelecionada = contasOrigem.find(c => c.id === pagamento.conta_id);
-        const contaContabilBanco = (contaSelecionada as any)?.plano_contas?.id || null;
-
-        const idAtivo = crypto.randomUUID();
         const idPassivo = crypto.randomUUID();
 
-        const lancamentos: any[] = [{
-            id: idAtivo,
-            proprietario_id: proprietarioId,
-            data_movimentacao: dataPagamentoISO,
-            descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
-            valor: valorQuitado,
-            tipo: 'Saida' as const,
-            conta_bancaria_id: pagamento.conta_id,
-            conta_contabil_id: contaContabilBanco,
-            origem: origemVincular,
-            documento: parcela.id,
-            historico_id: values.historico_id,
-            conta_resultado_id: idPassivo,
-        }];
-
         if (contaPatrimonial) {
-            lancamentos.push({
+            allLancamentos.push({
                 id: idPassivo,
                 proprietario_id: proprietarioId,
                 data_movimentacao: dataPagamentoISO,
@@ -337,11 +324,46 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 origem: origemVincular,
                 documento: parcela.id,
                 historico_id: values.historico_id,
-                conta_resultado_id: idAtivo,
+                conta_resultado_id: idBancoCredito,
             });
         }
+    }
 
-        const { error: lancErr } = await supabase.from('lancamentos').insert(lancamentos);
+    if (valorExcedente > 0.01 && values.conta_despesa_excedente_id) {
+        const idDespesa = crypto.randomUUID();
+        allLancamentos.push({
+            id: idDespesa,
+            proprietario_id: proprietarioId,
+            data_movimentacao: dataPagamentoISO,
+            descricao: values.descricao_excedente?.trim() || `Excedente CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`,
+            valor: valorExcedente,
+            tipo: 'Entrada' as const,
+            conta_bancaria_id: null,
+            conta_contabil_id: values.conta_despesa_excedente_id,
+            origem: `excedente_cp:${parcela.id}`,
+            documento: parcela.id,
+            historico_id: values.historico_id,
+            conta_resultado_id: idBancoCredito,
+        });
+    }
+
+    allLancamentos.push({
+        id: idBancoCredito,
+        proprietario_id: proprietarioId,
+        data_movimentacao: dataPagamentoISO,
+        descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
+        valor: totalPago,
+        tipo: 'Saida' as const,
+        conta_bancaria_id: contaBancoFirstPayment,
+        conta_contabil_id: contaContabilBancoMain,
+        origem: origemVincular,
+        documento: parcela.id,
+        historico_id: values.historico_id,
+        conta_resultado_id: allLancamentos.length > 0 ? allLancamentos[0].id : null,
+    });
+
+    if (allLancamentos.length > 0) {
+        const { error: lancErr } = await supabase.from('lancamentos').insert(allLancamentos);
         if (lancErr) { showError('Erro ao gerar lançamentos: ' + lancErr.message); return; }
     }
 
@@ -349,48 +371,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const novoValorPago = (parcela.valor_pago || 0) + valorQuitado;
     const saldoApos = parcela.valor_parcela - novoValorPago;
     const novoStatus = saldoApos <= 0.01 ? 'paga' : 'parcial';
-
-    // Lançamento do excedente (juros/multa) se informado
-    if (valorExcedente > 0.01 && values.conta_despesa_excedente_id) {
-        const contaBancoExcedente = values.pagamentos[0]?.conta_id || null;
-        const contaSelecionadaExcedente = contasOrigem.find(c => c.id === contaBancoExcedente);
-        const contaContabilBancoExcedente = (contaSelecionadaExcedente as any)?.plano_contas?.id || null;
-        const idDespesa = crypto.randomUUID();
-        const idBancoExcedente = crypto.randomUUID();
-        const descExcedente = values.descricao_excedente?.trim() || `Excedente CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`;
-        const lancamentosExcedente: any[] = [
-            {
-                id: idDespesa,
-                proprietario_id: proprietarioId,
-                data_movimentacao: dataPagamentoISO,
-                descricao: descExcedente,
-                valor: valorExcedente,
-                tipo: 'Entrada' as const,
-                conta_bancaria_id: null,
-                conta_contabil_id: values.conta_despesa_excedente_id,
-                origem: `excedente_cp:${parcela.id}`,
-                documento: parcela.id,
-                historico_id: values.historico_id,
-                conta_resultado_id: idBancoExcedente,
-            },
-            {
-                id: idBancoExcedente,
-                proprietario_id: proprietarioId,
-                data_movimentacao: dataPagamentoISO,
-                descricao: descExcedente,
-                valor: valorExcedente,
-                tipo: 'Saida' as const,
-                conta_bancaria_id: contaBancoExcedente,
-                conta_contabil_id: contaContabilBancoExcedente,
-                origem: `excedente_cp:${parcela.id}`,
-                documento: parcela.id,
-                historico_id: values.historico_id,
-                conta_resultado_id: idDespesa,
-            },
-        ];
-        const { error: lancExcErr } = await supabase.from('lancamentos').insert(lancamentosExcedente);
-        if (lancExcErr) { showError('Erro ao lançar excedente: ' + lancExcErr.message); return; }
-    }
 
     await supabase.from(tabelaParcelas).update({
         status: novoStatus,
@@ -444,7 +424,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     onOpenChange(false);
   };
 
-  const isSubmitDisabled = loadingContas || form.formState.isSubmitting || (isPagamentoParcial && !acaoSaldoRestante);
+  const isSubmitDisabled = loadingContas || form.formState.isSubmitting || (isPagamentoParcial && !acaoSaldoRestante) || (excedente > 0.01 && !form.watch('conta_despesa_excedente_id'));
 
   return (
     <>
