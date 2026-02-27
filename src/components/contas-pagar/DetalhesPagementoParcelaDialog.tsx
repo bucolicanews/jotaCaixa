@@ -30,6 +30,7 @@ interface PagamentoRaw {
   observacao: string | null;
   conta_nome: string;
   historico_descricao: string;
+  parcela_id: string;
 }
 
 interface LancamentoDetalhe {
@@ -52,6 +53,7 @@ interface DetalhesPagementoParcelaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parcela: ExtendedParcelaPagar;
+  cadeia?: ExtendedParcelaPagar[];
   proprietarioId: string;
   onDataChange: () => void;
 }
@@ -60,6 +62,7 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
   open,
   onOpenChange,
   parcela,
+  cadeia,
   proprietarioId,
   onDataChange,
 }) => {
@@ -95,25 +98,35 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
   }>({ data_pagamento: '', valor_pago: '', conta_id: '', historico_id: '', forma_pagamento: '', observacao: '' });
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
-  const saldoRestante = parcela.valor_parcela - (parcela.valor_pago || 0);
-  const fornecedor = parcela.admin_contas_pagar?.fornecedor || 'N/A';
-  const descricao = parcela.admin_contas_pagar?.descricao || 'Conta a Pagar';
+  const cadeiaCompleta = cadeia && cadeia.length > 0 ? cadeia : [parcela];
+  const parcelaRaiz = cadeiaCompleta[0];
+  const parcelaAtiva = cadeiaCompleta[cadeiaCompleta.length - 1];
+  const temReprogramacao = cadeiaCompleta.length > 1;
+  const totalPagoCadeia = React.useMemo(() => {
+    if (pagamentos.length > 0) return pagamentos.reduce((s, pg) => s + pg.valor_pago, 0);
+    return cadeiaCompleta.reduce((s, p) => s + (p.valor_pago || 0), 0);
+  }, [pagamentos, cadeiaCompleta]);
+  const saldoRestante = parcelaRaiz.valor_parcela - totalPagoCadeia;
+  const fornecedor = parcelaRaiz.admin_contas_pagar?.fornecedor || parcela.admin_contas_pagar?.fornecedor || 'N/A';
+  const descricao = parcelaRaiz.admin_contas_pagar?.descricao || parcela.admin_contas_pagar?.descricao || 'Conta a Pagar';
 
   const carregarDados = useCallback(async () => {
     if (!open) return;
     setLoading(true);
     try {
+      const ids = cadeiaCompleta.map(p => p.id);
+
       const [pagamentosRes, lancamentosRes, historicosRes] = await Promise.all([
         supabase
           .from(tabelaPagamentos)
-          .select('id, data_pagamento, valor_pago, forma_pagamento, observacao, conta_id, historico_id, saldo_contas(nome), historicos(descricao)')
-          .eq('parcela_id', parcela.id)
+          .select('id, data_pagamento, valor_pago, forma_pagamento, observacao, conta_id, historico_id, parcela_id, saldo_contas(nome), historicos(descricao)')
+          .in('parcela_id', ids)
           .order('data_pagamento', { ascending: true }),
         supabase
           .from('lancamentos')
           .select('id, data_movimentacao, tipo, conta_contabil_id, valor, origem')
           .eq('proprietario_id', proprietarioId)
-          .or(`documento.eq.${parcela.id},origem.ilike.%${parcela.id}%`)
+          .or(ids.map(id => `documento.eq.${id},origem.ilike.%${id}%`).join(','))
           .not('origem', 'ilike', '%estornada%')
           .order('data_movimentacao', { ascending: true }),
         supabase.from('historicos').select('id, descricao, codigo').eq('proprietario_id', proprietarioId).order('descricao'),
@@ -129,6 +142,7 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
         observacao: pg.observacao || null,
         conta_nome: pg.saldo_contas?.nome || '-',
         historico_descricao: pg.historicos?.descricao || '-',
+        parcela_id: pg.parcela_id || '',
       }));
       setPagamentos(pagamentosMapped);
 
@@ -158,7 +172,7 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
     } finally {
       setLoading(false);
     }
-  }, [open, parcela.id, tabelaPagamentos, proprietarioId]);
+  }, [open, parcela.id, cadeia, tabelaPagamentos, proprietarioId]);
 
   useEffect(() => {
     carregarDados();
@@ -314,33 +328,58 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
     }
   };
 
-  const parcelaParaPagamento = parcela as ExtendedParcelaPagar & { fornecedor: string };
+  const parcelaParaPagamento = parcelaAtiva as ExtendedParcelaPagar & { fornecedor: string };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes de Pagamento — Parcela {parcela.numero_parcela}</DialogTitle>
+            <DialogTitle>
+              Detalhes de Pagamento — Parcela {parcelaRaiz.numero_parcela}
+              {temReprogramacao && <span className="text-sm font-normal text-muted-foreground ml-2">({cadeiaCompleta.length} etapas)</span>}
+            </DialogTitle>
             <DialogDescription>{fornecedor} · {descricao}</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-3 gap-4 p-4 bg-secondary rounded-md text-sm">
             <div>
-              <p className="text-muted-foreground">Valor da Parcela</p>
-              <p className="text-lg font-bold">{formatCurrency(parcela.valor_parcela)}</p>
+              <p className="text-muted-foreground">Valor Original</p>
+              <p className="text-lg font-bold">{formatCurrency(parcelaRaiz.valor_parcela)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Total Pago</p>
-              <p className="text-lg font-bold text-green-600">{formatCurrency(parcela.valor_pago || 0)}</p>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(totalPagoCadeia)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Saldo Restante</p>
               <p className={`text-lg font-bold ${saldoRestante > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                {formatCurrency(saldoRestante)}
+                {formatCurrency(Math.max(0, saldoRestante))}
               </p>
             </div>
           </div>
+
+          {temReprogramacao && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
+              <p className="font-semibold text-amber-800">Histórico de Reprogramações</p>
+              <div className="grid grid-cols-4 gap-2 text-amber-700 font-medium border-b border-amber-200 pb-1">
+                <span>Etapa</span><span>Vencimento</span><span className="text-right">Valor</span><span className="text-right">Pago</span>
+              </div>
+              {cadeiaCompleta.map((p, i) => {
+                const pagoPorEtapa = pagamentos
+                  .filter(pg => pg.parcela_id === p.id)
+                  .reduce((s, pg) => s + pg.valor_pago, 0);
+                return (
+                  <div key={p.id} className="grid grid-cols-4 gap-2 text-amber-700">
+                    <span>{i === 0 ? 'Original' : `Reprog. ${i}`}</span>
+                    <span>{formatarData(p.data_vencimento)}</span>
+                    <span className="text-right">{formatCurrency(p.valor_parcela)}</span>
+                    <span className="text-right text-green-700">{formatCurrency(pagoPorEtapa)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <Separator />
 
@@ -443,6 +482,14 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
                       </div>
                     ) : (
                       <div className="flex items-start justify-between p-3 gap-2">
+                        {temReprogramacao && (
+                          <div className="shrink-0 text-xs text-amber-600 font-medium w-16">
+                            {(() => {
+                              const idx = cadeiaCompleta.findIndex(p => p.id === pg.parcela_id);
+                              return idx === 0 ? 'Original' : idx > 0 ? `Reprog. ${idx}` : '';
+                            })()}
+                          </div>
+                        )}
                         <div className="grid grid-cols-6 gap-x-4 gap-y-1 flex-1 text-sm">
                           <div>
                             <p className="text-xs text-muted-foreground">Data</p>

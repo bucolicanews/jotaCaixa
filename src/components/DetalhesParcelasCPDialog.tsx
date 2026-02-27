@@ -9,13 +9,14 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
 import { Badge } from './ui/badge';
-import { DollarSign, Undo2, Loader2, Trash2, Edit, Unlink, BookOpen } from 'lucide-react';
+import { DollarSign, Undo2, Loader2, Trash2, Edit, Unlink, BookOpen, Receipt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Progress } from './ui/progress';
 import { desvincularMapeamento } from '@/hooks/conciliacao/useMapeamentoParcelas';
 import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
+import DetalhesPagementoParcelaDialog from '@/components/contas-pagar/DetalhesPagementoParcelaDialog';
 import { useOwner } from '@/hooks/use-owner';
 
 interface DetalhesParcelasCPDialogProps {
@@ -39,6 +40,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const [parcelasComLancamento, setParcelasComLancamento] = useState<Set<string>>(new Set());
   const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null }>({ open: false, parcela: null });
   const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
+  const [detalhesParcelaDialog, setDetalhesParcelaDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null; cadeia: ExtendedParcelaPagar[] }>({ open: false, parcela: null, cadeia: [] });
 
   // Detectar Admin direto OU funcionário do admin
   const isDirectAdmin = role === 'Admin';
@@ -465,9 +467,69 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     }
   };
 
-  const totalValor = useMemo(() => parcelas.reduce((sum, p) => sum + p.valor_parcela, 0), [parcelas]);
+  const totalValor = useMemo(() => parcelas.filter(p => p.numero_parcela < 99).reduce((sum, p) => sum + p.valor_parcela, 0), [parcelas]);
   const totalPago = useMemo(() => parcelas.reduce((sum, p) => sum + (p.valor_pago || 0), 0), [parcelas]);
   const progressoPercentual = totalValor > 0 ? Math.round((totalPago / totalValor) * 100) : 0;
+
+  // Agrupar parcelas em cadeias.
+  // Parcelas com numero_parcela >= 99 são reprogramações — não têm linha própria na tabela.
+  // Parcelas normais (< 99) com observacao contendo 'reprogramado'/'parcelado' são raízes
+  // de cadeia; as parcelas reprogramadas (>= 99) são associadas à raiz mais recente (por
+  // data_vencimento) que ainda não foi fechada.
+  const gruposParcelas = useMemo(() => {
+    const normais = parcelas.filter(p => p.numero_parcela < 99);
+    const reprogramadas = parcelas.filter(p => p.numero_parcela >= 99);
+
+    // Para cada parcela normal, verificar se originou reprogramação
+    const eRaizDeCadeia = (p: ExtendedParcelaPagar) =>
+      p.status === 'paga' &&
+      (p.observacao?.toLowerCase().includes('reprogramado') ||
+       p.observacao?.toLowerCase().includes('parcelado'));
+
+    // Associar cada reprogramada à raiz normal 'paga com reprogramação' mais recente
+    // que venceu antes dela (ordenando por data_vencimento).
+    const raizes = normais.filter(eRaizDeCadeia).sort(
+      (a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()
+    );
+
+    const reprogramadasOrdenadas = [...reprogramadas].sort(
+      (a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()
+    );
+
+    // Map raiz.id -> cadeia (inclui a própria raiz)
+    const cadeiaMap = new Map<string, ExtendedParcelaPagar[]>();
+    for (const r of normais) {
+      cadeiaMap.set(r.id, [r]);
+    }
+
+    // Distribuir reprogramadas: cada uma vai para a raiz com data_vencimento imediatamente anterior
+    for (const rep of reprogramadasOrdenadas) {
+      const raizAlvo = raizes
+        .filter(r => new Date(r.data_vencimento) <= new Date(rep.data_vencimento))
+        .pop(); // a mais recente antes da reprogramada
+
+      if (raizAlvo) {
+        cadeiaMap.get(raizAlvo.id)?.push(rep);
+      } else {
+        // fallback: adiciona à primeira raiz disponível
+        const primeiraRaiz = raizes[0];
+        if (primeiraRaiz) cadeiaMap.get(primeiraRaiz.id)?.push(rep);
+        else cadeiaMap.set(rep.id, [rep]); // parcela órfã
+      }
+    }
+
+    return normais.map(p => {
+      const cadeia = cadeiaMap.get(p.id) || [p];
+      const ultima = cadeia[cadeia.length - 1];
+      const totalPagoCadeia = cadeia.reduce((s, c) => s + (c.valor_pago || 0), 0);
+      const valorOriginal = p.valor_parcela;
+      const saldoCadeia = ultima.status === 'reprogramada'
+        ? ultima.valor_parcela - (ultima.valor_pago || 0)
+        : Math.max(0, valorOriginal - totalPagoCadeia);
+      const temReprogramacao = cadeia.length > 1;
+      return { raiz: p, cadeia, ultima, totalPagoCadeia, valorOriginal, saldoCadeia, temReprogramacao };
+    });
+  }, [parcelas]);
 
   return (
     <>
@@ -513,8 +575,13 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                       <TableRow>
                           <TableHead>Nº</TableHead>
                           <TableHead>Vencimento</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                          <TableHead className="text-right">Pago</TableHead>
+                          <TableHead className="text-right">
+                              <div className="flex flex-col gap-0.5 items-end text-xs font-normal">
+                                  <span className="text-muted-foreground">Valor</span>
+                                  <span className="text-green-600">Pago</span>
+                                  <span className="text-orange-500">Saldo</span>
+                              </div>
+                          </TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Data Pagamento</TableHead>
                           <TableHead className="w-[160px]">Conta D</TableHead>
@@ -524,27 +591,54 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                   </TableHeader>
                   <TableBody>
                       {loading ? (
-                          <TableRow><TableCell colSpan={9} className="text-center">Carregando...</TableCell></TableRow>
-                      ) : parcelas.length === 0 ? (
-                          <TableRow><TableCell colSpan={9} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={8} className="text-center">Carregando...</TableCell></TableRow>
+                      ) : gruposParcelas.length === 0 ? (
+                          <TableRow><TableCell colSpan={8} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
                       ) : (
-                          parcelas.map((p) => {
+                          gruposParcelas.map((g) => {
+                              const p = g.ultima;
                               const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                               const isPaga = p.status === 'paga';
                               const isCanceled = p.status === 'cancelada' || p.status === 'bloqueada';
                               const canEditOrDelete = p.status === 'aberta' || p.status === 'parcial' || p.status === 'reprogramada';
-                              
+
                               return (
                                   <TableRow key={p.id}>
-                                      <TableCell>{p.numero_parcela}</TableCell>
-                                      <TableCell>{formatarData(p.data_vencimento)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
-                                      <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                                      <TableCell>
+                                          <div className="flex flex-col gap-0.5">
+                                              <span>{g.raiz.numero_parcela}</span>
+                                              {g.temReprogramacao && (
+                                                  <span className="text-xs text-muted-foreground">{g.cadeia.length} etapas</span>
+                                              )}
+                                          </div>
+                                      </TableCell>
+                                      <TableCell>
+                                          <div className="flex flex-col gap-0.5">
+                                              <span>{formatarData(p.data_vencimento)}</span>
+                                              {g.temReprogramacao && (
+                                                  <span className="text-xs text-muted-foreground">Venc. atual</span>
+                                              )}
+                                          </div>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                          <div className="flex flex-col gap-0.5 items-end text-xs">
+                                              <span className="text-muted-foreground">{formatCurrency(g.valorOriginal)}</span>
+                                              <span className="text-green-600 font-medium">{formatCurrency(g.totalPagoCadeia)}</span>
+                                              <span className={`font-semibold ${g.saldoCadeia > 0.01 ? 'text-orange-500' : 'text-green-600'}`}>
+                                                  {formatCurrency(Math.max(0, g.saldoCadeia))}
+                                              </span>
+                                          </div>
+                                      </TableCell>
                                       <TableCell>
                                           <div className="flex flex-col gap-1">
                                               <Badge variant={statusVariant}>
                                                   {p.status}
                                               </Badge>
+                                              {g.temReprogramacao && (
+                                                  <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                                                      Reprogramada
+                                                  </Badge>
+                                              )}
                                               {p.mapeado_extrato_id && (
                                                   <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
                                                       Mapeado
@@ -564,7 +658,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                           ))}
                                       </TableCell>
                                       <TableCell className="text-right space-x-1">
-                                          
+
                                           {/* Botão de Desvincular Mapeamento */}
                                           {p.mapeado_extrato_id && (
                                               <AlertDialog>
@@ -589,14 +683,19 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                   </AlertDialogContent>
                                               </AlertDialog>
                                           )}
-                                          
+
                                           {/* Botão de Edição */}
                                           {!isCanceled && (
                                               <Button variant="ghost" size="icon" onClick={() => handleOpenPagamento(p)} title="Editar Pagamento">
                                                   <Edit className="w-4 h-4 text-blue-500" />
                                               </Button>
                                           )}
-                                          
+
+                                          {/* Botão Ver Detalhes da Parcela */}
+                                          <Button variant="ghost" size="icon" onClick={() => setDetalhesParcelaDialog({ open: true, parcela: g.raiz, cadeia: g.cadeia })} title="Ver detalhes de pagamento">
+                                              <Receipt className="w-4 h-4 text-purple-500" />
+                                          </Button>
+
                                           {/* Botão de Excluir (Apenas se não estiver paga/cancelada) */}
                                           {canEditOrDelete && (
                                               <AlertDialog>
@@ -621,11 +720,12 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                   </AlertDialogContent>
                                               </AlertDialog>
                                           )}
-                                          
-                                          {isPaga ? (
-                                              p.mapeado_extrato_id ? (                                                  <Button 
-                                                      variant="destructive" 
-                                                      size="icon" 
+
+                                          {isPaga && g.saldoCadeia <= 0.01 ? (
+                                              p.mapeado_extrato_id ? (
+                                                  <Button
+                                                      variant="destructive"
+                                                      size="icon"
                                                       disabled={true}
                                                       title="Desvincule o mapeamento antes de estornar"
                                                   >
@@ -655,7 +755,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                   </AlertDialog>
                                               )
                                           ) : (
-                                              <Button size="sm" onClick={() => handleOpenPagamento(p)} disabled={!canEditOrDelete}>
+                                              <Button size="sm" onClick={() => handleOpenPagamento(p)} disabled={!canEditOrDelete && !isPaga}>
                                                   <DollarSign className="w-4 h-4" /> Pagar
                                               </Button>
                                           )}
@@ -704,6 +804,20 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                       setParcelasComLancamento(prev => new Set([...prev, lancamentoDialog.parcela!.id]));
                   }
                   setLancamentoDialog({ open: false, parcela: null });
+              }}
+          />
+      )}
+
+      {detalhesParcelaDialog.open && detalhesParcelaDialog.parcela && ownerId && (
+          <DetalhesPagementoParcelaDialog
+              open={detalhesParcelaDialog.open}
+              onOpenChange={(open) => setDetalhesParcelaDialog({ open, parcela: open ? detalhesParcelaDialog.parcela : null, cadeia: open ? detalhesParcelaDialog.cadeia : [] })}
+              parcela={detalhesParcelaDialog.parcela}
+              cadeia={detalhesParcelaDialog.cadeia}
+              proprietarioId={ownerId}
+              onDataChange={() => {
+                  fetchParcelas();
+                  onDataChange();
               }}
           />
       )}
