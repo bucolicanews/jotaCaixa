@@ -86,6 +86,15 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
   const [estornandoPagamento, setEstornandoPagamento] = useState<string | null>(null);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
   const [lancamentoDialogOpen, setLancamentoDialogOpen] = useState(false);
+  const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
+    open: boolean;
+    pagamentoId: string | null;
+    extratoId: string | null;
+    extratoDescricao: string;
+    extratoValor: number;
+    extratoData: string;
+    extratoContaNome: string;
+  }>({ open: false, pagamentoId: null, extratoId: null, extratoDescricao: '', extratoValor: 0, extratoData: '', extratoContaNome: '' });
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValores, setEditValores] = useState<{
@@ -252,6 +261,41 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
     if (!ownerId) return;
     setEstornandoPagamento(pagamentoId);
     try {
+      const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);
+      // Buscar extrato vinculado via id_parcela_pg
+      const { data: extratoVinculado } = await supabase
+        .from('extratos')
+        .select('id, descricao, valor, data, id_saldo_contas, saldo_contas(nome)')
+        .eq('id_parcela_pg', parcela.id)
+        .eq('conciliado', false)
+        .limit(1)
+        .maybeSingle();
+
+      if (extratoVinculado) {
+        setEstornandoPagamento(null);
+        setConfirmEstornoDialog({
+          open: true,
+          pagamentoId,
+          extratoId: extratoVinculado.id,
+          extratoDescricao: extratoVinculado.descricao || '',
+          extratoValor: extratoVinculado.valor,
+          extratoData: extratoVinculado.data,
+          extratoContaNome: (extratoVinculado as any).saldo_contas?.nome || '',
+        });
+      } else {
+        await executarEstorno(pagamentoId, null);
+      }
+    } catch (error: any) {
+      console.error('Erro ao verificar extrato:', error);
+      showError('Falha ao verificar extrato: ' + error.message);
+      setEstornandoPagamento(null);
+    }
+  };
+
+  const executarEstorno = async (pagamentoId: string, extratoId: string | null) => {
+    if (!ownerId) return;
+    setEstornandoPagamento(pagamentoId);
+    try {
       const { data: parcelaData, error: parcelaError } = await supabase
         .from(tabelaParcelas)
         .select('conta_pagar_id, valor_parcela, valor_pago')
@@ -299,31 +343,12 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
       const { error: deletePagError } = await supabase.from(tabelaPagamentos).delete().eq('id', pagamentoId);
       if (deletePagError) throw deletePagError;
 
-      const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);
-      const valorEstornado = pagamentoEstornado?.valor_pago || 0;
-
-      // Deletar extrato correspondente se existir (pagamento via banco)
-      if (pagamentoEstornado?.conta_id && pagamentoEstornado?.data_pagamento) {
-        const dataFormatada = pagamentoEstornado.data_pagamento.substring(0, 10);
-        // Buscar valor excedente lançado para recalcular o total que foi gravado no extrato
-        const { data: lancExcedente } = await supabase
-          .from('lancamentos')
-          .select('valor')
-          .eq('proprietario_id', ownerId)
-          .like('origem', `excedente_cp:${parcela.id}`)
-          .eq('tipo', 'Entrada')
-          .limit(1);
-        const valorExcedente = lancExcedente?.[0]?.valor || 0;
-        const valorTotalExtrato = -(pagamentoEstornado.valor_pago + valorExcedente);
-        await supabase
-          .from('extratos')
-          .delete()
-          .eq('id_saldo_contas', pagamentoEstornado.conta_id)
-          .eq('data', dataFormatada)
-          .eq('valor', valorTotalExtrato)
-          .eq('conciliado', false);
+      if (extratoId) {
+        await supabase.from('extratos').delete().eq('id', extratoId);
       }
 
+      const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);
+      const valorEstornado = pagamentoEstornado?.valor_pago || 0;
       const novoValorPago = Math.max(0, (parcelaData.valor_pago || 0) - valorEstornado);
       const novoStatus = novoValorPago <= 0 ? 'aberta' : 'parcial';
 
@@ -693,6 +718,38 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
           }}
         />
       )}
+
+      <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Foi encontrado um lançamento no extrato bancário vinculado a este pagamento. Deseja removê-lo também?</p>
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Conta:</span><span className="font-medium">{confirmEstornoDialog.extratoContaNome}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Data:</span><span className="font-medium">{confirmEstornoDialog.extratoData}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Descrição:</span><span className="font-medium">{confirmEstornoDialog.extratoDescricao}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Valor:</span><span className="font-medium text-red-600">{formatCurrency(Math.abs(confirmEstornoDialog.extratoValor))}</span></div>
+                </div>
+                <p className="text-xs text-muted-foreground">Se o extrato já foi conciliado, não será possível removê-lo.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmEstornoDialog(prev => ({ ...prev, open: false }))}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={async () => {
+                setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
+                await executarEstorno(confirmEstornoDialog.pagamentoId!, confirmEstornoDialog.extratoId);
+              }}
+            >
+              Estornar e Remover Extrato
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

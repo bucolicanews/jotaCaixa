@@ -349,6 +349,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         identificacao: (values.identificacao && values.identificacao !== '__nenhum__') ? values.identificacao : null,
                         conciliado: false,
                         conta_contabil_id: contaContabilPagamento,
+                        id_parcela_pg: parcela.id,
                     };
                 })
                 .filter(e => e !== null);
