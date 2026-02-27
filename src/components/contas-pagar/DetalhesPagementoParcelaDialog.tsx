@@ -305,13 +305,22 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
       // Deletar extrato correspondente se existir (pagamento via banco)
       if (pagamentoEstornado?.conta_id && pagamentoEstornado?.data_pagamento) {
         const dataFormatada = pagamentoEstornado.data_pagamento.substring(0, 10);
-        const valorExtrato = -Math.abs(pagamentoEstornado.valor_pago);
+        // Buscar valor excedente lançado para recalcular o total que foi gravado no extrato
+        const { data: lancExcedente } = await supabase
+          .from('lancamentos')
+          .select('valor')
+          .eq('proprietario_id', ownerId)
+          .like('origem', `excedente_cp:${parcela.id}`)
+          .eq('tipo', 'Entrada')
+          .limit(1);
+        const valorExcedente = lancExcedente?.[0]?.valor || 0;
+        const valorTotalExtrato = -(pagamentoEstornado.valor_pago + valorExcedente);
         await supabase
           .from('extratos')
           .delete()
           .eq('id_saldo_contas', pagamentoEstornado.conta_id)
           .eq('data', dataFormatada)
-          .eq('valor', valorExtrato)
+          .eq('valor', valorTotalExtrato)
           .eq('conciliado', false);
       }
 
