@@ -299,7 +299,22 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
       const { error: deletePagError } = await supabase.from(tabelaPagamentos).delete().eq('id', pagamentoId);
       if (deletePagError) throw deletePagError;
 
-      const valorEstornado = pagamentos.find(pg => pg.id === pagamentoId)?.valor_pago || 0;
+      const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);
+      const valorEstornado = pagamentoEstornado?.valor_pago || 0;
+
+      // Deletar extrato correspondente se existir (pagamento via banco)
+      if (pagamentoEstornado?.conta_id && pagamentoEstornado?.data_pagamento) {
+        const dataFormatada = pagamentoEstornado.data_pagamento.substring(0, 10);
+        const valorExtrato = -Math.abs(pagamentoEstornado.valor_pago);
+        await supabase
+          .from('extratos')
+          .delete()
+          .eq('id_saldo_contas', pagamentoEstornado.conta_id)
+          .eq('data', dataFormatada)
+          .eq('valor', valorExtrato)
+          .eq('conciliado', false);
+      }
+
       const novoValorPago = Math.max(0, (parcelaData.valor_pago || 0) - valorEstornado);
       const novoStatus = novoValorPago <= 0 ? 'aberta' : 'parcial';
 

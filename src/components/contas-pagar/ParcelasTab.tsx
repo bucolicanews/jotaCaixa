@@ -232,7 +232,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
 
             const { data: pagamentos, error: fetchPayError } = await supabase
                 .from(tabelaPagamentos)
-                .select('id, conta_id, valor_pago, historico_id')
+                .select('id, conta_id, valor_pago, historico_id, data_pagamento')
                 .eq('parcela_id', parcelaId);
 
             if (fetchPayError) throw fetchPayError;
@@ -353,6 +353,21 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                 .delete()
                 .in('id', pagamentoIds);
             if (deletePagamentosError) throw deletePagamentosError;
+
+            // Deletar extratos correspondentes se existirem (pagamentos via banco)
+            for (const pag of pagamentos) {
+                if (pag.conta_id && pag.data_pagamento) {
+                    const dataFormatada = pag.data_pagamento.substring(0, 10);
+                    const valorExtrato = -Math.abs(pag.valor_pago);
+                    await supabase
+                        .from('extratos')
+                        .delete()
+                        .eq('id_saldo_contas', pag.conta_id)
+                        .eq('data', dataFormatada)
+                        .eq('valor', valorExtrato)
+                        .eq('conciliado', false);
+                }
+            }
 
             const { error: resetError } = await supabase
                 .from(tabelaParcelas)
