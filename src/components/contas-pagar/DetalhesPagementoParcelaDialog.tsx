@@ -262,11 +262,12 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
     setEstornandoPagamento(pagamentoId);
     try {
       const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);
-      // Buscar extrato vinculado via id_parcela_pg
+      // Buscar extrato vinculado via id_parcela_pg (qualquer parcela da cadeia)
+      const idsDaCadeia = cadeiaCompleta.map(p => p.id);
       const { data: extratoVinculado } = await supabase
         .from('extratos')
         .select('id, descricao, valor, data, id_saldo_contas, saldo_contas(nome)')
-        .eq('id_parcela_pg', parcela.id)
+        .in('id_parcela_pg', idsDaCadeia)
         .eq('conciliado', false)
         .limit(1)
         .maybeSingle();
