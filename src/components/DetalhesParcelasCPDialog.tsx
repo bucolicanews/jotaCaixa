@@ -41,6 +41,15 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null }>({ open: false, parcela: null });
   const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
   const [detalhesParcelaDialog, setDetalhesParcelaDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null; cadeia: ExtendedParcelaPagar[] }>({ open: false, parcela: null, cadeia: [] });
+  const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
+    open: boolean;
+    parcelaId: string | null;
+    extratoId: string | null;
+    extratoDescricao: string;
+    extratoValor: number;
+    extratoData: string;
+    extratoContaNome: string;
+  }>({ open: false, parcelaId: null, extratoId: null, extratoDescricao: '', extratoValor: 0, extratoData: '', extratoContaNome: '' });
 
   // Detectar Admin direto OU funcionário do admin
   const isDirectAdmin = role === 'Admin';
@@ -248,6 +257,34 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const handleUndoPayment = async (parcelaId: string) => {
     if (!ownerId) return;
     setIsUndoing(true);
+    try {
+      const { data: extratoVinculado } = await supabase
+        .from('extratos')
+        .select('id, descricao, valor, data, id_saldo_contas, saldo_contas(nome)')
+        .eq('id_parcela_pg', parcelaId)
+        .eq('conciliado', false)
+        .limit(1)
+        .maybeSingle();
+      if (extratoVinculado) {
+        setIsUndoing(false);
+        setConfirmEstornoDialog({
+          open: true,
+          parcelaId,
+          extratoId: extratoVinculado.id,
+          extratoDescricao: extratoVinculado.descricao || '',
+          extratoValor: extratoVinculado.valor,
+          extratoData: extratoVinculado.data,
+          extratoContaNome: (extratoVinculado as any).saldo_contas?.nome || '',
+        });
+        return;
+      }
+    } catch (e) { /* sem extrato, segue normal */ }
+    await executarUndoPayment(parcelaId, null);
+  };
+
+  const executarUndoPayment = async (parcelaId: string, extratoId: string | null) => {
+    if (!ownerId) return;
+    setIsUndoing(true);
     
     try {
         // 1. Buscar a parcela para obter o valor pago e observação (para desconto)
@@ -429,6 +466,11 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             
         if (updateContaError) console.error('Erro ao atualizar conta sintética para pendente:', updateContaError);
         
+        // Deletar extrato vinculado se informado
+        if (extratoId) {
+          await supabase.from('extratos').delete().eq('id', extratoId);
+        }
+
         showSuccess('Pagamento estornado com sucesso! Saldos reajustados.');
         handlePagamentoComplete();
         
@@ -732,27 +774,9 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                       <Undo2 className="w-4 h-4 opacity-50" />
                                                   </Button>
                                               ) : (
-                                                  <AlertDialog>
-                                                      <AlertDialogTrigger asChild>
-                                                          <Button variant="destructive" size="icon" disabled={isUndoing}>
-                                                              {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                                                          </Button>
-                                                      </AlertDialogTrigger>
-                                                      <AlertDialogContent>
-                                                          <AlertDialogHeader>
-                                                              <AlertDialogTitle>Confirmar Estorno de Pagamento</AlertDialogTitle>
-                                                              <AlertDialogDescription>
-                                                                  Esta ação irá reverter o pagamento desta parcela, deletando os registros de pagamento e lançamentos de estorno associados. O saldo da conta de origem e a obrigação no Passivo serão reajustados. Tem certeza?
-                                                              </AlertDialogDescription>
-                                                          </AlertDialogHeader>
-                                                          <AlertDialogFooter>
-                                                              <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
-                                                              <AlertDialogAction onClick={() => handleUndoPayment(p.id)} disabled={isUndoing}>
-                                                                  {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Pagamento'}
-                                                              </AlertDialogAction>
-                                                          </AlertDialogFooter>
-                                                      </AlertDialogContent>
-                                                  </AlertDialog>
+                                                  <Button variant="destructive" size="icon" disabled={isUndoing} onClick={() => handleUndoPayment(p.id)}>
+                                                      {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                  </Button>
                                               )
                                           ) : (
                                               <Button size="sm" onClick={() => handleOpenPagamento(p)} disabled={!canEditOrDelete && !isPaga}>
@@ -821,6 +845,37 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
               }}
           />
       )}
+
+      <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Estorno</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Foi encontrado um lançamento no extrato bancário vinculado a este pagamento. Deseja removê-lo também?</p>
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Conta:</span><span className="font-medium">{confirmEstornoDialog.extratoContaNome}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Data:</span><span className="font-medium">{confirmEstornoDialog.extratoData}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Descrição:</span><span className="font-medium">{confirmEstornoDialog.extratoDescricao}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Valor:</span><span className="font-medium text-red-600">{formatCurrency(Math.abs(confirmEstornoDialog.extratoValor))}</span></div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmEstornoDialog(prev => ({ ...prev, open: false }))}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={async () => {
+                setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
+                await executarUndoPayment(confirmEstornoDialog.parcelaId!, confirmEstornoDialog.extratoId);
+              }}
+            >
+              Estornar e Remover Extrato
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
