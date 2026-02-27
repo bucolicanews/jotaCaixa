@@ -75,6 +75,13 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
 
   const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
 
+  const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
+    open: boolean;
+    parcela: Parcela | null;
+    extratoId: string | null;
+    extratoInfo: { descricao: string; valor: number; data: string } | null;
+  }>({ open: false, parcela: null, extratoId: null, extratoInfo: null });
+
   // Determina a tabela correta com base na role (Admin direto OU funcionário do admin)
   const isDirectAdmin = role === 'Admin';
   const adminIdFromProfile = (perfil as any)?.admin_id ?? null;
@@ -303,50 +310,47 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   
   const handleUndoPayment = async (parcela: Parcela) => {
     if (!ownerId || !conta) return;
+
+    const contaOwnerId = conta.empresa_id;
+
+    const { data: extratoVinculado, error: extratoError } = await supabase
+      .from('extratos')
+      .select('id, descricao, valor, data')
+      .eq('empresa_id', contaOwnerId)
+      .eq('id_parcela_rb', parcela.id)
+      .eq('conciliado', false)
+      .maybeSingle();
+
+    if (extratoError) {
+      console.warn('[ESTORNO CR] Erro ao buscar extrato:', extratoError);
+    }
+
+    if (extratoVinculado) {
+      setConfirmEstornoDialog({
+        open: true,
+        parcela,
+        extratoId: extratoVinculado.id,
+        extratoInfo: {
+          descricao: extratoVinculado.descricao,
+          valor: extratoVinculado.valor,
+          data: extratoVinculado.data,
+        },
+      });
+    } else {
+      executarUndoPayment(parcela, null);
+    }
+  };
+
+  const executarUndoPayment = async (parcela: Parcela, extratoId: string | null) => {
+    if (!ownerId || !conta) return;
+    setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
     setIsUndoing(true);
-    
+
     const contaOwnerId = conta.empresa_id;
     const contaReceberId = conta.id;
     const contaReceberIdShort = contaReceberId.substring(0, 8);
-    
+
     try {
-        // VALIDAÇÃO: Verificar se há lançamento no extrato bancário
-        // Busca recebimentos para obter valor, data e conta de destino
-        const { data: recebimentosCheck, error: recebimentosCheckError } = await supabase
-            .from(tabelaRecebimentos)
-            .select('id, conta_id, valor_recebido, data_recebimento')
-            .eq('parcela_id', parcela.id);
-            
-        if (recebimentosCheckError) throw recebimentosCheckError;
-        
-        if (recebimentosCheck && recebimentosCheck.length > 0) {
-            for (const receb of recebimentosCheck) {
-                if (receb.conta_id) {
-                    const dataRecebimento = receb.data_recebimento 
-                        ? receb.data_recebimento.substring(0, 10) 
-                        : null;
-                    
-                    const { data: extratoExistente, error: extratoError } = await supabase
-                        .from('extratos')
-                        .select('id')
-                        .eq('empresa_id', contaOwnerId)
-                        .eq('id_saldo_contas', receb.conta_id)
-                        .eq('valor', Math.abs(receb.valor_recebido))
-                        .eq('tipo', 'Entrada');
-                    
-                    if (extratoError) {
-                        console.warn('Aviso: Erro ao verificar extrato:', extratoError);
-                    }
-                    
-                    if (extratoExistente && extratoExistente.length > 0) {
-                        showError('Não é possível estornar. Esta conta possui lançamento no extrato bancário. Delete o lançamento do extrato primeiro e depois estorne a conta recebida.');
-                        setIsUndoing(false);
-                        return;
-                    }
-                }
-            }
-        }
-        
         // 1. Buscar todos os registros de recebimento associados
         const { data: recebimentos, error: fetchError } = await supabase
             .from(tabelaRecebimentos)
@@ -499,7 +503,18 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (deleteRecebimentosError) throw deleteRecebimentosError;
         
-        // 8. Resetar a Parcela
+        // 8. Deletar extrato vinculado (se houver)
+        if (extratoId !== null) {
+            const { error: deleteExtratoError } = await supabase
+                .from('extratos')
+                .delete()
+                .eq('id', extratoId);
+            if (deleteExtratoError) {
+                console.warn('[ESTORNO CR] Erro ao deletar extrato:', deleteExtratoError);
+            }
+        }
+
+        // 9. Resetar a Parcela
         const { error: resetError } = await supabase
             .from(tabelaParcelas)
             .update({
@@ -512,7 +527,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (resetError) throw resetError;
         
-        // 9. Resetar o status da conta sintética para 'aberta'
+        // 10. Resetar o status da conta sintética para 'aberta'
         const { error: updateContaError } = await supabase
             .from(tabelaContasReceber)
             .update({ status: 'aberta' })
@@ -736,27 +751,15 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                                     <Undo2 className="w-4 h-4 opacity-50" />
                                                 </Button>
                                             ) : (
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="icon" disabled={isUndoing} title="Estornar Recebimento">
-                                                            {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta ação irá reverter o recebimento desta parcela, deletando os registros de recebimento e lançamentos de estorno associados. O saldo da conta de destino e o direito a receber no Ativo serão reajustados. Tem certeza?
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleUndoPayment(p)} disabled={isUndoing}>
-                                                                {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Recebimento'}
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                                                <Button
+                                                    variant="destructive"
+                                                    size="icon"
+                                                    disabled={isUndoing}
+                                                    title="Estornar Recebimento"
+                                                    onClick={() => handleUndoPayment(p)}
+                                                >
+                                                    {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                </Button>
                                             )
                                         ) : (
                                             !isCanceled && (
@@ -765,16 +768,38 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                                 </Button>
                                             )
                                         )}
-                                        {usuario?.id && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => setLancamentoDialog({ open: true, parcela: p })}
-                                                title={parcelasComLancamento.has(p.id) ? 'Lançamento contábil registrado' : 'Registrar lançamento contábil'}
-                                            >
-                                                <BookOpen className={`w-4 h-4 ${parcelasComLancamento.has(p.id) ? 'text-green-600' : 'text-gray-400'}`} />
-                                            </Button>
-                                        )}
+                                        {usuario?.id && (() => {
+                                            const lans = lancamentosPorParcela[p.id] || [];
+                                            const temLancamentoReal = lans.some(l => l.origem !== 'recebimento_recebimentos');
+                                            const semLancamento = isPaga && !temLancamentoReal;
+                                            if (semLancamento) {
+                                                return (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => { setParcelaIdParaEditarPaga(p.id); setEditarPagaDialogOpen(true); }}
+                                                        title="Parcela sem lançamento contábil — clique para gerar"
+                                                        className="relative"
+                                                    >
+                                                        <BookOpen className="w-4 h-4 text-red-500" />
+                                                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                                                        </span>
+                                                    </Button>
+                                                );
+                                            }
+                                            return (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => setLancamentoDialog({ open: true, parcela: p })}
+                                                    title={temLancamentoReal ? 'Lançamento contábil registrado' : 'Registrar lançamento contábil'}
+                                                >
+                                                    <BookOpen className={`w-4 h-4 ${temLancamentoReal ? 'text-green-600' : 'text-gray-400'}`} />
+                                                </Button>
+                                            );
+                                        })()}
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -838,6 +863,42 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
               }}
           />
       )}
+
+      <AlertDialog
+        open={confirmEstornoDialog.open}
+        onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Foi encontrado um lançamento no extrato bancário vinculado a esta parcela:</p>
+                <ul className="text-sm bg-muted p-3 rounded space-y-1">
+                  <li><strong>Descrição:</strong> {confirmEstornoDialog.extratoInfo?.descricao}</li>
+                  <li><strong>Valor:</strong> {confirmEstornoDialog.extratoInfo?.valor !== undefined ? formatCurrency(confirmEstornoDialog.extratoInfo.valor) : ''}</li>
+                  <li><strong>Data:</strong> {confirmEstornoDialog.extratoInfo?.data ? formatarData(confirmEstornoDialog.extratoInfo.data) : ''}</li>
+                </ul>
+                <p>Deseja estornar o recebimento e remover este lançamento do extrato?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isUndoing}
+              onClick={() => {
+                if (confirmEstornoDialog.parcela) {
+                  executarUndoPayment(confirmEstornoDialog.parcela, confirmEstornoDialog.extratoId);
+                }
+              }}
+            >
+              {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Estornar e Remover Extrato
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

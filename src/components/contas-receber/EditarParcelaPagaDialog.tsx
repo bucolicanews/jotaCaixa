@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { Label } from '@/components/ui/label';
 import { v4 as uuidv4 } from 'uuid';
+import FormExtratoManualCR from './FormExtratoManualCR';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -65,6 +66,7 @@ interface SavePaymentArgs {
     isAdmin: boolean;
     contasDestino: SaldoCalculado[];
     comprovanteUrl?: string | null;
+    skipRecebimento?: boolean;
 }
 
 export async function saveRecebimentoAndLancamentos({
@@ -74,6 +76,7 @@ export async function saveRecebimentoAndLancamentos({
     isAdmin,
     contasDestino,
     comprovanteUrl = null,
+    skipRecebimento = false,
 }: SavePaymentArgs) {
     
     const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -154,14 +157,15 @@ export async function saveRecebimentoAndLancamentos({
         pagbank_valor_liquido: valorLiquido,
     };
 
-    const { error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
-        ...recebimentoBasePayload,
-        data_recebimento: dataPagamentoISO,
-        forma_pagamento: values.forma_pagamento,
-        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
-    });
-    
-    if (recebimentoError) throw recebimentoError;
+    if (!skipRecebimento) {
+        const { error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
+            ...recebimentoBasePayload,
+            data_recebimento: dataPagamentoISO,
+            forma_pagamento: values.forma_pagamento,
+            tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
+        });
+        if (recebimentoError) throw recebimentoError;
+    }
     
     const idAtivo = uuidv4();
     const idPatrimonial = uuidv4();
@@ -395,6 +399,20 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [extratoManualDialog, setExtratoManualDialog] = useState(false);
+  const [pendingExtratoData, setPendingExtratoData] = useState<{
+    parcelaId: string;
+    conta_receber_id: string;
+    valor_parcela: number;
+    conta_id: string;
+    valor_recebido: number;
+    taxa_bancaria: number;
+    forma_pagamento: string;
+    data_pagamento: Date;
+    historico_id: string | null;
+    conta_patrimonial_id: string | null;
+    codigo_transacao: string | null;
+  } | null>(null);
   
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
   const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
@@ -590,10 +608,18 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
                 data_pagamento: dataPagamentoISO,
             })
             .eq('id', parcelaId)
-            .select('conta_receber_id')
+            .select('id, conta_receber_id, valor_parcela, valor_pago')
             .single();
             
         if (parcelaError) throw parcelaError;
+
+        const { data: recebimentoCliente } = await supabase
+            .from(tabelaRecebimentos)
+            .select('cliente_id')
+            .eq('parcela_id', parcelaId)
+            .limit(1)
+            .single();
+        const clienteId = recebimentoCliente?.cliente_id ?? null;
         
         if (parcela.conta_receber_id) {
             const { error: contaError } = await supabase
@@ -605,10 +631,59 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
                 
             if (contaError) throw contaError;
         }
+
+        // Deletar lançamentos antigos e regenerar
+        const { error: deleteLancamentosError } = await supabase
+            .from('lancamentos')
+            .delete()
+            .eq('proprietario_id', proprietarioDaSessao)
+            .eq('documento', parcelaId)
+            .not('origem', 'like', '%_estornada');
+
+        if (deleteLancamentosError) throw deleteLancamentosError;
+
+        await saveRecebimentoAndLancamentos({
+            values,
+            parcela: {
+                id: parcelaId,
+                conta_receber_id: parcela.conta_receber_id,
+                empresa_id: proprietarioDaSessao,
+                valor_parcela: parcela.valor_parcela,
+                valor_pago: 0,
+                cliente_id: clienteId,
+            },
+            proprietarioDaSessao,
+            isAdmin,
+            contasDestino,
+            comprovanteUrl: finalAnexoUrl,
+            skipRecebimento: true,
+        });
         
-        showSuccess('Dados do recebimento atualizados com sucesso!');
-        onSaveComplete();
-        onOpenChange(false);
+        showSuccess('Dados do recebimento atualizados e lançamentos regenerados com sucesso!');
+
+        const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
+        const isBankPayment = contaDestinoDetalhe?.plano_contas?.is_banco === true;
+
+        if (isBankPayment && values.conta_id) {
+            setPendingExtratoData({
+                parcelaId,
+                conta_receber_id: parcela.conta_receber_id,
+                valor_parcela: parcela.valor_parcela,
+                conta_id: values.conta_id,
+                valor_recebido: values.valor_recebido,
+                taxa_bancaria: values.taxa_bancaria || 0,
+                forma_pagamento: values.forma_pagamento,
+                data_pagamento: values.data_pagamento,
+                historico_id: values.historico_id ?? null,
+                conta_patrimonial_id: values.conta_patrimonial_id ?? null,
+                codigo_transacao: values.codigo_transacao ?? null,
+            });
+            onOpenChange(false);
+            setExtratoManualDialog(true);
+        } else {
+            onSaveComplete();
+            onOpenChange(false);
+        }
     } catch (error: any) {
       showError(`Falha ao atualizar: ${error.message}`);
     } finally {
@@ -619,6 +694,7 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
   const currentAnexoUrl = watch('anexo_url');
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
@@ -872,6 +948,53 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
         </Form>
       </DialogContent>
     </Dialog>
+
+    {extratoManualDialog && pendingExtratoData && (
+      <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Registro de Extrato Manual</DialogTitle>
+            <DialogDescription>
+              Confirme os detalhes do extrato bancário para esta atualização de recebimento.
+            </DialogDescription>
+          </DialogHeader>
+          <FormExtratoManualCR
+            parcela={{
+              id: pendingExtratoData.parcelaId,
+              conta_receber_id: pendingExtratoData.conta_receber_id,
+              empresa_id: proprietarioDaSessao!,
+              valor_parcela: pendingExtratoData.valor_parcela,
+              valor_pago: 0,
+              cliente_id: null,
+            }}
+            recebimentoDetalhes={{
+              conta_id: pendingExtratoData.conta_id,
+              valor_recebido: pendingExtratoData.valor_recebido,
+            }}
+            formaPagamento={pendingExtratoData.forma_pagamento}
+            dataPagamento={pendingExtratoData.data_pagamento}
+            historicoId={pendingExtratoData.historico_id}
+            contaPatrimonialId={pendingExtratoData.conta_patrimonial_id}
+            codigoTransacao={pendingExtratoData.codigo_transacao}
+            contasDestino={contasDestino}
+            isPagamentoParcial={false}
+            saldoRestante={0}
+            skipRecebimento={true}
+            onSaveComplete={() => {
+              setExtratoManualDialog(false);
+              setPendingExtratoData(null);
+              onSaveComplete();
+            }}
+            onClose={() => {
+              setExtratoManualDialog(false);
+              setPendingExtratoData(null);
+              onSaveComplete();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    )}
+  </>
   );
 };
 

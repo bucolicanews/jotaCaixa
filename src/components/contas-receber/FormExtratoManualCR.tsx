@@ -67,10 +67,11 @@ interface FormExtratoManualCRProps {
     dataPagamento: Date;
     historicoId: string | null;
     contaPatrimonialId: string | null;
-    codigoTransacao: string | null; // NOVO PROP
+    codigoTransacao: string | null;
     contasDestino: SaldoCalculado[];
     isPagamentoParcial: boolean;
     saldoRestante: number;
+    skipRecebimento?: boolean;
     onSaveComplete: () => void;
     onClose: () => void;
 }
@@ -182,6 +183,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     contasDestino,
     isPagamentoParcial,
     saldoRestante,
+    skipRecebimento = false,
     onSaveComplete,
     onClose,
 }) => {
@@ -344,6 +346,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     identificacao: (values.identificacao && values.identificacao !== '__nenhum__') ? values.identificacao : null,
                     conciliado: false,
                     conta_contabil_id: contaContabilRecebimento,
+                    id_parcela_rb: parcela.id,
                 });
             }
             
@@ -374,6 +377,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 isAdmin: isSupervisao,
                 contasDestino,
                 comprovanteUrl,
+                skipRecebimento,
             });
 
             showSuccess('Recebimento e Extrato registrados com sucesso!');
