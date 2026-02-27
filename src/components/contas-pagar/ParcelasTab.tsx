@@ -10,6 +10,7 @@ import { PagBankTransferStatus } from '@/components/contas-pagar/PagBankTransfer
 import { supabase } from '@/integrations/supabase/client';
 import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
 import DetalhesPagementoParcelaDialog from '@/components/contas-pagar/DetalhesPagementoParcelaDialog';
+import EditarPagamentoCPDialog from '@/components/contas-pagar/EditarPagamentoCPDialog';
 import { useOwner } from '@/hooks/use-owner';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -86,6 +87,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
     }>({ open: false, parcela: null, extratoId: null, extratoDescricao: '', extratoValor: 0, extratoData: '', extratoContaNome: '' });
     const [pagamentosInfo, setPagamentosInfo] = useState<Record<string, PagamentoInfo>>({});
     const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean; parcela: ExtendedParcelaPagar | null }>({ open: false, parcela: null });
+    const [editarPagamentoDialog, setEditarPagamentoDialog] = useState<{ open: boolean; parcelaId: string | null }>({ open: false, parcelaId: null });
 
     const carregarLancamentos = useCallback(async () => {
         if (!proprietarioId || parcelas.length === 0) return;
@@ -541,34 +543,56 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    {proprietarioId && (
-                                                        <div className="flex flex-col items-start gap-1">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() => setLancamentoDialog({ open: true, parcela: p })}
-                                                                title={temLancamento ? 'Ver/editar lançamento contábil' : 'Registrar lançamento contábil'}
-                                                            >
-                                                                <BookOpen className={`w-4 h-4 ${temLancamento ? 'text-green-600' : 'text-gray-400'}`} />
-                                                            </Button>
-                                                            {lancamentos.length > 0 && (
-                                                                <div className="flex flex-col gap-0.5 min-w-[160px]">
-                                                                    {lancamentos.map((l, i) => (
-                                                                        <span key={i} className="text-xs text-muted-foreground leading-tight">
-                                                                            <span className={`font-semibold ${l.tipo === 'Entrada' ? 'text-blue-600' : 'text-orange-600'}`}>
-                                                                                {l.tipo === 'Entrada' ? 'D' : 'C'}
-                                                                            </span>
-                                                                            {' '}{l.conta_codigo} {l.conta_descricao}
-                                                                            {' '}
-                                                                            <span className="text-[10px] text-muted-foreground opacity-60">
-                                                                                {l.origem?.startsWith('pagamento_cp') ? '(pag)' : l.origem === 'lancamento_cp' ? '(prov)' : ''}
-                                                                            </span>
+                                                    {proprietarioId && (() => {
+                                                        const semLancamento = isPaga && lancamentos.length === 0;
+                                                        if (semLancamento) {
+                                                            return (
+                                                                <div className="flex flex-col items-start gap-1">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={() => setEditarPagamentoDialog({ open: true, parcelaId: p.id })}
+                                                                        title="Parcela sem lançamento contábil — clique para gerar"
+                                                                        className="relative"
+                                                                    >
+                                                                        <BookOpen className="w-4 h-4 text-red-500" />
+                                                                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
                                                                         </span>
-                                                                    ))}
+                                                                    </Button>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div className="flex flex-col items-start gap-1">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => setLancamentoDialog({ open: true, parcela: p })}
+                                                                    title={temLancamento ? 'Ver/editar lançamento contábil' : 'Registrar lançamento contábil'}
+                                                                >
+                                                                    <BookOpen className={`w-4 h-4 ${temLancamento ? 'text-green-600' : 'text-gray-400'}`} />
+                                                                </Button>
+                                                                {lancamentos.length > 0 && (
+                                                                    <div className="flex flex-col gap-0.5 min-w-[160px]">
+                                                                        {lancamentos.map((l, i) => (
+                                                                            <span key={i} className="text-xs text-muted-foreground leading-tight">
+                                                                                <span className={`font-semibold ${l.tipo === 'Entrada' ? 'text-blue-600' : 'text-orange-600'}`}>
+                                                                                    {l.tipo === 'Entrada' ? 'D' : 'C'}
+                                                                                </span>
+                                                                                {' '}{l.conta_codigo} {l.conta_descricao}
+                                                                                {' '}
+                                                                                <span className="text-[10px] text-muted-foreground opacity-60">
+                                                                                    {l.origem?.startsWith('pagamento_cp') ? '(pag)' : l.origem === 'lancamento_cp' ? '(prov)' : ''}
+                                                                                </span>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
@@ -663,6 +687,17 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                     }}
                 />
             )}
+
+            <EditarPagamentoCPDialog
+                parcelaId={editarPagamentoDialog.parcelaId}
+                open={editarPagamentoDialog.open}
+                onOpenChange={(open) => setEditarPagamentoDialog({ open, parcelaId: open ? editarPagamentoDialog.parcelaId : null })}
+                onSaveComplete={() => {
+                    setEditarPagamentoDialog({ open: false, parcelaId: null });
+                    carregarLancamentos();
+                    onDataChange?.();
+                }}
+            />
       <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
         <AlertDialogContent>
           <AlertDialogHeader>

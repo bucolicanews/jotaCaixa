@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp, PlusCircle } from 'lucide-react';
+import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp, PlusCircle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { useOwner } from '@/hooks/use-owner';
@@ -34,6 +34,9 @@ interface ExtratoRecord extends TransacaoExtrato {
     id_saldo_contas: string;
     empresa_id: string;
     saldo_contas: { nome: string } | null;
+    plano_contas_result: { Conta: string; Descricao: string } | null;
+    id_parcela_rb?: string | null;
+    id_parcela_pg?: string | null;
 }
 
 const Extratos: React.FC = () => {
@@ -110,7 +113,8 @@ const Extratos: React.FC = () => {
       .from('extratos')
       .select(`
         *,
-        saldo_contas:id_saldo_contas ( nome )
+        saldo_contas:id_saldo_contas ( nome ),
+        plano_contas_result:conta_contabil_id ( Conta, Descricao )
       `)
       .eq('empresa_id', ownerId)
       .order('data', { ascending: false });
@@ -349,25 +353,26 @@ const Extratos: React.FC = () => {
                 <TableRow>
                   <TableHead className="w-[100px]">Data</TableHead>
                   <TableHead className="w-[150px]">Conta/Caixa</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="w-[100px]">Identificação</TableHead>
+                  <TableHead className="w-[200px]">Identificação / Razão</TableHead>
+                  <TableHead className="w-[160px]">Descrição</TableHead>
                   <TableHead className="w-[80px] text-center">Tipo</TableHead>
                   <TableHead className="w-[120px] text-right">Valor</TableHead>
-                  <TableHead className="w-[150px]">Conta Contábil</TableHead>
-                  <TableHead className="w-[110px]">Parcela CP</TableHead>
+                  <TableHead className="w-[170px]">Conta Contábil</TableHead>
+                  <TableHead className="w-[110px]">Parcela CR/CP</TableHead>
+                  <TableHead className="w-[90px] text-center">Conciliado</TableHead>
                   <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {extratos.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-4 text-muted-foreground">Nenhum extrato salvo.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center py-4 text-muted-foreground">Nenhum extrato salvo.</TableCell></TableRow>
                 ) : (
                   extratos.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="text-sm">{formatarData(e.data)}</TableCell>
                       <TableCell className="font-medium text-sm">{e.saldo_contas?.nome || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{e.descricao}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{e.identificacao || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={e.identificacao || ''}>{e.identificacao || '-'}</TableCell>
+                      <TableCell className="text-sm max-w-[160px] truncate" title={e.descricao}>{e.descricao}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={e.tipo === 'Entrada' ? 'success' : 'destructive'}>
                           {e.tipo}
@@ -376,8 +381,23 @@ const Extratos: React.FC = () => {
                       <TableCell className={cn("text-right font-semibold", e.valor >= 0 ? 'text-green-600' : 'text-red-600')}>
                         {formatCurrency(Math.abs(e.valor))}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{e.conta_contabil_id || 'N/A'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">{(e as any).id_parcela_pg ? (e as any).id_parcela_pg.substring(0, 8) : '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {e.plano_contas_result
+                          ? `${e.plano_contas_result.Conta} - ${e.plano_contas_result.Descricao}`
+                          : (e.conta_contabil_id ? e.conta_contabil_id.substring(0, 8) + '...' : 'N/A')}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">
+                        {(e as any).id_parcela_rb
+                          ? `CR: ${(e as any).id_parcela_rb.substring(0, 8)}`
+                          : (e as any).id_parcela_pg
+                            ? `CP: ${(e as any).id_parcela_pg.substring(0, 8)}`
+                            : '-'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(e as any).conciliado
+                          ? <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" title="Conciliado" />
+                          : <AlertCircle className="w-5 h-5 text-orange-400 mx-auto" title="Não conciliado" />}
+                      </TableCell>
                       <TableCell className="text-right space-x-2">
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(e)} title="Editar Extrato">
                               <Edit className="w-4 h-4" />

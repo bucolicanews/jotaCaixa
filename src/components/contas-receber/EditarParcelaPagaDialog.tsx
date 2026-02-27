@@ -167,15 +167,21 @@ export async function saveRecebimentoAndLancamentos({
         if (recebimentoError) throw recebimentoError;
     }
     
+    const valorAcrescimo = valorRecebido - parcela.valor_parcela;
+    const contaAcrescimoFinal = values.conta_acrescimo_id || contaReceitaResultado || null;
+    const temAcrescimo = valorAcrescimo > 0.005 && !!contaAcrescimoFinal;
+    const valorBaixaPatrimonial = parcela.valor_parcela;
+
     const idAtivo = uuidv4();
     const idPatrimonial = uuidv4();
+    const idAcrescimoReceita = uuidv4();
     
     lancamentosPayload.push({
         id: idAtivo,
         proprietario_id: proprietarioDaSessao,
         data_movimentacao: dataPagamentoISO,
-        descricao: `Recebimento (Líquido) Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
-        valor: valorLiquido,
+        descricao: `Recebimento Parcela ${parcela.id.substring(0, 8)} - ${values.forma_pagamento}`,
+        valor: valorRecebido,
         tipo: 'Entrada' as const,
         conta_bancaria_id: values.conta_id,
         conta_contabil_id: contaContabilCaixaBanco,
@@ -190,11 +196,28 @@ export async function saveRecebimentoAndLancamentos({
             id: idPatrimonial,
             proprietario_id: proprietarioDaSessao,
             data_movimentacao: dataPagamentoISO,
-            descricao: `Estorno Patrimonial (Líquido) CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-            valor: valorLiquido,
+            descricao: `Baixa Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: valorBaixaPatrimonial,
             tipo: 'Saida' as const,
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_patrimonial_id,
+            historico_id: values.historico_id,
+            origem: `recebimento_manual:${parcela.id}`,
+            documento: parcela.id,
+            conta_resultado_id: idAtivo,
+        });
+    }
+
+    if (temAcrescimo) {
+        lancamentosPayload.push({
+            id: idAcrescimoReceita,
+            proprietario_id: proprietarioDaSessao,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Receita de Juros/Acréscimo CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+            valor: valorAcrescimo,
+            tipo: 'Saida' as const,
+            conta_bancaria_id: null,
+            conta_contabil_id: contaAcrescimoFinal,
             historico_id: values.historico_id,
             origem: `recebimento_manual:${parcela.id}`,
             documento: parcela.id,
@@ -281,43 +304,6 @@ export async function saveRecebimentoAndLancamentos({
         }
     }
     
-    const valorAcrescimo = valorRecebido - parcela.valor_parcela;
-    if (valorAcrescimo > 0 && values.conta_acrescimo_id) {
-        
-        const idAcrescimoReceita = uuidv4();
-        const idAcrescimoBanco = uuidv4();
-        
-        lancamentosPayload.push({
-            id: idAcrescimoBanco,
-            proprietario_id: proprietarioDaSessao,
-            data_movimentacao: dataPagamentoISO,
-            descricao: `Acréscimo Receita: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-            valor: valorAcrescimo,
-            tipo: 'Entrada' as const,
-            conta_bancaria_id: values.conta_id,
-            conta_contabil_id: contaContabilCaixaBanco,
-            origem: `recebimento_manual:${parcela.id}`,
-            documento: parcela.id,
-            historico_id: values.historico_id,
-            conta_resultado_id: idAcrescimoReceita,
-        });
-        
-        lancamentosPayload.push({
-            id: idAcrescimoReceita,
-            proprietario_id: proprietarioDaSessao,
-            data_movimentacao: dataPagamentoISO,
-            descricao: `Receita Acréscimo: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-            valor: valorAcrescimo,
-            tipo: 'Saida' as const,
-            conta_bancaria_id: null,
-            conta_contabil_id: values.conta_acrescimo_id,
-            historico_id: values.historico_id,
-            origem: `recebimento_manual:${parcela.id}`,
-            documento: parcela.id,
-            conta_resultado_id: idAcrescimoBanco,
-        });
-    }
-    
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
     if (lancamentoError) throw lancamentoError;
     
@@ -400,6 +386,9 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
   const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true);
+  const [parcelaValor, setParcelaValor] = useState<number>(0);
   const [pendingExtratoData, setPendingExtratoData] = useState<{
     parcelaId: string;
     conta_receber_id: string;
@@ -412,6 +401,7 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
     historico_id: string | null;
     conta_patrimonial_id: string | null;
     codigo_transacao: string | null;
+    conta_acrescimo_id: string | null;
   } | null>(null);
   
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -482,7 +472,28 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
     }
     setLoadingContasPatrimoniais(false);
   }, [proprietarioDaSessao, configMap.Ativo]);
-  
+
+  const fetchContasReceita = useCallback(async () => {
+    if (!proprietarioDaSessao) return;
+    setLoadingContasReceita(true);
+    const receitaCode = configMap.Receita || '4';
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', proprietarioDaSessao)
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
+        .like('Conta', `${receitaCode}.%`)
+        .order('Conta');
+    if (error) {
+        showError('Erro ao carregar contas de receita: ' + error.message);
+        setContasReceita([]);
+    } else {
+        setContasReceita(data as PlanoContas[]);
+    }
+    setLoadingContasReceita(false);
+  }, [proprietarioDaSessao, configMap.Receita]);
+
   const fetchRecebimentoData = useCallback(async () => {
     if (!parcelaId || !proprietarioDaSessao) return;
     
@@ -504,7 +515,7 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
     
     const { data: parcela, error: parcelaError } = await supabase
         .from(tabelaParcelas)
-        .select('conta_receber_id, data_pagamento')
+        .select('conta_receber_id, data_pagamento, valor_parcela')
         .eq('id', parcelaId)
         .single();
         
@@ -513,6 +524,8 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
         setLoading(false);
         return;
     }
+    
+    setParcelaValor(parcela.valor_parcela || 0);
     
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
@@ -542,9 +555,10 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
+          fetchContasReceita();
           fetchRecebimentoData();
       }
-  }, [open, parcelaId, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchRecebimentoData]);
+  }, [open, parcelaId, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, fetchRecebimentoData]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setComprovanteFile(e.target.files?.[0] || null);
@@ -642,25 +656,6 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
 
         if (deleteLancamentosError) throw deleteLancamentosError;
 
-        await saveRecebimentoAndLancamentos({
-            values,
-            parcela: {
-                id: parcelaId,
-                conta_receber_id: parcela.conta_receber_id,
-                empresa_id: proprietarioDaSessao,
-                valor_parcela: parcela.valor_parcela,
-                valor_pago: 0,
-                cliente_id: clienteId,
-            },
-            proprietarioDaSessao,
-            isAdmin,
-            contasDestino,
-            comprovanteUrl: finalAnexoUrl,
-            skipRecebimento: true,
-        });
-        
-        showSuccess('Dados do recebimento atualizados e lançamentos regenerados com sucesso!');
-
         const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
         const isBankPayment = contaDestinoDetalhe?.plano_contas?.is_banco === true;
 
@@ -677,10 +672,28 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
                 historico_id: values.historico_id ?? null,
                 conta_patrimonial_id: values.conta_patrimonial_id ?? null,
                 codigo_transacao: values.codigo_transacao ?? null,
+                conta_acrescimo_id: values.conta_acrescimo_id ?? null,
             });
             onOpenChange(false);
             setExtratoManualDialog(true);
         } else {
+            await saveRecebimentoAndLancamentos({
+                values,
+                parcela: {
+                    id: parcelaId,
+                    conta_receber_id: parcela.conta_receber_id,
+                    empresa_id: proprietarioDaSessao,
+                    valor_parcela: parcela.valor_parcela,
+                    valor_pago: 0,
+                    cliente_id: clienteId,
+                },
+                proprietarioDaSessao,
+                isAdmin,
+                contasDestino,
+                comprovanteUrl: finalAnexoUrl,
+                skipRecebimento: true,
+            });
+            showSuccess('Dados do recebimento atualizados e lançamentos regenerados com sucesso!');
             onSaveComplete();
             onOpenChange(false);
         }
@@ -692,6 +705,9 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
   };
 
   const currentAnexoUrl = watch('anexo_url');
+  const valorRecebidoAtual = watch('valor_recebido');
+  const isAcrescimo = parcelaValor > 0 && valorRecebidoAtual > parcelaValor;
+  const valorAcrescimo = isAcrescimo ? valorRecebidoAtual - parcelaValor : 0;
 
   return (
     <>
@@ -848,6 +864,41 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
                 />
             </div>
 
+            {isAcrescimo && (
+              <div className="space-y-3 p-4 border border-amber-300 rounded-md bg-amber-50">
+                <h3 className="font-semibold text-amber-800">
+                  Acréscimo (Receita adicional):{' '}
+                  {valorAcrescimo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </h3>
+                <p className="text-sm text-amber-700">
+                  O valor recebido é maior que o valor da parcela. Selecione a conta de receita para registrar o acréscimo.
+                </p>
+                <FormField
+                  control={form.control}
+                  name="conta_acrescimo_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Conta de Receita (Acréscimo) *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "0"} disabled={loadingContasReceita}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={loadingContasReceita ? "Carregando..." : "Selecione a conta de receita"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="0" disabled>Selecione a conta</SelectItem>
+                          {contasReceita.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>{c.Conta} - {c.Descricao}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -980,6 +1031,7 @@ const EditarParcelaPagaDialog: React.FC<EditarParcelaPagaDialogProps> = ({
             isPagamentoParcial={false}
             saldoRestante={0}
             skipRecebimento={true}
+            contaAcrescimoId={pendingExtratoData.conta_acrescimo_id}
             onSaveComplete={() => {
               setExtratoManualDialog(false);
               setPendingExtratoData(null);

@@ -72,6 +72,7 @@ interface FormExtratoManualCRProps {
     isPagamentoParcial: boolean;
     saldoRestante: number;
     skipRecebimento?: boolean;
+    contaAcrescimoId?: string | null;
     onSaveComplete: () => void;
     onClose: () => void;
 }
@@ -184,6 +185,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     isPagamentoParcial,
     saldoRestante,
     skipRecebimento = false,
+    contaAcrescimoId = null,
     onSaveComplete,
     onClose,
 }) => {
@@ -332,9 +334,11 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             
             if (contaDestinoDetalhe?.plano_contas?.is_banco) { 
                 const valorExtrato = Math.abs(valorRecebido); 
+                const contaContabilBanco = (contaDestinoDetalhe as any)?.plano_contas?.id || null;
                 const contaContabilRecebimento = isSupervisao 
                     ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
-                    : null;
+                    : contaContabilBanco;
+                const contaContabilFinal = contaContabilBanco || contaContabilRecebimento || null;
                 
                 extratosPayload.push({
                     empresa_id: proprietarioDaSessao,
@@ -345,7 +349,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     tipo: 'Entrada' as const,
                     identificacao: (values.identificacao && values.identificacao !== '__nenhum__') ? values.identificacao : null,
                     conciliado: false,
-                    conta_contabil_id: contaContabilRecebimento,
+                    conta_contabil_id: contaContabilFinal,
                     id_parcela_rb: parcela.id,
                 });
             }
@@ -363,7 +367,8 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 conta_id: contaDestinoId,
                 historico_id: historicoId,
                 conta_patrimonial_id: contaPatrimonialId,
-                codigo_transacao: codigoTransacao, // NOVO CAMPO
+                codigo_transacao: codigoTransacao,
+                conta_acrescimo_id: contaAcrescimoId || null,
                 acao_saldo_restante: isPagamentoParcial ? values.acao_saldo_restante : undefined,
                 nova_data_vencimento: isPagamentoParcial ? values.nova_data_vencimento : undefined,
                 numero_novas_parcelas: isPagamentoParcial ? values.numero_novas_parcelas : undefined,

@@ -26,9 +26,37 @@ interface LancamentoDetalhado extends Lancamento {
     saldo_contas: { nome: string } | null;
 }
 
+const isCROrigem = (origem: string): boolean => {
+    return origem?.startsWith('recebimento_manual') ||
+        origem === 'estorno_recebimento_manual' ||
+        origem === 'recebimento_manual_estornada' ||
+        origem?.startsWith('desconto_cr') ||
+        origem?.startsWith('lancamento_cr');
+};
+
+const isCPOrigem = (origem: string): boolean => {
+    return origem?.startsWith('pagamento_cp') ||
+        origem?.startsWith('pagamento_manual') ||
+        origem?.startsWith('lancamento_cp') ||
+        origem === 'pagamento_manual_estornada' ||
+        origem?.startsWith('excedente_cp');
+};
+
+const extrairRazao = (descricao: string): string => {
+    const matchCR = descricao?.match(/CR:\s*(.+?)\s*\(CR ID:/i);
+    if (matchCR) return matchCR[1].trim();
+    const matchCP = descricao?.match(/CP:\s*(.+?)\s*\((?:CP|Parcela)/i);
+    if (matchCP) return matchCP[1].trim();
+    const matchForn = descricao?.match(/Pagamento Parcela [a-f0-9\-]+ - (.+)/i);
+    if (matchForn) return matchForn[1].trim();
+    const matchBaixa = descricao?.match(/Baixa (?:Passivo|Patrimonial) CP:\s*(.+?)\s*\(Parcela/i);
+    if (matchBaixa) return matchBaixa[1].trim();
+    return '';
+};
+
 const TodosLancamentosTable: React.FC = () => {
     const { usuario } = useSessao();
-    const { ownerId } = useOwner(); // USANDO useOwner
+    const { ownerId } = useOwner();
     const { printContent } = usePrint();
     const { logoUrl, ownerName } = useOwnerBranding();
     
@@ -131,7 +159,6 @@ const TodosLancamentosTable: React.FC = () => {
                 idsToDelete.push(pairedId);
             }
             
-            // 2. Deletar ambos os lançamentos (Débito e Crédito)
             const { error } = await supabase
                 .from('lancamentos')
                 .delete()
@@ -196,29 +223,34 @@ const TodosLancamentosTable: React.FC = () => {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[100px]">Data</TableHead>
-                                <TableHead className="w-[80px]">Tipo</TableHead>
-                                <TableHead className="w-[120px] text-right">Valor</TableHead>
-                                <TableHead className="min-w-[200px]">Descrição</TableHead>
-                                <TableHead className="w-[150px]">Conta Contábil</TableHead>
-                                <TableHead className="w-[150px]">Origem</TableHead>
-                                <TableHead className="w-[100px]">Conta Caixa</TableHead>
-                                <TableHead className="w-[100px] text-right">Ações</TableHead>
+                                <TableHead className="w-[90px]">Data</TableHead>
+                                <TableHead className="w-[75px]">Tipo</TableHead>
+                                <TableHead className="w-[110px] text-right">Valor</TableHead>
+                                <TableHead className="min-w-[180px]">Descrição</TableHead>
+                                <TableHead className="w-[140px]">Conta Contábil</TableHead>
+                                <TableHead className="w-[120px]">Origem</TableHead>
+                                <TableHead className="w-[90px]">Conta Caixa</TableHead>
+                                <TableHead className="w-[90px]">Parcela CR</TableHead>
+                                <TableHead className="w-[90px]">Parcela CP</TableHead>
+                                <TableHead className="w-[140px]">Razão</TableHead>
+                                <TableHead className="w-[90px] text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={11} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                             ) : lancamentos.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={11} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado.</TableCell></TableRow>
                             ) : (
                                 lancamentos.map((l) => {
                                     const isDebito = l.tipo === 'Entrada';
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
-                                    
-                                    // Permitir deletar qualquer lançamento
-                                    const canDelete = true;
+                                    const isCR = isCROrigem(l.origem || '');
+                                    const isCP = isCPOrigem(l.origem || '');
+                                    const parcelaCR = isCR && l.documento ? l.documento.substring(0, 8) : '-';
+                                    const parcelaCP = isCP && l.documento ? l.documento.substring(0, 8) : '-';
+                                    const razao = extrairRazao(l.descricao || '');
                                     
                                     return (
                                         <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem?.endsWith('_estornada') && 'opacity-50')}>
@@ -231,37 +263,38 @@ const TodosLancamentosTable: React.FC = () => {
                                             <TableCell className={cn("text-right font-semibold", isDebito ? 'text-red-600' : 'text-green-600')}>
                                                 {formatCurrency(l.valor)}
                                             </TableCell>
-                                            <TableCell className="text-sm">{l.descricao}</TableCell>
+                                            <TableCell className="text-sm max-w-[180px] truncate" title={l.descricao}>{l.descricao}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{contaDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{origemDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{l.saldo_contas?.nome || '-'}</TableCell>
+                                            <TableCell className="text-xs font-mono text-muted-foreground">{parcelaCR}</TableCell>
+                                            <TableCell className="text-xs font-mono text-muted-foreground">{parcelaCP}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={razao}>{razao || '-'}</TableCell>
                                             <TableCell className="text-right space-x-2">
                                                 <Button variant="ghost" size="icon" onClick={() => alert('Edição não implementada.')} disabled>
                                                     <Edit className="w-4 h-4" />
                                                 </Button>
-                                                {canDelete && (
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" disabled={isDeleting}>
-                                                                <Trash2 className="w-4 h-4 text-red-500" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Excluir Lançamento?</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Esta ação removerá permanentemente este lançamento e seu par de partida dobrada.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDelete(l)} disabled={isDeleting}>
-                                                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
-                                                                </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                )}
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" disabled={isDeleting}>
+                                                            <Trash2 className="w-4 h-4 text-red-500" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Excluir Lançamento?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta ação removerá permanentemente este lançamento e seu par de partida dobrada.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDelete(l)} disabled={isDeleting}>
+                                                                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </TableCell>
                                         </TableRow>
                                     );

@@ -8,17 +8,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { PlusCircle, Undo2, Loader2, Pencil, BookOpen } from 'lucide-react';
-import { ExtendedParcelaDetalhada } from '@/types/contas-receber';
+import { ContaReceber } from '@/types/contas-receber';
 import { supabase } from '@/integrations/supabase/client';
 import { useOwner } from '@/hooks/use-owner';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import RegistrarPagamentoDialog from './RegistrarPagamentoDialog';
 import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
+import EditarParcelaPagaDialog from '@/components/contas-receber/EditarParcelaPagaDialog';
+
+interface Parcela {
+  id: string;
+  conta_receber_id: string;
+  empresa_id: string;
+  numero_parcela: number;
+  valor_parcela: number;
+  valor_pago: number;
+  data_vencimento: string;
+  data_pagamento: string | null;
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
+  id_conta_contabil: string | null;
+  observacao: string | null;
+  mapeado_extrato_id: string | null;
+}
 
 interface RecebimentoRaw {
   id: string;
@@ -30,6 +45,7 @@ interface RecebimentoRaw {
   observacao: string | null;
   conta_nome: string;
   historico_descricao: string;
+  parcela_id: string;
 }
 
 interface LancamentoDetalhe {
@@ -42,12 +58,6 @@ interface LancamentoDetalhe {
   origem: string;
 }
 
-interface PlanoContaItem {
-  id: string;
-  Conta: string;
-  Descricao: string;
-}
-
 interface Historico {
   id: string;
   descricao: string;
@@ -57,7 +67,8 @@ interface Historico {
 interface DetalhesRecebimentoParcelaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  parcela: ExtendedParcelaDetalhada;
+  parcela: Parcela;
+  conta: ContaReceber;
   proprietarioId: string;
   onDataChange: () => void;
 }
@@ -66,6 +77,7 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
   open,
   onOpenChange,
   parcela,
+  conta,
   proprietarioId,
   onDataChange,
 }) => {
@@ -80,17 +92,25 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
   const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
   const tabelaContasReceber = isAdminOrEmployee ? 'admin_contas_receber' : 'contas_receber';
 
+  const { contas: contasDestino } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+
   const [recebimentos, setRecebimentos] = useState<RecebimentoRaw[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoDetalhe[]>([]);
   const [loading, setLoading] = useState(false);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContaItem[]>([]);
-  const [contasResultado, setContasResultado] = useState<PlanoContaItem[]>([]);
   const [estornandoRecebimento, setEstornandoRecebimento] = useState<string | null>(null);
-  const [novoRecebimentoDialogOpen, setNovoRecebimentoDialogOpen] = useState(false);
   const [lancamentoDialogOpen, setLancamentoDialogOpen] = useState(false);
+  const [editarPagaDialogOpen, setEditarPagaDialogOpen] = useState(false);
 
-  const { contas: contasDestino, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+  const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
+    open: boolean;
+    recebimentoId: string | null;
+    extratoId: string | null;
+    extratoDescricao: string;
+    extratoValor: number;
+    extratoData: string;
+    extratoContaNome: string;
+  }>({ open: false, recebimentoId: null, extratoId: null, extratoDescricao: '', extratoValor: 0, extratoData: '', extratoContaNome: '' });
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValores, setEditValores] = useState<{
@@ -98,25 +118,27 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
     valor_recebido: string;
     conta_id: string;
     historico_id: string;
-    conta_patrimonial_id: string;
-    conta_resultado_id: string;
     forma_pagamento: string;
     observacao: string;
-  }>({ data_recebimento: '', valor_recebido: '', conta_id: '', historico_id: '', conta_patrimonial_id: '', conta_resultado_id: '', forma_pagamento: '', observacao: '' });
+  }>({ data_recebimento: '', valor_recebido: '', conta_id: '', historico_id: '', forma_pagamento: '', observacao: '' });
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
-  const saldoRestante = parcela.valor_parcela - (parcela.valor_pago || 0);
-  const cliente = parcela.contas_receber?.clientes?.nome || 'N/A';
-  const descricao = parcela.contas_receber?.descricao || 'Conta a Receber';
+  const totalRecebido = React.useMemo(
+    () => recebimentos.reduce((s, r) => s + r.valor_recebido, 0),
+    [recebimentos]
+  );
+  const saldoRestante = parcela.valor_parcela - totalRecebido;
+  const cliente = conta.clientes?.nome || 'N/A';
+  const descricao = conta.descricao || 'Conta a Receber';
 
   const carregarDados = useCallback(async () => {
     if (!open) return;
     setLoading(true);
     try {
-      const [recebimentosRes, lancamentosRes, historicosRes, patrimonialRes, resultadoRes] = await Promise.all([
+      const [recebimentosRes, lancamentosRes, historicosRes] = await Promise.all([
         supabase
           .from(tabelaRecebimentos)
-          .select('id, data_recebimento, valor_recebido, forma_pagamento, observacao, conta_id, historico_id, saldo_contas(nome), historicos(descricao)')
+          .select('id, data_recebimento, valor_recebido, forma_pagamento, observacao, conta_id, historico_id, parcela_id, saldo_contas(nome), historicos(descricao)')
           .eq('parcela_id', parcela.id)
           .order('data_recebimento', { ascending: true }),
         supabase
@@ -127,8 +149,6 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           .not('origem', 'ilike', '%estornada%')
           .order('data_movimentacao', { ascending: true }),
         supabase.from('historicos').select('id, descricao, codigo').eq('proprietario_id', proprietarioId).order('descricao'),
-        supabase.from('plano_contas').select('id, "Conta", "Descricao"').eq('proprietario_id', proprietarioId).eq('Analitica', 'Sim').eq('is_conta_patrimonial', true).eq('is_a_receber', true).order('Conta'),
-        supabase.from('plano_contas').select('id, "Conta", "Descricao"').eq('proprietario_id', proprietarioId).eq('Analitica', 'Sim').eq('is_conta_resultado', true).order('Conta'),
       ]);
 
       const recebimentosMapped: RecebimentoRaw[] = (recebimentosRes.data || []).map((r: any) => ({
@@ -141,11 +161,11 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
         observacao: r.observacao || null,
         conta_nome: r.saldo_contas?.nome || '-',
         historico_descricao: r.historicos?.descricao || '-',
+        parcela_id: r.parcela_id || '',
       }));
       setRecebimentos(recebimentosMapped);
+
       setHistoricos((historicosRes.data || []).map((h: any) => ({ id: h.id, descricao: h.descricao, codigo: h.codigo || null })));
-      setContasPatrimoniais((patrimonialRes.data || []) as PlanoContaItem[]);
-      setContasResultado((resultadoRes.data || []) as PlanoContaItem[]);
 
       const lancamentosRaw = lancamentosRes.data || [];
       if (lancamentosRaw.length > 0) {
@@ -174,11 +194,8 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
   }, [open, parcela.id, tabelaRecebimentos, proprietarioId]);
 
   useEffect(() => {
-    if (open) {
-      refetchSaldos();
-      carregarDados();
-    }
-  }, [open, carregarDados, refetchSaldos]);
+    carregarDados();
+  }, [carregarDados]);
 
   const abrirEdicao = (r: RecebimentoRaw) => {
     const dataStr = r.data_recebimento
@@ -189,8 +206,6 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
       valor_recebido: String(r.valor_recebido),
       conta_id: r.conta_id || '',
       historico_id: r.historico_id || '',
-      conta_patrimonial_id: parcela.contas_receber?.id_conta_patrimonial || '',
-      conta_resultado_id: parcela.contas_receber?.id_conta_resultado || '',
       forma_pagamento: r.forma_pagamento || '',
       observacao: r.observacao || '',
     });
@@ -219,7 +234,7 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           data_recebimento: editValores.data_recebimento,
           valor_recebido: novoValor,
           conta_id: editValores.conta_id || null,
-          historico_id: editValores.historico_id || null,
+          historico_id: editValores.historico_id && editValores.historico_id !== '__nenhum__' ? editValores.historico_id : null,
           forma_pagamento: editValores.forma_pagamento || null,
           observacao: editValores.observacao || null,
         })
@@ -227,25 +242,15 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
 
       if (error) throw error;
 
-      if (parcela.contas_receber?.id) {
-        await supabase
-          .from(tabelaContasReceber)
-          .update({
-            id_conta_patrimonial: editValores.conta_patrimonial_id || null,
-            id_conta_resultado: editValores.conta_resultado_id || null,
-          })
-          .eq('id', parcela.contas_receber.id);
-      }
-
       const diferenca = novoValor - valorAnterior;
-      const novoValorPagoTotal = Math.max(0, (parcela.valor_pago || 0) + diferenca);
-      const saldoAposEdicao = parcela.valor_parcela - novoValorPagoTotal;
-      const novoStatus: string = saldoAposEdicao <= 0.01 ? 'paga' : (novoValorPagoTotal > 0 ? 'parcial' : 'aberta');
+      const novoValorRecebidoTotal = Math.max(0, (parcela.valor_pago || 0) + diferenca);
+      const saldoAposEdicao = parcela.valor_parcela - novoValorRecebidoTotal;
+      const novoStatus: string = saldoAposEdicao <= 0.01 ? 'paga' : (novoValorRecebidoTotal > 0 ? 'parcial' : 'aberta');
 
       await supabase
         .from(tabelaParcelas)
         .update({
-          valor_pago: novoValorPagoTotal,
+          valor_pago: novoValorRecebidoTotal,
           status: novoStatus,
           data_pagamento: editValores.data_recebimento,
         })
@@ -266,90 +271,90 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
     if (!ownerId) return;
     setEstornandoRecebimento(recebimentoId);
     try {
-      const { data: parcelaData, error: parcelaError } = await supabase
-        .from(tabelaParcelas)
-        .select('conta_receber_id, valor_parcela, valor_pago')
-        .eq('id', parcela.id)
-        .single();
-      if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
+      const recebimento = recebimentos.find(r => r.id === recebimentoId);
+      const temBanco = !!recebimento?.conta_id;
 
-      const contaReceberId = parcelaData.conta_receber_id;
-      const dataEstornoISO = new Date().toISOString();
-
-      const { data: originalLaunches } = await supabase
-        .from('lancamentos')
-        .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
-        .eq('proprietario_id', ownerId)
-        .or(`documento.eq.${parcela.id},origem.ilike.%${parcela.id}%`)
-        .not('origem', 'ilike', '%estornada%');
-
-      const lancamentosEstornoPayload: any[] = [];
-      for (const orig of (originalLaunches || []).filter((l: any) => l.origem?.startsWith('recebimento_manual'))) {
-        lancamentosEstornoPayload.push({
-          id: crypto.randomUUID(),
-          proprietario_id: ownerId,
-          data_movimentacao: dataEstornoISO,
-          descricao: `ESTORNO: ${orig.descricao}`,
-          valor: orig.valor,
-          tipo: orig.tipo === 'Entrada' ? 'Saida' : 'Entrada',
-          conta_bancaria_id: orig.conta_bancaria_id,
-          conta_contabil_id: orig.conta_contabil_id,
-          origem: 'estorno_recebimento_manual',
-          historico_id: orig.historico_id,
-          conta_resultado_id: orig.conta_resultado_id,
-        });
+      if (!temBanco) {
+        await executarEstorno(recebimentoId, null);
+        return;
       }
 
-      if (lancamentosEstornoPayload.length > 0) {
-        const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
-        if (insErr) throw insErr;
+      let extratoVinculado: any = null;
+      try {
+        const { data } = await supabase
+          .from('extratos')
+          .select('id, descricao, valor, data, saldo_contas(nome)')
+          .eq('id_parcela_rb', parcela.id)
+          .maybeSingle();
+        extratoVinculado = data;
+      } catch (err) {
+        // Silently handle error
       }
 
-      const originalLaunchIds = (originalLaunches || []).map((l: any) => l.id);
-      if (originalLaunchIds.length > 0) {
-        await supabase.from('lancamentos').update({ origem: 'recebimento_manual_estornada' }).in('id', originalLaunchIds);
-      }
+      const dataFallback = recebimento?.data_recebimento 
+        ? new Date(recebimento.data_recebimento).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
 
-      const { error: deleteRecError } = await supabase.from(tabelaRecebimentos).delete().eq('id', recebimentoId);
-      if (deleteRecError) throw deleteRecError;
-
-      const valorEstornado = recebimentos.find(r => r.id === recebimentoId)?.valor_recebido || 0;
-      const novoValorPago = Math.max(0, (parcelaData.valor_pago || 0) - valorEstornado);
-      const novoStatus = novoValorPago <= 0 ? 'aberta' : 'parcial';
-
-      await supabase
-        .from(tabelaParcelas)
-        .update({
-          status: novoStatus,
-          valor_pago: novoValorPago,
-          data_pagamento: novoValorPago <= 0 ? null : parcela.data_pagamento,
-          observacao: 'Estorno de recebimento realizado.',
-        })
-        .eq('id', parcela.id);
-
-      if (novoValorPago <= 0) {
-        await supabase.from(tabelaContasReceber).update({ status: 'aberta' }).eq('id', contaReceberId);
-      }
-
-      showSuccess('Recebimento estornado com sucesso!');
-      await carregarDados();
-      onDataChange();
+      setEstornandoRecebimento(null);
+      setConfirmEstornoDialog({
+        open: true,
+        recebimentoId,
+        extratoId: extratoVinculado?.id ?? null,
+        extratoDescricao: extratoVinculado?.descricao || 'Transf Pix recebida',
+        extratoValor: extratoVinculado?.valor ?? recebimento?.valor_recebido ?? 0,
+        extratoData: extratoVinculado?.data || dataFallback,
+        extratoContaNome: (extratoVinculado as any)?.saldo_contas?.nome || recebimento?.conta_nome || 'Banco',
+      });
     } catch (error: any) {
-      console.error('Erro ao estornar recebimento:', error);
-      showError('Falha ao estornar: ' + error.message);
-    } finally {
+      showError('Falha ao verificar extrato: ' + error.message);
       setEstornandoRecebimento(null);
     }
   };
 
-  const parcelaParaRecebimento = {
-    id: parcela.id,
-    conta_receber_id: parcela.contas_receber?.id || '',
-    empresa_id: proprietarioId,
-    valor_parcela: parcela.valor_parcela,
-    valor_pago: parcela.valor_pago || 0,
-    cliente_id: parcela.contas_receber?.cliente_id || null,
-    status: parcela.status,
+  const executarEstorno = async (recebimentoId: string, extratoId: string | null) => {
+    if (!ownerId) return;
+    setEstornandoRecebimento(recebimentoId);
+    try {
+      // 1. Deletar recebimento
+      const { error: deleteRecError } = await supabase
+        .from(tabelaRecebimentos)
+        .delete()
+        .eq('id', recebimentoId);
+      if (deleteRecError) throw deleteRecError;
+
+      // 2. Deletar lançamentos
+      const { error: deleteLancError } = await supabase
+        .from('lancamentos')
+        .delete()
+        .eq('proprietario_id', ownerId)
+        .eq('documento', parcela.id)
+        .like('origem', 'recebimento_manual:%');
+      if (deleteLancError) throw deleteLancError;
+
+      // 3. Deletar extrato (por id_parcela_rb sempre)
+      await supabase
+        .from('extratos')
+        .delete()
+        .eq('id_parcela_rb', parcela.id);
+
+      // 4. Resetar parcela
+      await supabase
+        .from(tabelaParcelas)
+        .update({
+          status: 'aberta',
+          valor_pago: 0,
+          data_pagamento: null,
+        })
+        .eq('id', parcela.id);
+
+      showSuccess('Estorno realizado! Parcela, lançamentos e extrato deletados com sucesso.');
+      await carregarDados();
+      onDataChange();
+    } catch (error: any) {
+      showError('Falha ao estornar: ' + error.message);
+    } finally {
+      setEstornandoRecebimento(null);
+    }
   };
 
   return (
@@ -357,24 +362,35 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes de Recebimento — Parcela {parcela.numero_parcela}</DialogTitle>
+            <DialogTitle>
+              Detalhes de Recebimento — Parcela {parcela.numero_parcela}
+            </DialogTitle>
             <DialogDescription>{cliente} · {descricao}</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-3 gap-4 p-4 bg-secondary rounded-md text-sm">
             <div>
-              <p className="text-muted-foreground">Valor da Parcela</p>
+              <p className="text-muted-foreground">Valor Original</p>
               <p className="text-lg font-bold">{formatCurrency(parcela.valor_parcela)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Total Recebido</p>
-              <p className="text-lg font-bold text-green-600">{formatCurrency(parcela.valor_pago || 0)}</p>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(totalRecebido)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Saldo Restante</p>
-              <p className={`text-lg font-bold ${saldoRestante > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                {formatCurrency(saldoRestante)}
-              </p>
+              {saldoRestante < 0 ? (
+                <>
+                  <p className="text-muted-foreground">Acréscimo</p>
+                  <p className="text-lg font-bold text-blue-600">{formatCurrency(Math.abs(saldoRestante))}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-muted-foreground">Saldo Restante</p>
+                  <p className={`text-lg font-bold ${saldoRestante > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                    {formatCurrency(saldoRestante)}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -425,51 +441,19 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
                               <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                               <SelectContent>
                                 {contasDestino.map(c => (
-                                  <SelectItem key={c.id} value={c.id}>{c.nome} ({c.tipo_saldo})</SelectItem>
+                                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Forma de Pagamento</Label>
+                            <Label className="text-xs">Forma de Recebimento</Label>
                             <Input
                               value={editValores.forma_pagamento}
                               onChange={e => setEditValores(v => ({ ...v, forma_pagamento: e.target.value }))}
                               placeholder="Pix, Boleto, TED..."
                               disabled={salvandoEdicao}
                             />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Conta Patrimonial (A Receber)</Label>
-                            <Select
-                              value={editValores.conta_patrimonial_id || undefined}
-                              onValueChange={val => setEditValores(v => ({ ...v, conta_patrimonial_id: val }))}
-                              disabled={salvandoEdicao}
-                            >
-                              <SelectTrigger><SelectValue placeholder="Selecione a conta patrimonial" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__nenhum__">Nenhuma</SelectItem>
-                                {contasPatrimoniais.map(c => (
-                                  <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Conta Resultado (Receita)</Label>
-                            <Select
-                              value={editValores.conta_resultado_id || undefined}
-                              onValueChange={val => setEditValores(v => ({ ...v, conta_resultado_id: val }))}
-                              disabled={salvandoEdicao}
-                            >
-                              <SelectTrigger><SelectValue placeholder="Selecione a conta resultado" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__nenhum__">Nenhuma</SelectItem>
-                                {contasResultado.map(c => (
-                                  <SelectItem key={c.id} value={c.id}>{c.Conta} - {c.Descricao}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Histórico</Label>
@@ -546,35 +530,18 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
                           >
                             <Pencil className="w-4 h-4 text-blue-500" />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Estornar este recebimento"
-                                disabled={estornandoRecebimento === r.id}
-                              >
-                                {estornandoRecebimento === r.id
-                                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                                  : <Undo2 className="w-4 h-4 text-orange-500" />
-                                }
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Estornar Recebimento</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Estornar {formatCurrency(r.valor_recebido)} recebido em {formatarData(r.data_recebimento)}? Os lançamentos contábeis serão revertidos.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleEstornarRecebimento(r.id)}>
-                                  Confirmar Estorno
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Estornar este recebimento"
+                            disabled={estornandoRecebimento === r.id}
+                            onClick={() => handleEstornarRecebimento(r.id)}
+                          >
+                            {estornandoRecebimento === r.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Undo2 className="w-4 h-4 text-orange-500" />
+                            }
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -647,7 +614,7 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           <div className="flex justify-between items-center pt-2">
             <Button
               variant="outline"
-              onClick={() => setNovoRecebimentoDialogOpen(true)}
+              onClick={() => setEditarPagaDialogOpen(true)}
               disabled={parcela.status === 'cancelada'}
             >
               <PlusCircle className="w-4 h-4 mr-2" />
@@ -658,13 +625,13 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
         </DialogContent>
       </Dialog>
 
-      {novoRecebimentoDialogOpen && (
-        <RegistrarPagamentoDialog
-          open={novoRecebimentoDialogOpen}
-          onOpenChange={setNovoRecebimentoDialogOpen}
-          parcela={parcelaParaRecebimento}
+      {editarPagaDialogOpen && (
+        <EditarParcelaPagaDialog
+          parcelaId={parcela.id}
+          open={editarPagaDialogOpen}
+          onOpenChange={setEditarPagaDialogOpen}
           onSaveComplete={() => {
-            setNovoRecebimentoDialogOpen(false);
+            setEditarPagaDialogOpen(false);
             carregarDados();
             onDataChange();
           }}
@@ -681,8 +648,8 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           parcelaData={parcela.data_vencimento}
           origemTipo="contas_receber"
           proprietarioId={proprietarioId}
-          contaPatrimonialId={parcela.contas_receber?.id_conta_patrimonial || null}
-          contaResultadoId={parcela.contas_receber?.id_conta_resultado || null}
+          contaPatrimonialId={conta.id_conta_patrimonial}
+          contaResultadoId={(conta as any)?.id_conta_resultado}
           onSaved={() => {
             setLancamentoDialogOpen(false);
             carregarDados();
@@ -690,6 +657,41 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           }}
         />
       )}
+
+      <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  O lançamento do extrato bancário será DELETADO junto com o recebimento e os lançamentos contábeis.
+                </p>
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Parcela:</span><span className="font-medium">Nº {parcela.numero_parcela} — {parcela.id.substring(0, 8)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Conta/Banco:</span><span className="font-medium">{confirmEstornoDialog.extratoContaNome}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Data:</span><span className="font-medium">{confirmEstornoDialog.extratoData}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Descrição:</span><span className="font-medium">{confirmEstornoDialog.extratoDescricao}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Valor:</span><span className="font-medium text-green-600">{formatCurrency(Math.abs(confirmEstornoDialog.extratoValor))}</span></div>
+                </div>
+                <p className="text-xs text-muted-foreground">Os lançamentos contábeis serão estornados e o extrato bancário será removido.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmEstornoDialog(prev => ({ ...prev, open: false }))}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={async () => {
+                setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
+                await executarEstorno(confirmEstornoDialog.recebimentoId!, confirmEstornoDialog.extratoId);
+              }}
+            >
+              Confirmar Estorno
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

@@ -18,6 +18,7 @@ import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagam
 import { Badge } from '@/components/ui/badge';
 import { desvincularMapeamento } from '@/hooks/conciliacao/useMapeamentoParcelas';
 import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
+import DetalhesRecebimentoParcelaDialog from '@/components/contas-receber/DetalhesRecebimentoParcelaDialog';
 import { useOwner } from '@/hooks/use-owner';
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
@@ -68,19 +69,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [editarPagaDialogOpen, setEditarPagaDialogOpen] = useState(false);
   const [parcelaIdParaEditarPaga, setParcelaIdParaEditarPaga] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isUndoing, setIsUndoing] = useState(false);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [parcelasComLancamento, setParcelasComLancamento] = useState<Set<string>>(new Set());
   const [lancamentoDialog, setLancamentoDialog] = useState<{ open: boolean; parcela: Parcela | null }>({ open: false, parcela: null });
+  const [detalhesRecebimentoDialog, setDetalhesRecebimentoDialog] = useState<{ open: boolean; parcela: Parcela | null }>({ open: false, parcela: null });
 
   const [lancamentosPorParcela, setLancamentosPorParcela] = useState<Record<string, LancamentoResumo[]>>({});
-
-  const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
-    open: boolean;
-    parcela: Parcela | null;
-    extratoId: string | null;
-    extratoInfo: { descricao: string; valor: number; data: string } | null;
-  }>({ open: false, parcela: null, extratoId: null, extratoInfo: null });
 
   // Determina a tabela correta com base na role (Admin direto OU funcionário do admin)
   const isDirectAdmin = role === 'Admin';
@@ -308,242 +302,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       }
   };
   
-  const handleUndoPayment = async (parcela: Parcela) => {
-    if (!ownerId || !conta) return;
-
-    const contaOwnerId = conta.empresa_id;
-
-    const { data: extratoVinculado, error: extratoError } = await supabase
-      .from('extratos')
-      .select('id, descricao, valor, data')
-      .eq('empresa_id', contaOwnerId)
-      .eq('id_parcela_rb', parcela.id)
-      .eq('conciliado', false)
-      .maybeSingle();
-
-    if (extratoError) {
-      console.warn('[ESTORNO CR] Erro ao buscar extrato:', extratoError);
-    }
-
-    if (extratoVinculado) {
-      setConfirmEstornoDialog({
-        open: true,
-        parcela,
-        extratoId: extratoVinculado.id,
-        extratoInfo: {
-          descricao: extratoVinculado.descricao,
-          valor: extratoVinculado.valor,
-          data: extratoVinculado.data,
-        },
-      });
-    } else {
-      executarUndoPayment(parcela, null);
-    }
-  };
-
-  const executarUndoPayment = async (parcela: Parcela, extratoId: string | null) => {
-    if (!ownerId || !conta) return;
-    setConfirmEstornoDialog(prev => ({ ...prev, open: false }));
-    setIsUndoing(true);
-
-    const contaOwnerId = conta.empresa_id;
-    const contaReceberId = conta.id;
-    const contaReceberIdShort = contaReceberId.substring(0, 8);
-
-    try {
-        // 1. Buscar todos os registros de recebimento associados
-        const { data: recebimentos, error: fetchError } = await supabase
-            .from(tabelaRecebimentos)
-            .select('id, conta_id, valor_recebido, historico_id')
-            .eq('parcela_id', parcela.id);
-            
-        if (fetchError) throw fetchError;
-        
-        if (!recebimentos || recebimentos.length === 0) {
-            showError('Nenhum recebimento encontrado para estornar.');
-            setIsUndoing(false);
-            return;
-        }
-        
-        const dataEstornoISO = new Date().toISOString();
-        
-        // 2. Buscar mapeamento contábil (Admin e Cliente)
-        let contaDescontoConcedidoId: string | null = null;
-        let contaEstornoDescontoId: string | null = null;
-        
-        const { data: configData } = await supabase
-            .from('configuracao_contas_receber')
-            .select('tipo_registro, conta_contabil_id')
-            .eq('proprietario_id', ownerId)
-            .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
-            
-        contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
-        contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
-        
-        // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
-        // Primeiro tenta por documento (lançamentos novos), depois fallback por origem com sufixo
-        let { data: originalLaunches, error: fetchLaunchError } = await supabase
-            .from('lancamentos')
-            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
-            .eq('proprietario_id', ownerId)
-            .eq('documento', parcela.id)
-            .not('origem', 'like', '%_estornada');
-
-        if (fetchLaunchError) throw fetchLaunchError;
-
-        if (!originalLaunches || originalLaunches.length === 0) {
-            const origemRecebimento = `recebimento_manual:${parcela.id}`;
-            const origemDesconto = `desconto_cr:${parcela.id}`;
-            const { data: fallbackLaunches, error: fallbackError } = await supabase
-                .from('lancamentos')
-                .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
-                .eq('proprietario_id', ownerId)
-                .or(`origem.eq.${origemRecebimento},origem.eq.${origemDesconto}`)
-                .not('origem', 'like', '%_estornada');
-            if (fallbackError) throw fallbackError;
-            originalLaunches = fallbackLaunches;
-        }
-        
-        const lancamentosEstornoPayload: any[] = [];
-        const originalLaunchIds = (originalLaunches || []).map(l => l.id);
-        
-        if (originalLaunchIds.length === 0) {
-            showError('Nenhum lançamento contábil original encontrado para estorno.');
-            setIsUndoing(false);
-            return;
-        }
-        
-        // 4. Marcar os lançamentos originais como estornados
-        const { error: markError } = await supabase
-            .from('lancamentos')
-            .update({ origem: 'recebimento_manual_estornada' })
-            .in('id', originalLaunchIds);
-            
-        if (markError) throw markError;
-        
-        // 5. Gerar Lançamentos de Estorno (Reversão)
-        
-        // 5.1. Estorno do Recebimento (Caixa/Clientes)
-        for (const orig of originalLaunches.filter(l => l.origem?.startsWith('recebimento_manual') && !l.origem?.includes('_estornada'))) {
-            const inverseId = crypto.randomUUID();
-            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada';
-            
-            // Lançamento de Estorno
-            const lancInvert = {
-                id: inverseId,
-                proprietario_id: ownerId,
-                data_movimentacao: dataEstornoISO,
-                descricao: `ESTORNO: ${orig.descricao}`,
-                valor: orig.valor,
-                tipo: tipoInvertido,
-                conta_bancaria_id: orig.conta_bancaria_id,
-                conta_contabil_id: orig.conta_contabil_id,
-                origem: 'estorno_recebimento_manual',
-                historico_id: orig.historico_id,
-                conta_resultado_id: orig.id,
-            };
-            lancamentosEstornoPayload.push(lancInvert);
-        }
-        
-        // 5.2. Estorno do Desconto Concedido (Se houver) - D: Ativo / C: Receita Estorno
-        const isDiscountApplied = parcela.observacao?.includes('desconto');
-        const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
-
-        if (isDiscountApplied && contaEstornoDescontoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
-            
-            // Lançamento 1: D: Clientes a Receber (Ativo) - ENTRADA (Aumenta Ativo Devedor)
-            const idEstornoAtivo = crypto.randomUUID();
-            const idEstornoReceita = crypto.randomUUID();
-
-            // D: Clientes a Receber Avulso (Ativo) - ENTRADA (Aumenta Ativo Devedor)
-            const lancamentoEstornoPatrimonial = {
-                id: idEstornoAtivo,
-                proprietario_id: ownerId,
-                data_movimentacao: dataEstornoISO,
-                descricao: `ESTORNO DESCONTO CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                valor: valorDesconto,
-                tipo: 'Entrada' as const, // DÉBITO (Aumenta Ativo Devedor)
-                conta_bancaria_id: null,
-                conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (1.x.x)
-                origem: 'estorno_recebimento_manual',
-                historico_id: recebimentos[0].historico_id,
-                conta_resultado_id: idEstornoReceita, // Referência cruzada
-            };
-            lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
-
-            // Lançamento 2: C: Receita Estorno do Desconto (Resultado) - CRÉDITO (Saída)
-            const lancamentoEstornoReceita = {
-                id: idEstornoReceita,
-                proprietario_id: ownerId,
-                data_movimentacao: dataEstornoISO,
-                descricao: `RECEITA ESTORNO DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                valor: valorDesconto,
-                tipo: 'Saida' as const, // CRÉDITO (Saída) na Receita Credora
-                conta_bancaria_id: null,
-                conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Concedido (Receita)
-                origem: 'estorno_recebimento_manual',
-                historico_id: recebimentos[0].historico_id,
-                conta_resultado_id: idEstornoAtivo, // Referência cruzada
-            };
-            lancamentosEstornoPayload.push(lancamentoEstornoReceita);
-        } else if (isDiscountApplied && valorDesconto > 0.01 && !contaEstornoDescontoId) {
-            console.warn('Aviso: Conta de Estorno Desconto Concedido (Receita) não configurada. Estorno de desconto não será realizado.');
-        }
-        
-        // 6. Inserir todos os lançamentos de estorno
-        const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
-        if (insErr) throw insErr;
-        
-        // 7. Deletar Registros de Recebimento
-        const recebimentoIds = recebimentos.map(r => r.id);
-        const { error: deleteRecebimentosError } = await supabase
-            .from(tabelaRecebimentos)
-            .delete()
-            .in('id', recebimentoIds);
-            
-        if (deleteRecebimentosError) throw deleteRecebimentosError;
-        
-        // 8. Deletar extrato vinculado (se houver)
-        if (extratoId !== null) {
-            const { error: deleteExtratoError } = await supabase
-                .from('extratos')
-                .delete()
-                .eq('id', extratoId);
-            if (deleteExtratoError) {
-                console.warn('[ESTORNO CR] Erro ao deletar extrato:', deleteExtratoError);
-            }
-        }
-
-        // 9. Resetar a Parcela
-        const { error: resetError } = await supabase
-            .from(tabelaParcelas)
-            .update({
-                status: 'aberta',
-                valor_pago: 0,
-                data_pagamento: null,
-                observacao: 'Estorno de recebimento realizado.',
-            })
-            .eq('id', parcela.id);
-            
-        if (resetError) throw resetError;
-        
-        // 10. Resetar o status da conta sintética para 'aberta'
-        const { error: updateContaError } = await supabase
-            .from(tabelaContasReceber)
-            .update({ status: 'aberta' })
-            .eq('id', contaReceberId);
-            
-        if (updateContaError) console.error('Erro ao atualizar conta sintética para aberta:', updateContaError);
-        
-        showSuccess('Recebimento estornado com sucesso! Saldos reajustados.');
-        handlePagamentoCompleto();
-        
-    } catch (error: any) {
-        console.error('Erro ao estornar recebimento:', error);
-        showError('Falha ao estornar recebimento: ' + error.message);
-    } finally {
-        setIsUndoing(false);
-    }
+  const handleUndoPayment = (parcela: Parcela) => {
+    // Em vez de estornar direto, abre o modal de detalhes
+    setDetalhesRecebimentoDialog({
+      open: true,
+      parcela,
+    });
   };
 
   const handleDesvincularMapeamento = async (parcela: Parcela) => {
@@ -754,11 +518,10 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                                 <Button
                                                     variant="destructive"
                                                     size="icon"
-                                                    disabled={isUndoing}
                                                     title="Estornar Recebimento"
                                                     onClick={() => handleUndoPayment(p)}
                                                 >
-                                                    {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                    <Undo2 className="w-4 h-4" />
                                                 </Button>
                                             )
                                         ) : (
@@ -843,6 +606,20 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
           }}
       />
 
+      {detalhesRecebimentoDialog.open && detalhesRecebimentoDialog.parcela && conta && ownerId && (
+          <DetalhesRecebimentoParcelaDialog
+              open={detalhesRecebimentoDialog.open}
+              onOpenChange={(open) => setDetalhesRecebimentoDialog({ open, parcela: open ? detalhesRecebimentoDialog.parcela : null })}
+              parcela={detalhesRecebimentoDialog.parcela}
+              conta={conta}
+              proprietarioId={ownerId}
+              onDataChange={() => {
+                  fetchParcelas();
+                  onDataChange();
+              }}
+          />
+      )}
+
       {lancamentoDialog.open && lancamentoDialog.parcela && ownerId && (
           <LancamentoContabilDialog
               open={lancamentoDialog.open}
@@ -863,42 +640,6 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
               }}
           />
       )}
-
-      <AlertDialog
-        open={confirmEstornoDialog.open}
-        onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <p>Foi encontrado um lançamento no extrato bancário vinculado a esta parcela:</p>
-                <ul className="text-sm bg-muted p-3 rounded space-y-1">
-                  <li><strong>Descrição:</strong> {confirmEstornoDialog.extratoInfo?.descricao}</li>
-                  <li><strong>Valor:</strong> {confirmEstornoDialog.extratoInfo?.valor !== undefined ? formatCurrency(confirmEstornoDialog.extratoInfo.valor) : ''}</li>
-                  <li><strong>Data:</strong> {confirmEstornoDialog.extratoInfo?.data ? formatarData(confirmEstornoDialog.extratoInfo.data) : ''}</li>
-                </ul>
-                <p>Deseja estornar o recebimento e remover este lançamento do extrato?</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isUndoing}
-              onClick={() => {
-                if (confirmEstornoDialog.parcela) {
-                  executarUndoPayment(confirmEstornoDialog.parcela, confirmEstornoDialog.extratoId);
-                }
-              }}
-            >
-              {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Estornar e Remover Extrato
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 };
