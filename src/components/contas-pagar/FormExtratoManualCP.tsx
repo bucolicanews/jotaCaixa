@@ -61,6 +61,8 @@ interface FormExtratoManualCPProps {
     mapeamentoContabil: Record<string, string | null>;
     onSaveComplete: () => void;
     onClose: () => void;
+    conta_despesa_excedente_id?: string | null;
+    descricao_excedente?: string;
     parentValues?: {
         acao_saldo_restante?: 'desconto' | 'reprogramar' | 'parcelar';
         nova_data_vencimento?: Date;
@@ -173,6 +175,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     mapeamentoContabil,
     onSaveComplete,
     onClose,
+    conta_despesa_excedente_id,
+    descricao_excedente,
     parentValues,
 }) => {
     const { ownerId, ownerType } = useOwner();
@@ -297,7 +301,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         const tabelaContasPagar = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
         
         const valorPagoAnterior = parcela.valor_pago || 0;
-        const novoValorPagoTotal = valorPagoAnterior + totalPago;
+        const saldoDevedor = parcela.valor_parcela - valorPagoAnterior;
+        const valorQuitado = Math.min(totalPago, saldoDevedor);
+        const novoValorPagoTotal = valorPagoAnterior + valorQuitado;
         const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
         const isPagamentoParcial = saldoRestanteCalculado > 0.01;
         
@@ -352,14 +358,19 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 if (extratoError) throw extratoError;
             }
             
+            const valorExcedente = totalPago - valorQuitado;
+
+            console.log('[DEBUG FormExtratoManualCP]', { totalPago, saldoDevedor, valorQuitado, valorExcedente, conta_despesa_excedente_id });
+
             const lancamentosPayload: any[] = [];
             const origemVincular = `pagamento_cp:${parcela.id}`;
+            const idBancoCredito = crypto.randomUUID();
 
             for (const pagamento of pagamentoDetalhes) {
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
                     [ownerKey]: proprietarioDaSessao, 
-                    valor_pago: pagamento.valor_pago, 
+                    valor_pago: valorQuitado, 
                     conta_id: pagamento.conta_id,
                     id_conta_contabil: contaPagamento,
                     data_pagamento: dataPagamentoISO,
@@ -379,42 +390,57 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 
                 if (!contaContabilCaixaBanco) throw new Error('Conta de origem não possui vínculo contábil.');
                 
-                const idAtivo = crypto.randomUUID();
                 const idPatrimonial = crypto.randomUUID();
                 
-                const lancamentoAtivoPayload = {
-                    id: idAtivo,
-                    proprietario_id: proprietarioDaSessao,
-                    data_movimentacao: dataPagamentoISO,
-                    descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
-                    valor: pagamento.valor_pago,
-                    tipo: 'Saida' as const,
-                    conta_bancaria_id: pagamento.conta_id,
-                    conta_contabil_id: contaContabilCaixaBanco,
-                    origem: origemVincular,
-                    documento: parcela.id,
-                    historico_id: historicoId,
-                    conta_resultado_id: idPatrimonial,
-                };
-                lancamentosPayload.push(lancamentoAtivoPayload);
-                
                 if (contaPatrimonial) {
-                    const lancamentoPatrimonialPayload = {
+                    lancamentosPayload.push({
                         id: idPatrimonial,
                         proprietario_id: proprietarioDaSessao,
                         data_movimentacao: dataPagamentoISO,
                         descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                        valor: pagamento.valor_pago,
+                        valor: valorQuitado,
                         tipo: 'Entrada' as const,
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
                         origem: origemVincular,
                         documento: parcela.id,
                         historico_id: historicoId,
-                        conta_resultado_id: idAtivo,
-                    };
-                    lancamentosPayload.push(lancamentoPatrimonialPayload);
+                        conta_resultado_id: idBancoCredito,
+                    });
                 }
+
+                if (valorExcedente > 0.01 && conta_despesa_excedente_id) {
+                    const idDespesa = crypto.randomUUID();
+                    lancamentosPayload.push({
+                        id: idDespesa,
+                        proprietario_id: proprietarioDaSessao,
+                        data_movimentacao: dataPagamentoISO,
+                        descricao: descricao_excedente?.trim() || `Excedente CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`,
+                        valor: valorExcedente,
+                        tipo: 'Entrada' as const,
+                        conta_bancaria_id: null,
+                        conta_contabil_id: conta_despesa_excedente_id,
+                        origem: `excedente_cp:${parcela.id}`,
+                        documento: parcela.id,
+                        historico_id: historicoId,
+                        conta_resultado_id: idBancoCredito,
+                    });
+                }
+
+                lancamentosPayload.push({
+                    id: idBancoCredito,
+                    proprietario_id: proprietarioDaSessao,
+                    data_movimentacao: dataPagamentoISO,
+                    descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
+                    valor: totalPago,
+                    tipo: 'Saida' as const,
+                    conta_bancaria_id: pagamento.conta_id,
+                    conta_contabil_id: contaContabilCaixaBanco,
+                    origem: origemVincular,
+                    documento: parcela.id,
+                    historico_id: historicoId,
+                    conta_resultado_id: lancamentosPayload.length > 0 ? lancamentosPayload[0].id : null,
+                });
             }
             
             let finalStatus: AdminParcelaPagar['status'] = 'paga';

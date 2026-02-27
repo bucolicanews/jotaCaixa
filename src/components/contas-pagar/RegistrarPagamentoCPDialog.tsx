@@ -674,6 +674,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               mapeamentoContabil={mapeamentoContabil}
               onSaveComplete={onSaveComplete}
               onClose={() => setExtratoManualDialog(false)}
+              conta_despesa_excedente_id={pendingPaymentData.conta_despesa_excedente_id}
+              descricao_excedente={pendingPaymentData.descricao_excedente}
               parentValues={pendingPaymentData}
             />
           </DialogContent>
