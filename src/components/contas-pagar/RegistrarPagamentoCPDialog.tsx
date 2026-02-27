@@ -286,11 +286,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         .single();
     const contaPatrimonial = contaSintetica?.id_conta_patrimonial || null;
 
+    const valorQuitado = Math.min(totalPago, saldoDevedor);
+    const valorExcedente = totalPago - valorQuitado;
+
     for (const pagamento of values.pagamentos) {
         const pagamentoPayload = {
             parcela_id: parcela.id,
             [isAdminOrEmployee ? 'admin_id' : 'empresa_id']: proprietarioId,
-            valor_pago: pagamento.valor_pago,
+            valor_pago: valorQuitado,
             conta_id: pagamento.conta_id,
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
@@ -311,7 +314,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             proprietario_id: proprietarioId,
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
-            valor: pagamento.valor_pago,
+            valor: valorQuitado,
             tipo: 'Saida' as const,
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaContabilBanco,
@@ -327,7 +330,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 proprietario_id: proprietarioId,
                 data_movimentacao: dataPagamentoISO,
                 descricao: `Baixa Passivo CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`,
-                valor: pagamento.valor_pago,
+                valor: valorQuitado,
                 tipo: 'Entrada' as const,
                 conta_bancaria_id: null,
                 conta_contabil_id: contaPatrimonial,
@@ -343,13 +346,11 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
 
     // O valor registrado na parcela é só o saldo devedor quitado (sem o excedente)
-    const valorQuitado = Math.min(totalPago, saldoDevedor);
     const novoValorPago = (parcela.valor_pago || 0) + valorQuitado;
     const saldoApos = parcela.valor_parcela - novoValorPago;
     const novoStatus = saldoApos <= 0.01 ? 'paga' : 'parcial';
 
     // Lançamento do excedente (juros/multa) se informado
-    const valorExcedente = totalPago - saldoDevedor;
     if (valorExcedente > 0.01 && values.conta_despesa_excedente_id) {
         const contaBancoExcedente = values.pagamentos[0]?.conta_id || null;
         const contaSelecionadaExcedente = contasOrigem.find(c => c.id === contaBancoExcedente);
