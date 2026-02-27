@@ -48,6 +48,9 @@ const formSchema = z.object({
   salvar_como_padrao: z.boolean().optional(),
   
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial.').nullable(),
+
+  conta_despesa_excedente_id: z.string().uuid().nullable().optional(),
+  descricao_excedente: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -73,6 +76,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const [isInitialized, setIsInitialized] = useState(false);
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<FormValues & { isPagamentoParcial: boolean, saldoRestante: number } | null>(null);
+  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]);
+  const [loadingContasDespesa, setLoadingContasDespesa] = useState(false);
 
   const tabelaPagamentos = isAdminOrEmployee ? 'admin_pagamentos' : 'pagamentos';
   const tabelaParcelas = isAdminOrEmployee ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
@@ -99,6 +104,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       nova_data_vencimento: addDays(new Date(), 30),
       numero_novas_parcelas: 2,
       intervalo_dias_novas_parcelas: 30,
+      conta_despesa_excedente_id: null,
+      descricao_excedente: '',
     },
   });
   
@@ -111,6 +118,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const pagamentosArray = watch('pagamentos');
   const totalPago = pagamentosArray.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
   const restante = saldoDevedor - totalPago;
+  const excedente = restante < -0.01 ? Math.abs(restante) : 0;
   const acaoSaldoRestante = watch('acao_saldo_restante');
   const isPagamentoParcial = restante > 0.01;
 
@@ -176,9 +184,23 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
     setLoadingContasPatrimoniais(false);
   }, [proprietarioId, configMap.Passivo]);
+
+  const fetchContasDespesa = useCallback(async () => {
+    if (!proprietarioId) return;
+    setLoadingContasDespesa(true);
+    const custoCode = configMap.Custo || '5';
+    const { data } = await supabase
+      .from('plano_contas')
+      .select('id, Conta, Descricao')
+      .eq('proprietario_id', proprietarioId)
+      .eq('Analitica', 'Sim')
+      .like('Conta', `${custoCode}.%`)
+      .order('Conta');
+    setContasDespesa((data as PlanoContas[]) || []);
+    setLoadingContasDespesa(false);
+  }, [proprietarioId, configMap.Custo]);
   
   const fetchHistoricoPadrao = useCallback(async () => {
-    if (!isAdminOrEmployee || !proprietarioId) return null;
     
     const { data, error } = await supabase
         .from('configuracao_historico_padrao')
@@ -201,9 +223,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
+          fetchContasDespesa();
           fetchMapeamentoContabil();
       }
-  }, [open, proprietarioId, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchMapeamentoContabil]);
+  }, [open, proprietarioId, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchContasDespesa, fetchMapeamentoContabil]);
 
   useEffect(() => {
     if (open && !loadingContas && !isInitialized && proprietarioId) {
@@ -319,9 +342,54 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (lancErr) { showError('Erro ao gerar lançamentos: ' + lancErr.message); return; }
     }
 
-    const novoValorPago = (parcela.valor_pago || 0) + totalPago;
+    // O valor registrado na parcela é só o saldo devedor quitado (sem o excedente)
+    const valorQuitado = Math.min(totalPago, saldoDevedor);
+    const novoValorPago = (parcela.valor_pago || 0) + valorQuitado;
     const saldoApos = parcela.valor_parcela - novoValorPago;
     const novoStatus = saldoApos <= 0.01 ? 'paga' : 'parcial';
+
+    // Lançamento do excedente (juros/multa) se informado
+    const valorExcedente = totalPago - saldoDevedor;
+    if (valorExcedente > 0.01 && values.conta_despesa_excedente_id) {
+        const contaBancoExcedente = values.pagamentos[0]?.conta_id || null;
+        const contaSelecionadaExcedente = contasOrigem.find(c => c.id === contaBancoExcedente);
+        const contaContabilBancoExcedente = (contaSelecionadaExcedente as any)?.plano_contas?.id || null;
+        const idDespesa = crypto.randomUUID();
+        const idBancoExcedente = crypto.randomUUID();
+        const descExcedente = values.descricao_excedente?.trim() || `Excedente CP: ${parcela.fornecedor} (Parcela ${parcela.numero_parcela})`;
+        const lancamentosExcedente: any[] = [
+            {
+                id: idDespesa,
+                proprietario_id: proprietarioId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: descExcedente,
+                valor: valorExcedente,
+                tipo: 'Entrada' as const,
+                conta_bancaria_id: null,
+                conta_contabil_id: values.conta_despesa_excedente_id,
+                origem: `excedente_cp:${parcela.id}`,
+                documento: parcela.id,
+                historico_id: values.historico_id,
+                conta_resultado_id: idBancoExcedente,
+            },
+            {
+                id: idBancoExcedente,
+                proprietario_id: proprietarioId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: descExcedente,
+                valor: valorExcedente,
+                tipo: 'Saida' as const,
+                conta_bancaria_id: contaBancoExcedente,
+                conta_contabil_id: contaContabilBancoExcedente,
+                origem: `excedente_cp:${parcela.id}`,
+                documento: parcela.id,
+                historico_id: values.historico_id,
+                conta_resultado_id: idDespesa,
+            },
+        ];
+        const { error: lancExcErr } = await supabase.from('lancamentos').insert(lancamentosExcedente);
+        if (lancExcErr) { showError('Erro ao lançar excedente: ' + lancExcErr.message); return; }
+    }
 
     await supabase.from(tabelaParcelas).update({
         status: novoStatus,
@@ -345,11 +413,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !proprietarioId) {
         showError('Dados da parcela ou proprietário estão incompletos.');
-        return;
-    }
-    
-    if (Math.abs(restante) > 0.01 && !isPagamentoParcial) {
-        showError('O valor total pago deve ser igual ao saldo devedor da parcela.');
         return;
     }
 
@@ -380,7 +443,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     onOpenChange(false);
   };
 
-  const isSubmitDisabled = loadingContas || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial) || (isPagamentoParcial && !acaoSaldoRestante);
+  const isSubmitDisabled = loadingContas || form.formState.isSubmitting || (isPagamentoParcial && !acaoSaldoRestante);
 
   return (
     <>
@@ -550,11 +613,56 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               <div className="p-4 bg-secondary rounded-md space-y-2 text-sm">
                 <div className="flex justify-between font-medium"><p>Total Informado:</p><p>{formatCurrency(totalPago)}</p></div>
                 <Separator />
-                <div className={cn("flex justify-between font-bold text-lg", Math.abs(restante) > 0.01 ? 'text-red-600' : 'text-green-600')}>
-                  <p>Restante a Pagar:</p>
-                  <p>{formatCurrency(restante)}</p>
+                <div className={cn("flex justify-between font-bold text-lg", Math.abs(restante) > 0.01 ? (excedente > 0 ? 'text-amber-500' : 'text-red-600') : 'text-green-600')}>
+                  <p>{excedente > 0 ? 'Valor Excedente:' : 'Restante a Pagar:'}</p>
+                  <p>{excedente > 0 ? `+${formatCurrency(excedente)}` : formatCurrency(restante)}</p>
                 </div>
               </div>
+
+              {excedente > 0 && (
+                <div className="space-y-3 p-4 border border-amber-300 rounded-md bg-amber-50 dark:bg-amber-950/20">
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    Valor excedente de {formatCurrency(excedente)} — informe a conta de despesa (ex: juros, multa)
+                  </p>
+                  <FormField
+                    control={form.control}
+                    name="conta_despesa_excedente_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Conta de Despesa do Excedente</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasDespesa}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={loadingContasDespesa ? 'Carregando...' : 'Selecione a conta de despesa'} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (não lançar)</SelectItem>
+                            {contasDespesa.map(c => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="descricao_excedente"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descrição (Opcional)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Ex: Juros por atraso, Multa..." />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
               <Button type="submit" className="w-full" disabled={isSubmitDisabled}>
                 <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />
