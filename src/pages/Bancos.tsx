@@ -1,9 +1,9 @@
+import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, AlertCircle, CheckCircle2, Link2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -19,8 +19,114 @@ import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import DetalhesLancamentosDialog from '@/components/contabilidade/DetalhesLancamentosDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useMonitoramentoContabil } from '@/hooks/useMonitoramentoContabil';
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
+
+interface MonitoramentoBadgeProps {
+  contaId: string;
+  onVerDetalhes: () => void;
+}
+
+const MonitoramentoBadge: React.FC<MonitoramentoBadgeProps> = ({ contaId, onVerDetalhes }) => {
+  const mon = useMonitoramentoContabil(contaId);
+
+  if (mon.loading) {
+    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  }
+
+  const tudo_ok = mon.totalExtratosSemVinculo === 0 && mon.lancamentosSemVinculo.length === 0;
+  const tem_pendencias = mon.totalExtratosSemVinculo > 0 || mon.lancamentosSemVinculo.length > 0;
+
+  const cor = tudo_ok
+    ? 'text-green-600'
+    : tem_pendencias
+    ? 'text-amber-500'
+    : 'text-muted-foreground';
+
+  const icone = tudo_ok
+    ? <CheckCircle2 className={cn('w-4 h-4', cor)} />
+    : <AlertCircle className={cn('w-4 h-4', cor)} />;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7">
+          {icone}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-4" align="end">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-1">
+            <Link2 className="w-4 h-4" /> Monitoramento Contábil
+          </p>
+
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Extratos totais</span>
+              <span className="font-medium">{mon.totalExtratos}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Vinculados</span>
+              <span className="font-medium text-green-600">{mon.totalExtratosVinculados}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Sem vínculo</span>
+              <div className="flex items-center gap-1">
+                <span className={cn('font-medium', mon.totalExtratosSemVinculo > 0 ? 'text-red-600' : 'text-green-600')}>
+                  {mon.totalExtratosSemVinculo}
+                </span>
+                {mon.totalExtratosSemVinculo > 0 && (
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs text-blue-600" onClick={onVerDetalhes}>
+                    ver
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-2 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Parcelas CR vinculadas</span>
+              <span className="font-medium">{mon.parcelasVinculadas.filter(p => p.tipo_parcela === 'CR').length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Parcelas CP vinculadas</span>
+              <span className="font-medium">{mon.parcelasVinculadas.filter(p => p.tipo_parcela === 'CP').length}</span>
+            </div>
+          </div>
+
+          <div className="border-t pt-2 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Lançamentos contábeis</span>
+              <span className="font-medium">{mon.lancamentos.length}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Sem vínculo contábil</span>
+              <div className="flex items-center gap-1">
+                <span className={cn('font-medium', mon.lancamentosSemVinculo.length > 0 ? 'text-amber-600' : 'text-green-600')}>
+                  {mon.lancamentosSemVinculo.length}
+                </span>
+                {mon.lancamentosSemVinculo.length > 0 && (
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs text-blue-600" onClick={onVerDetalhes}>
+                    ver
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {tudo_ok && (
+            <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Tudo vinculado e lançado
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const Bancos = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -229,6 +335,7 @@ const Bancos = () => {
                                 <TableHead className="w-[150px]">Nome</TableHead>
                                 <TableHead className="w-[100px]">Natureza</TableHead>
                                 <TableHead>Conta Contábil</TableHead>
+                                <TableHead className="w-[80px] text-center">Contábil</TableHead>
                                 <TableHead className="w-[150px] text-right">Saldo Atual</TableHead>
                                 <TableHead className="w-[100px] text-right">Ações</TableHead>
                             </TableRow>
@@ -256,6 +363,12 @@ const Bancos = () => {
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <MonitoramentoBadge
+                                                    contaId={conta.id}
+                                                    onVerDetalhes={() => handleOpenDetalhes(conta)}
+                                                />
                                             </TableCell>
                                             <TableCell className={cn("text-right font-semibold", conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600')}>
                                                 {formatCurrency(conta.saldo_atual)}
