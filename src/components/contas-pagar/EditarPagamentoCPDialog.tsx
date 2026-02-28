@@ -121,12 +121,13 @@ const EditarPagamentoCPDialog: React.FC<EditarPagamentoCPDialogProps> = ({
             if (parcelaErr) throw parcelaErr;
             setParcelaData(parcela);
 
+            const dataPag = pagamento.data_pagamento
+                ? new Date(pagamento.data_pagamento + 'T12:00:00')
+                : new Date();
             form.reset({
                 conta_id: pagamento.conta_id || '',
                 valor_pago: pagamento.valor_pago || 0,
-                data_pagamento: pagamento.data_pagamento
-                    ? new Date(pagamento.data_pagamento + 'T12:00:00')
-                    : new Date(),
+                data_pagamento: isNaN(dataPag.getTime()) ? new Date() : dataPag,
                 forma_pagamento: pagamento.forma_pagamento || 'Pix',
                 historico_id: pagamento.historico_id || null,
             });
@@ -329,7 +330,7 @@ const EditarPagamentoCPDialog: React.FC<EditarPagamentoCPDialogProps> = ({
                                                         variant="outline"
                                                         className={cn('pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
                                                     >
-                                                        {field.value ? format(field.value, 'dd/MM/yyyy', { locale: ptBR }) : <span>Data</span>}
+                                                        {field.value instanceof Date && !isNaN(field.value.getTime()) ? format(field.value, 'dd/MM/yyyy', { locale: ptBR }) : <span>Data</span>}
                                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                                     </Button>
                                                 </FormControl>
