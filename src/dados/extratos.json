@@ -15,7 +15,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "694a01a5-5ea4-40d4-9069-c69fb9db160d",
+    "id_parcela_rb": "5e675900-c78c-4614-9f69-f441acf38a63"
   },
   {
     "id": "16790645-675a-47d3-8a72-90e48f00343c",
@@ -33,7 +35,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "3be89bb3-641c-45d5-bbfe-0fd80e23f77c",
+    "id_parcela_rb": "c1692a03-f8c9-4315-9eb3-78f859046c0e"
   },
   {
     "id": "9aa9f62a-4a13-4496-993c-fcb882c154cf",
@@ -51,7 +55,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7ad7bed3-53cc-43dd-b002-4dec55e44552",
+    "id_parcela_rb": "77cb3bdf-5d19-46cc-a719-2f0038e7878c"
   },
   {
     "id": "3f7f9510-7285-43eb-a687-ab2b1e318498",
@@ -69,7 +75,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fe1c4322-e0dd-4949-a658-5f6ca58f15aa",
+    "id_parcela_rb": "f6677446-5225-4252-bac8-ffd5c53dbd75"
   },
   {
     "id": "958af400-1b4c-4b6f-8448-105421c8d5fb",
@@ -87,7 +95,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5e542104-582a-4c15-adb4-9744a9d16228",
+    "id_parcela_rb": "8568e489-01b3-4f23-b5e7-f64f7b4a20d0"
   },
   {
     "id": "79535dc8-f7a9-4efa-936c-d4c9ff4085ae",
@@ -105,7 +115,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a640fa75-a223-41e7-9166-26df7588a8c0",
+    "id_parcela_rb": "8cd91b7a-5b37-4b61-ae6a-b3b4e65b934b"
   },
   {
     "id": "d906bb3f-ea64-4d0d-b1d8-98ab114b922e",
@@ -123,7 +135,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "55ffc27b-929b-4d3a-922f-fc44cee2d34d",
+    "id_parcela_rb": "45641bbd-cc24-406f-83a7-b011c64ccf22"
   },
   {
     "id": "3ffbb512-6687-4571-a391-780598c968bb",
@@ -141,7 +155,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "15a1efe1-5a91-44a3-b2c7-398bb6b3f49e",
+    "id_parcela_rb": "2997fa71-3b10-4d07-95f7-45717fbf4c67"
   },
   {
     "id": "125e6382-ae38-4a90-83a2-57be651e7cc7",
@@ -159,7 +175,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "9dd81dac-c5aa-4e13-accb-39957d6e4fe4",
+    "id_parcela_rb": "941ac738-6c41-43d7-b082-3592cf3992ee"
   },
   {
     "id": "2281206c-b913-4c0f-b3f9-80e5b2d1ff98",
@@ -177,7 +195,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "CONCILIADA",
-    "valor_conciliado": "150.00"
+    "valor_conciliado": "150.00",
+    "id_parcela_pg": "46e147a8-5fab-4d20-ab5b-98408a4383c8",
+    "id_parcela_rb": "53c9f5df-7f1c-4684-8f9a-306239971b9a"
   },
   {
     "id": "af33da71-9d04-457b-939a-17839fae6dfc",
@@ -195,7 +215,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "46327efa-f8da-4d5e-a20c-7da5fa35029f",
+    "id_parcela_rb": "45a851b2-65ae-4ed3-ac66-5ba02773fe64"
   },
   {
     "id": "5ba73bee-a0e2-48f3-93a8-63ca4f474e54",
@@ -213,7 +235,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1487d35a-0f92-4762-9b0f-4887fc45d168",
+    "id_parcela_rb": "f0093f94-d243-46c6-88aa-05a8403a76c5"
   },
   {
     "id": "5be1797c-df34-4083-8dcc-5d6f07e4a4f2",
@@ -231,7 +255,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "986183b9-ac01-4c63-9d15-e74a3c54475e",
+    "id_parcela_rb": "555765c5-938c-4f14-a61e-692b0c6d8ab3"
   },
   {
     "id": "1d2aee9b-2c71-4a5a-8a4a-145e1dcc7450",
@@ -249,7 +275,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e4ade712-fc3b-467b-be15-90d8ef4e3f0d",
+    "id_parcela_rb": "3218c512-d4dd-4ec5-b0cd-5072996d5b8d"
   },
   {
     "id": "452fa45d-649d-4bc3-82b6-fd50d2de3a69",
@@ -267,7 +295,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fdb99708-aa92-4060-a8e7-f6d35084f8ed",
+    "id_parcela_rb": "48f91479-0cfe-435f-bc0e-e666858f6ea3"
   },
   {
     "id": "67ed927b-c49a-4824-93f0-fdc9e72bb19d",
@@ -285,7 +315,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "91045cf6-68fe-48d0-aff6-addd4ceef500",
+    "id_parcela_rb": "36eb7ed0-82ff-4add-939b-16d444c54b24"
   },
   {
     "id": "a5c0f13a-e557-4054-917a-ff32c330c01c",
@@ -303,7 +335,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "0d662def-5ea9-47b8-a7c6-3bebc4dbe274",
+    "id_parcela_rb": "c5708dc5-fc80-4174-bacf-f330e9c9e3de"
   },
   {
     "id": "104e7882-3d4d-47b2-a9ee-b4fea8924ddb",
@@ -321,7 +355,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6fb2b41a-5f66-41b2-b9c0-88fbcacf647f",
+    "id_parcela_rb": "ede4db00-7e37-4e36-96f3-f8bfd7784225"
   },
   {
     "id": "117c770d-574e-468e-ab6e-bead19efa903",
@@ -339,7 +375,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6cc5906a-3035-4ef7-a1eb-901ba2ec6ace",
+    "id_parcela_rb": "78687da5-30ee-4c3b-a415-0636294828d1"
   },
   {
     "id": "dc39e8e5-47e2-4ae9-9b60-1f173dfbd4f3",
@@ -357,7 +395,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "986f61ad-bb1a-4ad1-9218-2e0547b16954",
+    "id_parcela_rb": "7bdbc16f-d4bf-4a0a-9c6c-85deece56268"
   },
   {
     "id": "2879814b-e8c1-432e-b1ef-ecbd3fa818b1",
@@ -375,7 +415,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "4fb62898-0903-4375-9fdb-36e8dd51a53b",
+    "id_parcela_rb": "439ab22a-0f29-4bda-b654-7584868bd054"
   },
   {
     "id": "caeaae01-5780-4b62-a1de-792659dda306",
@@ -393,7 +435,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "088a8857-6bcf-4993-a5b9-c9113ed54808",
+    "id_parcela_rb": "6002b371-5549-4779-9111-5f1b059a39c7"
   },
   {
     "id": "0a74dc61-ea91-458f-b00c-245e0ab883c8",
@@ -411,7 +455,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "819b5c00-1296-4df6-b1cd-f4f8e67bd598",
+    "id_parcela_rb": "c8dbaa63-017a-4942-8e7d-a426778080a1"
   },
   {
     "id": "ae30c02f-9265-4b53-a2fc-f551a7bc8d94",
@@ -429,7 +475,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fd7fe145-5c2d-4ca5-baf0-5da725ee6437",
+    "id_parcela_rb": "ca5adb97-330a-40cb-a9c3-e476fd91d731"
   },
   {
     "id": "deef615c-48ac-4b52-9e5c-898b34a3f714",
@@ -447,7 +495,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "ead0e3fe-e76f-4e36-b770-200c1ec58ab6",
+    "id_parcela_rb": "c6a62f4e-a5d6-4daa-805c-c305d40a2633"
   },
   {
     "id": "d1170f97-8815-4fd7-847f-7ce0e064c575",
@@ -465,7 +515,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "321b73c4-86fa-48fe-82ad-09b5fb774db8",
+    "id_parcela_rb": "a3afc262-0b2a-4760-90db-245dc4ac4f93"
   },
   {
     "id": "158acdd9-930e-4d03-ba16-5aab01b362cf",
@@ -483,7 +535,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "3ac31301-28b3-4e0d-8629-6885426e43a5",
+    "id_parcela_rb": "5a6b6400-0279-439e-8b1a-ba375d023b93"
   },
   {
     "id": "2da04909-5c8e-40ca-8f8c-cf277c9dfc0b",
@@ -501,7 +555,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "637684af-9e06-4488-bcbc-742551ff4bb9",
+    "id_parcela_rb": "ffb939ae-c436-4af9-83a7-fcbc706a77ed"
   },
   {
     "id": "6f2d836a-33ce-4121-b7ff-2f6784e42071",
@@ -519,7 +575,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "525d7773-f3b4-4405-a4d4-16b1ed45bb9c",
+    "id_parcela_rb": "0b25381c-676a-4a5a-bfd4-7d2773eea3b9"
   },
   {
     "id": "29555cd5-ebd2-452c-b8ec-ba05bd871b4c",
@@ -537,7 +595,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6f80a5e0-0559-43ec-9ba4-36bc8d0f1f28",
+    "id_parcela_rb": "5a0e57d4-ed9b-4e43-96ec-e3fd8dd63fe6"
   },
   {
     "id": "fdfe8b2d-a735-49ed-8eeb-8171ef0c275f",
@@ -555,7 +615,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c89b608d-9ce7-4623-8d09-ac8514aea9f4",
+    "id_parcela_rb": "5ada7e07-b5b4-4d2a-b269-b6b9a771298d"
   },
   {
     "id": "f546159c-c8db-42c1-a848-ec072f85dcba",
@@ -573,7 +635,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6bf776a2-e0a6-4986-a360-3d5109a2505f",
+    "id_parcela_rb": "01f91497-af63-440c-9fd0-c7505e588e89"
   },
   {
     "id": "ec3acb04-1cf3-4be0-a8b8-c2bc6bfdf50c",
@@ -591,7 +655,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bf446d3b-816d-47fc-816d-5fb77a5022df",
+    "id_parcela_rb": "ed60edc0-a89b-4cbe-9a01-8badabc654af"
   },
   {
     "id": "059a2049-ffeb-4f41-9d40-50442b469833",
@@ -609,7 +675,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "3d807114-0725-4378-a780-673334db863a",
+    "id_parcela_rb": "89f17f6c-e71d-4228-8dc7-d2b895391b7e"
   },
   {
     "id": "1257fd23-f1b2-4722-96a5-f056a2b753f9",
@@ -627,7 +695,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "aaf804db-3cfa-4b3e-80c3-f600e9dcadb1",
+    "id_parcela_rb": "50491453-1df6-445f-bc7b-e4b0cfcfa21d"
   },
   {
     "id": "6f7fa5b0-25b6-4461-8fde-066373906ac0",
@@ -645,7 +715,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "92ecd932-4099-4795-8090-0dda1a9fc53a",
+    "id_parcela_rb": "a6ae0738-2ea3-49d9-ab17-e6a784abe18f"
   },
   {
     "id": "d7781956-1075-4858-bd3d-3fb88a70ef0c",
@@ -663,7 +735,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "208c751e-fea0-49e1-b04e-685629cad6d8",
+    "id_parcela_rb": "66c172a5-1720-44cf-936e-079576ccd3d8"
   },
   {
     "id": "7e69d409-b45f-4257-9c30-4030f665fa25",
@@ -681,7 +755,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "9a059b57-88b9-4079-842d-f8054e0578a0",
+    "id_parcela_rb": "e499ef55-0126-4c65-a727-b348cb91afe8"
   },
   {
     "id": "f27d95c0-3d8a-4a0e-a709-375ff56eb756",
@@ -699,7 +775,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "f270783d-364f-4b47-8e44-6fd005cd5cef",
+    "id_parcela_rb": "96ae0d3e-4c5f-470d-a0df-f1516c505cb3"
   },
   {
     "id": "a4508061-4a7d-4851-aa9f-2c9e08e5051b",
@@ -717,7 +795,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2b41038b-42a2-4275-8a4e-fe38e9c132f5",
+    "id_parcela_rb": "6b82501c-d281-40e3-9826-d39d992f86fd"
   },
   {
     "id": "8b810609-79b6-460a-afc2-e6ef549e8de6",
@@ -735,7 +815,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a1a98c9b-e501-45ff-bc95-2c2a6bf2d6dc",
+    "id_parcela_rb": "d572a32b-e46d-447f-8f29-7a7b9b21455b"
   },
   {
     "id": "32f41d0d-ab3e-4c51-83b3-b830292e5279",
@@ -753,7 +835,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fda7b147-0783-4526-9943-1f3c7e803659",
+    "id_parcela_rb": "546e189d-dbc7-4a1a-b35b-b7580aa297e1"
   },
   {
     "id": "b8d43ccf-3825-4bce-abef-00664572e106",
@@ -771,7 +855,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a0a9ea96-6435-470c-909a-c0d01ca9a2d1",
+    "id_parcela_rb": "32f8a828-957b-43f5-a90b-669f6edff826"
   },
   {
     "id": "88be4231-a414-4352-bd70-769634602ec2",
@@ -789,7 +875,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "869ff1ad-d4c3-4df2-8783-9dd3c8c8123a",
+    "id_parcela_rb": "98f019e1-523b-403b-8d66-b3ea6483b3bd"
   },
   {
     "id": "79fb9a7a-e0c7-4871-a07c-82044bfba43f",
@@ -807,7 +895,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "26fa586e-35e4-4644-8b88-7fa2ec0dabb0",
+    "id_parcela_rb": "3525cd11-0153-4afa-b1ab-0a67901020dc"
   },
   {
     "id": "f3c11d90-9638-4e35-8afb-fb1338cef073",
@@ -825,7 +915,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "ad28e3bc-ff6a-4e19-8cf4-2f32639f42a1",
+    "id_parcela_rb": "8e27254d-3e1e-41c4-b608-facc4c4877e6"
   },
   {
     "id": "a5c46aed-e2b4-4f3a-bca1-ca428579d09a",
@@ -843,7 +935,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c1cbabe9-759b-4434-910d-03b3c97ced8c",
+    "id_parcela_rb": "922bb4d0-94d5-40d6-90ca-bad9f9bcc5b5"
   },
   {
     "id": "69e304c7-983a-4625-a11e-f6a337520ae1",
@@ -861,7 +955,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bf185152-53c0-4212-be91-bdec3e058dd4",
+    "id_parcela_rb": "73a4034b-a158-475c-8e64-e8f7b1f0529d"
   },
   {
     "id": "b26f2465-7c1a-40f4-8931-12254d8626a6",
@@ -879,7 +975,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e1aa6a7a-af9e-448d-9d89-2a8fa9666d7c",
+    "id_parcela_rb": "4723d7c2-d0d5-4344-8b46-0496149331df"
   },
   {
     "id": "8dd57f04-f51d-4648-9e97-ff304e1900f9",
@@ -897,7 +995,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e91cfe73-edc0-4735-b507-1c3448abf45d",
+    "id_parcela_rb": "95631ae2-f045-489d-89d8-759babdd5ac9"
   },
   {
     "id": "3c948ead-a3c5-4e16-9508-4c66c21a077c",
@@ -915,7 +1015,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "327948e7-a46e-42a4-8c5e-6cb871df3d4e",
+    "id_parcela_rb": "d6d5298c-4668-424e-918c-4f033683b16f"
   },
   {
     "id": "1e0c075d-c1f8-43c2-8895-3a74b43c084c",
@@ -933,7 +1035,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "03c735c1-9f19-4aed-a4ad-56eacc7df358",
+    "id_parcela_rb": "f3cade35-d0ad-4812-b3e5-66b8210ac191"
   },
   {
     "id": "965beec7-2b9d-4566-85cf-81c156534785",
@@ -951,7 +1055,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "9ae4e16e-55d1-464a-b6f2-57237c1f1148",
+    "id_parcela_rb": "aaf01faa-64bb-45ce-9869-abe1ace2b777"
   },
   {
     "id": "012d2e3c-21a1-4b18-8311-5884569f13bd",
@@ -969,25 +1075,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
-  },
-  {
-    "id": "3483f9cd-1a95-42be-b760-f1b044cff979",
-    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
-    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
-    "data": "2026-01-08",
-    "descricao": "Transf Pix recebida",
-    "valor": "1459",
-    "tipo": "Entrada",
-    "identificacao": "Cmr Comercio De Moveis Rusticos E Plantas Ltda (35)",
-    "conciliado": false,
-    "conta_contabil_id": null,
-    "criado_em": "2026-02-11 12:58:07.054107+00",
-    "status_mapeamento": "sem_mapeamento",
-    "mapeado_parcela_id": null,
-    "mapeado_tipo": null,
-    "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "3cd977e5-cfd4-4580-8aa5-b732f0aac4a5",
+    "id_parcela_rb": "eb2580d2-cebb-486a-b43f-eacdcd613e0b"
   },
   {
     "id": "23acab16-546a-4335-8208-ff5f969d570d",
@@ -1005,7 +1095,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1818133b-9fdc-4f86-bea0-459dde6a0594",
+    "id_parcela_rb": "b24bb8b9-9722-4110-bc3a-1b0a23b790e0"
   },
   {
     "id": "7d1ebb97-3f00-47ae-9deb-5571659bebc9",
@@ -1023,7 +1115,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "423b1267-9306-44ca-b000-1b51365b7a8c",
+    "id_parcela_rb": "340fe7e0-cd59-4e83-9b38-92bdb8b97a1a"
   },
   {
     "id": "dd790a41-fbf3-4775-91d5-ea27e0be8ec5",
@@ -1041,7 +1135,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1a4eb89f-c1a5-47c4-b26a-2d12e63c6a7a",
+    "id_parcela_rb": "d62c0615-2ea9-466e-af84-a36e8eb302db"
   },
   {
     "id": "d49aa374-74d1-44d7-9770-ba4c5a48568f",
@@ -1059,7 +1155,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "4ea15b6c-8161-43e7-8869-deac7966acd5",
+    "id_parcela_rb": "0729c586-dbd5-4084-a770-8ee27120c123"
   },
   {
     "id": "9f0b57ff-d853-4fec-a968-ca60ddaca33a",
@@ -1077,7 +1175,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2c813d98-fc61-4fe0-a8dd-639b2bced46d",
+    "id_parcela_rb": "1ab2df38-0f9b-48a1-8061-4b6d737ded72"
   },
   {
     "id": "e99f80ba-a767-4dfe-b686-3d5d5c6f7501",
@@ -1095,7 +1195,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a4e15d2a-d8af-4b1e-93dd-6d589cf225e8",
+    "id_parcela_rb": "4957c397-2e50-4f58-b135-fdf02129dc80"
   },
   {
     "id": "dc231f98-7064-4e33-ae87-58b83a4ad816",
@@ -1113,7 +1215,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c68cc374-0250-4321-a7bd-a5ff7e3490d1",
+    "id_parcela_rb": "722e054c-d962-4ff7-9211-e67397380fac"
   },
   {
     "id": "7452d877-e153-42d2-a74d-d437f5cda8c0",
@@ -1131,7 +1235,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "53b6eb8e-26b6-4ad1-a001-9bd5dfe53e6d",
+    "id_parcela_rb": "1755c9a6-bbf8-4455-90f4-41b901727cea"
   },
   {
     "id": "217f6303-d240-4ff6-8558-7a8b8defd5f1",
@@ -1149,7 +1255,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "47e83b88-9264-4d55-8d33-7eee8d2ed702",
+    "id_parcela_rb": "3b07624e-05ef-4928-9a20-69cff179d139"
   },
   {
     "id": "bc195458-0317-4aeb-889a-5418b03ef389",
@@ -1167,7 +1275,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7bd97cd0-5bc5-4186-b756-725d21955291",
+    "id_parcela_rb": "900b879b-a1e1-47d4-8233-7e1c3b797cd5"
   },
   {
     "id": "60891448-6000-4bf7-9005-cbe221c98d5c",
@@ -1185,7 +1295,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "13d4044a-d629-45ee-a0ed-32a1a9769b57",
+    "id_parcela_rb": "35da35e9-97b3-47c2-94b2-e34bf4da168b"
   },
   {
     "id": "28cd1f11-e849-4899-b58e-1378fd51be0a",
@@ -1203,7 +1315,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "189c0910-b89d-4ee9-adc9-fd15d79502bd",
+    "id_parcela_rb": "3a0d8d54-fa50-4bd7-b2c1-34821db1c819"
   },
   {
     "id": "ea8ac1c0-f104-44a5-b37f-60bf01cf8d4e",
@@ -1221,7 +1335,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5e80c159-1f39-449a-a391-740c0af97d83",
+    "id_parcela_rb": "2808ed1b-7a96-433a-9cce-ae50b808ecd6"
   },
   {
     "id": "b4614b49-eb30-44be-b28f-cc01da6dd826",
@@ -1239,7 +1355,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1dc7bcd7-c8b9-4a5c-b64f-97193f04c45d",
+    "id_parcela_rb": "26c7389f-4b8c-41b0-b417-4a72ffe00ad0"
   },
   {
     "id": "5732d50c-4413-48c5-a090-eb01bb3dac47",
@@ -1257,7 +1375,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7b55b311-e91f-491d-aeae-4f5bef118213",
+    "id_parcela_rb": "7748d847-ce66-48d2-ad2d-a364bbfee0a6"
   },
   {
     "id": "3c1b2ddf-8de1-429e-821f-4709cdab6062",
@@ -1275,7 +1395,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e32989b3-a3a4-49bc-8bb6-31db38ae0ff3",
+    "id_parcela_rb": "22e50755-c300-43df-bb44-e543a939cd3e"
   },
   {
     "id": "196c40a8-fd2d-4ecf-9893-8c36e17ff47f",
@@ -1293,7 +1415,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "b4fd6555-5535-4a54-91fc-5c5705fb03af",
+    "id_parcela_rb": "427c3173-268b-4a18-a8f4-6eeedaa4ed0b"
   },
   {
     "id": "67b43803-9263-4307-ab89-aa6017a69435",
@@ -1311,7 +1435,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "40917cb9-fd81-47f5-a819-7183edb2c244",
+    "id_parcela_rb": "517a9c3a-b57b-4890-af6d-b930cc8953dd"
   },
   {
     "id": "02d8e304-ee45-47ad-89ae-66331f85a115",
@@ -1329,7 +1455,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "0108238e-57a1-488d-aa54-9883cd440357",
+    "id_parcela_rb": "560cecc2-1c13-42b7-a96e-b57e01f4b15d"
   },
   {
     "id": "48b2159e-7694-4251-851d-d22e8f2a1d45",
@@ -1347,7 +1475,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a4bd5d77-4969-49ef-8374-2a17011c82c2",
+    "id_parcela_rb": "c2ffab3a-bd00-4563-8118-150e9b88fc4c"
   },
   {
     "id": "1331f8a4-31ec-4229-acff-6b0f118c5081",
@@ -1365,7 +1495,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "57b01171-fe01-47f4-9974-043b55a19527",
+    "id_parcela_rb": "869fa5c3-b796-459c-89b1-006e6d14ebe4"
   },
   {
     "id": "dee9d618-c0de-4c5b-ab73-723e1c56b7cd",
@@ -1383,7 +1515,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bd5f8716-0172-4f5e-9270-707988287d57",
+    "id_parcela_rb": "90bd0200-9a58-49f9-b203-ed5e948ce211"
   },
   {
     "id": "f2f9e06e-8521-4ec9-9a2a-b262aa2208ef",
@@ -1401,7 +1535,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1730734a-87a2-481a-a18b-9b028c39d619",
+    "id_parcela_rb": "eb8732d0-ce20-49fc-aa15-c505db701494"
   },
   {
     "id": "95b2a6c2-2550-42f1-a9e8-0c79dc4109dc",
@@ -1419,7 +1555,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c84f1eb0-f29d-49c7-a76c-59b06ffcba15",
+    "id_parcela_rb": "24ebcb2f-1645-4528-a14a-72af6bd3fb4b"
   },
   {
     "id": "a5050cce-2ad3-4ead-a60f-57e8536d21a9",
@@ -1437,7 +1575,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "52f1c217-41f8-47a3-bd80-14d5136531cd",
+    "id_parcela_rb": "6f7fd455-d6fd-40bc-bbcd-3524cf268bea"
   },
   {
     "id": "af3276a6-aa69-4a92-aba7-c20db083eae6",
@@ -1455,7 +1595,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "89d47cae-709f-4d80-8e7a-7837b12d35a6",
+    "id_parcela_rb": "b1627cc1-8aa8-473b-a59c-c4e043004cec"
   },
   {
     "id": "e46c0296-a491-4b05-b62e-f46bf6cc34f0",
@@ -1473,7 +1615,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bc62169f-bd79-43be-817a-6a78ef236adc",
+    "id_parcela_rb": "8a991298-d8f7-405f-a9b9-348abf2260ff"
   },
   {
     "id": "db223f33-a313-4c21-add9-c8f7268dfa67",
@@ -1491,7 +1635,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "969ae4d7-9cbc-4dd0-8b45-87644daddf6e",
+    "id_parcela_rb": "8ffa89dc-83dc-4f25-95b5-f66fc473d5f4"
   },
   {
     "id": "9c037ce4-5a32-4578-948c-722b84e7d198",
@@ -1509,7 +1655,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "514dc514-9773-4219-9664-1fa19e18cf3e",
+    "id_parcela_rb": "0e4b7c9e-8ad8-4d24-9f1f-5f4ddaafb8ec"
   },
   {
     "id": "f7197a04-3226-496e-91a6-b64b0b42f130",
@@ -1527,7 +1675,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "ba241175-dd42-466a-a51e-2f606f59be89",
+    "id_parcela_rb": "a434da94-6ed0-4bf1-ba2d-81d843ab5655"
   },
   {
     "id": "e1391a61-2618-4308-bea1-7a9ea44a1378",
@@ -1545,7 +1695,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fbf05030-459e-4766-8313-109f4a229db3",
+    "id_parcela_rb": "0677a6a2-b2d3-42eb-8975-6441a5adc8d9"
   },
   {
     "id": "f449b7a8-4484-49db-bfd9-25c00df14f6b",
@@ -1563,7 +1715,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "22bc1b15-e9df-4ce0-8f78-000a4daa3d76",
+    "id_parcela_rb": "7b42fa1d-ea0d-4399-ba9a-135f17d742d0"
   },
   {
     "id": "15f04b9e-cb0d-4bea-84db-5562d487e410",
@@ -1581,7 +1735,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "366c4263-6a95-4f8c-88d7-21e204ed0eda",
+    "id_parcela_rb": "f1e310e0-c2ab-4e33-bffb-9619e99455df"
   },
   {
     "id": "6b23747f-73f9-4412-80ab-7587640ed9c1",
@@ -1599,7 +1755,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7c532fd0-1b55-452a-a665-0c233b100a9f",
+    "id_parcela_rb": "44924003-ac40-414e-9e5d-bc41559dab53"
   },
   {
     "id": "0d772c2d-2e75-4d1b-ad05-d7fd1a7b6882",
@@ -1617,7 +1775,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c132eecb-3cfd-4d8d-943e-23b3996a1a3b",
+    "id_parcela_rb": "17f2aad1-a1a8-4124-8213-604c45f76928"
   },
   {
     "id": "292ebe1c-02d6-423e-9c2c-3c7a4d3b3be5",
@@ -1635,7 +1795,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c2940176-e165-4d24-aecf-981889129e73",
+    "id_parcela_rb": "dd958ac5-b7bf-4754-8275-54e715e475df"
   },
   {
     "id": "04f27ae8-f5fd-4e3c-9e49-6ada1cba66ec",
@@ -1653,7 +1815,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "814e58d5-a778-4f31-beb2-35e8b5fa806b",
+    "id_parcela_rb": "a9faea9e-5576-415b-8818-774424d3c927"
   },
   {
     "id": "a5a50918-b3e5-44a5-b6db-1e7db5a58d2f",
@@ -1671,7 +1835,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "aab91e01-37e1-40b2-97b5-93d9e5d73c11",
+    "id_parcela_rb": "fa6c3117-5a59-4d13-b001-6f6bf60646b4"
   },
   {
     "id": "4d9926b3-4e3f-4430-bb85-fe1a6922a35d",
@@ -1689,7 +1855,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a39206b8-ed41-43e8-8b1a-624fb5f2f7c2",
+    "id_parcela_rb": "de3f5323-c451-401a-99b9-d94a0b065d74"
   },
   {
     "id": "ac1b5d34-80de-4027-876c-d04f2c4b2426",
@@ -1707,7 +1875,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c4f19037-3ccc-4174-bac6-5fe80dbd29f2",
+    "id_parcela_rb": "e64f75d9-4fed-4dad-81d1-7a170ad71e3e"
   },
   {
     "id": "7aadb44d-7de4-4d85-bcf9-6e4d0480b1e7",
@@ -1725,7 +1895,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "fbcf7a29-3072-435b-8be5-97358969eb68",
+    "id_parcela_rb": "d44424cb-4e89-4e45-a90e-470a31f329c7"
   },
   {
     "id": "1bb55c58-c3d8-4c9d-9316-0c01223d8ba6",
@@ -1743,7 +1915,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "d6cc3ee8-085b-4741-be50-764499265de4",
+    "id_parcela_rb": "68a74562-0336-4c77-92f1-b2dfd94d6b65"
   },
   {
     "id": "641e3eb5-65e5-4738-9aa0-29cb957bf38c",
@@ -1761,7 +1935,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "16ebc697-b8a4-464d-a890-b44f47e2308a",
+    "id_parcela_rb": "76b1251e-f6fa-431a-8fdd-fbd1ef0212f6"
   },
   {
     "id": "392f18de-c845-489f-9b4a-17bbb65c718b",
@@ -1779,7 +1955,9 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "54c96071-20e2-4f89-99eb-e5ace1748c2c",
+    "id_parcela_rb": "780b221c-59f8-416f-badd-49439bc63bf3"
   },
   {
     "id": "1734c45b-bd84-4dac-9eb8-4fb444ba4150",
@@ -1797,6 +1975,1568 @@
     "mapeado_parcela_id": null,
     "mapeado_tipo": null,
     "status_conciliacao": "PENDENTE",
-    "valor_conciliado": "0.00"
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2bec42dc-1d69-4450-be1e-0640e8b09b76",
+    "id_parcela_rb": "ca8d9a60-e847-496a-b474-856c60ea5849"
+  },
+  {
+    "id": "af6238e9-57a2-4f30-b40b-1bfb29117d5f",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "6bc26625-fb5a-46b1-8e6c-a6b41e45c06f",
+    "data": "2026-02-16",
+    "descricao": "pagamento pix realizado",
+    "valor": "-54.7",
+    "tipo": "Saida",
+    "identificacao": "SISTEMA GDOOR",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-16 19:03:47.841098+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7a6c8eea-3da6-43d8-99a2-6214b29e1139",
+    "id_parcela_rb": "7d429fc1-37c5-40bd-916a-61dccffdeeea"
+  },
+  {
+    "id": "88c84348-f529-4229-8a9b-f15bece513fc",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-16",
+    "descricao": "pagamento pix realizado",
+    "valor": "-39.8",
+    "tipo": "Saida",
+    "identificacao": "SISTEMA GDOOR",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-16 19:09:38.429256+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "1ad81195-ef50-4645-8568-3ec8c08f9820",
+    "id_parcela_rb": "bb01afc7-f58a-4738-98b8-0d06d292dd7a"
+  },
+  {
+    "id": "4b7b6b3b-f36b-4bf3-b364-101fd9dbb926",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-19",
+    "descricao": "Pagamento de PIX do PagBank a receber",
+    "valor": "767",
+    "tipo": "Entrada",
+    "identificacao": "ERICA DOS SANTOS FERREIRA",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-19 13:36:43.729558+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "50faa38b-e165-4161-8fe9-ac3a0469c388",
+    "id_parcela_rb": "b5294017-9b60-434c-be9f-c91219c0345a"
+  },
+  {
+    "id": "395bf3eb-202b-4e2b-9a54-db7355dc9f8d",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-19",
+    "descricao": "pagamento pix realizado",
+    "valor": "-38.61",
+    "tipo": "Saida",
+    "identificacao": "SISTEMA GDOOR",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-19 14:04:07.567332+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c4004302-e248-4d43-89c7-8054e78aca2f",
+    "id_parcela_rb": "bdebe7e0-aea5-4531-a842-01c7ae69ec27"
+  },
+  {
+    "id": "2cf81175-3171-47c5-9425-320260a41944",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-19",
+    "descricao": "Transf Pix recebida",
+    "valor": "163",
+    "tipo": "Entrada",
+    "identificacao": "FELIPE DA COSTA PAZ",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-19 17:03:06.098816+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bae0d2bf-87db-4a44-87ed-cb0f369c7bc5",
+    "id_parcela_rb": "0199c3aa-183a-419e-97cd-f240a94baec8"
+  },
+  {
+    "id": "24312806-6f14-4c04-990e-8f76ac7d6ab6",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-19",
+    "descricao": "pagamento pix realizado",
+    "valor": "-150",
+    "tipo": "Saida",
+    "identificacao": "TATIANA LOUREIRO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-19 20:19:55.288467+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e50377e9-540a-4b8f-8eb6-8c37f23c0c1b",
+    "id_parcela_rb": "7452d2da-58ab-4c1a-a182-7ac22b1e9640"
+  },
+  {
+    "id": "9cfc12bc-a402-4791-8a68-7b628efc3f64",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "6bc26625-fb5a-46b1-8e6c-a6b41e45c06f",
+    "data": "2026-02-20",
+    "descricao": "pagamento pix realizado",
+    "valor": "-55.89",
+    "tipo": "Saida",
+    "identificacao": "m do s g vieira",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-20 13:08:35.791315+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "0a0a54ec-dfe2-49d6-b35f-42c0e3a309fd",
+    "id_parcela_rb": "35832909-418a-4297-bfd2-d59169e4328f"
+  },
+  {
+    "id": "7c75fa26-bbe2-48f4-9e36-07330b5c31ae",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "6bc26625-fb5a-46b1-8e6c-a6b41e45c06f",
+    "data": "2026-02-20",
+    "descricao": "pagamento pix realizado",
+    "valor": "-64.98",
+    "tipo": "Saida",
+    "identificacao": "VARIANTE MATERIAS DE CONSTRUÇAO",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-20 13:10:55.977093+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "37e070e1-d6ef-4281-b5db-2206cb31d5d6",
+    "id_parcela_rb": "c1da62d1-0d10-42e9-a072-711712871347"
+  },
+  {
+    "id": "f0575a38-f3c6-4f46-8ae9-2f24b1bd474e",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "6bc26625-fb5a-46b1-8e6c-a6b41e45c06f",
+    "data": "2026-02-20",
+    "descricao": "pagamento pix realizado",
+    "valor": "-61.6",
+    "tipo": "Saida",
+    "identificacao": "TOP MOTOS",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-20 13:12:30.949596+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "80a0afac-4f0b-4888-a9be-c62a3331dba1",
+    "id_parcela_rb": "9ed0e865-24fe-40e9-be13-2272d4803cdf"
+  },
+  {
+    "id": "2a0f3d9a-1ddf-4dbe-8486-f4fd126e1365",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "6bc26625-fb5a-46b1-8e6c-a6b41e45c06f",
+    "data": "2026-02-20",
+    "descricao": "pagamento pix realizado",
+    "valor": "-56.07",
+    "tipo": "Saida",
+    "identificacao": "FELIPE DA COSTA PAZ",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-20 13:14:57.633562+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "898e3c95-ebce-4eea-b1ff-4bea184f56a5",
+    "id_parcela_rb": "d3759dda-03aa-4716-be1e-6872ba13d2f2"
+  },
+  {
+    "id": "bfe2bc28-fcd3-4c2a-8b04-edd0b3999749",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-20",
+    "descricao": "TESTE",
+    "valor": "1",
+    "tipo": "Entrada",
+    "identificacao": "TESTE",
+    "conciliado": true,
+    "conta_contabil_id": "5cd3df38-6e14-44b3-a4df-27a858e02fd1",
+    "criado_em": "2026-02-20 17:55:55.505691+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "530d64c4-facd-4beb-8a9b-fd84ff952ec6",
+    "id_parcela_rb": "e4ef0140-26e4-42fc-8b0c-f9c84ab75e26"
+  },
+  {
+    "id": "0041bd70-914d-498d-b338-f077e3fb3fbf",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-20",
+    "descricao": "TESTE",
+    "valor": "-1",
+    "tipo": "Saida",
+    "identificacao": "TESTE",
+    "conciliado": true,
+    "conta_contabil_id": "5ed545cd-b958-44f2-8ddb-07bf177bc4ff",
+    "criado_em": "2026-02-20 17:58:59.839296+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "3ecf75e6-82b0-4a13-b1c8-987f84c5d48a",
+    "id_parcela_rb": "587da371-2723-483f-8d1d-19fa27d42144"
+  },
+  {
+    "id": "48568af9-e379-4ff2-9a53-49c12be888a6",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-23",
+    "descricao": "Transf Pix recebida",
+    "valor": "88.8",
+    "tipo": "Entrada",
+    "identificacao": "DAYSE TAVARES FERREIRA",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 11:29:52.794662+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "419d5dbb-8eed-4dd7-9efe-67c74927d854",
+    "id_parcela_rb": "bc63152f-90c1-45e2-bd8c-521ee98d0c1f"
+  },
+  {
+    "id": "c6f00873-688f-4b41-b219-6c89960a1aad",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-15",
+    "descricao": "Transf Pix recebida",
+    "valor": "644.8",
+    "tipo": "Entrada",
+    "identificacao": "jose josimar gomes da silva",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 11:31:06.776423+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "8f640416-35b7-429f-bb64-6bb2f2410dbd",
+    "id_parcela_rb": "caa37c4f-4b8a-4452-887b-3ab7da662765"
+  },
+  {
+    "id": "71a87a50-5b85-405d-8ae6-0dfbe336d66b",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:10:47.867032+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "25e4d4c5-e4fe-4099-b801-1474383b9d68",
+    "id_parcela_rb": "b426f7d7-5178-4dbf-a923-f79b84ee7640"
+  },
+  {
+    "id": "2663c95e-1957-4c3e-af21-d17bc02e12ee",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:16:27.348901+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "082cc9d9-8d97-4342-884f-716184c8fb49",
+    "id_parcela_rb": "830a3c84-38fe-4662-9ebc-5e86fefe31bb"
+  },
+  {
+    "id": "239f8470-a404-4e5c-8ea4-93db167bc0c3",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:17:19.111495+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "ff68595d-fac5-48e6-91ae-d50815ff6791",
+    "id_parcela_rb": "a074281e-8ca7-4bf4-8916-98208e52e54e"
+  },
+  {
+    "id": "3c21df00-bf58-4b1b-94fb-3be4d45735b5",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:18:35.428704+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "9f814855-1455-48e9-a43b-33ad027f2eba",
+    "id_parcela_rb": "0426d3a8-7064-4085-a4d5-61fe312b5dc2"
+  },
+  {
+    "id": "9258e0c5-ae7a-4653-b77c-e9e4d8791758",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:34:31.227535+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "0becc298-aa35-44d3-aaa3-4b852608535e",
+    "id_parcela_rb": "be8040c7-c1fd-49a0-8202-f43225077e6a"
+  },
+  {
+    "id": "d2ba3153-d4fa-45bc-9345-ad34348f4c29",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:39:32.785061+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "10659331-1705-4385-abc7-ade553d2bf9b",
+    "id_parcela_rb": "658fa904-e38f-452a-b912-414d92cf8e67"
+  },
+  {
+    "id": "9763dc62-9833-4086-a29d-e2926cbd32d9",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:40:42.653422+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "55e23eae-5b78-46eb-b206-8996e056512d",
+    "id_parcela_rb": "23a8c8b8-66ec-4bef-b642-8d3b3566729b"
+  },
+  {
+    "id": "943500b8-ae3d-4231-85be-f67552e00697",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:42:00.307132+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2ef6e8d7-89d6-4dbe-a79d-e6e7f348d1da",
+    "id_parcela_rb": "93113163-032a-4d4f-8f6f-5abe6d080f47"
+  },
+  {
+    "id": "31ce8b75-3da4-4ad6-b72c-07800283737e",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:43:42.220408+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "514b1f03-ae29-4eb3-a9c4-abc3c7620531",
+    "id_parcela_rb": "0749d503-d5b2-44d1-bf75-b178b5386677"
+  },
+  {
+    "id": "516daf81-5ede-4de1-81e2-afabecc1e20b",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:46:07.851974+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bc61051f-2c48-4f99-a472-9033768d9d68",
+    "id_parcela_rb": "7d0db267-0d98-4ab0-9665-ef89a51efc36"
+  },
+  {
+    "id": "684541f8-dcbf-4907-be11-5893f998c613",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:46:29.494053+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "193be862-5fd0-4e77-87e8-b1237dd72997",
+    "id_parcela_rb": "ce219260-b71b-4d6b-a1a3-6ee31d264205"
+  },
+  {
+    "id": "9ceec279-7f67-42d3-abea-0613edd3bfa5",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:48:36.097659+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "b0e484b7-0d47-44bb-8dce-02bd07e1173c",
+    "id_parcela_rb": "2ce032ed-3d8e-41f0-bebc-1bf2fc5b77d1"
+  },
+  {
+    "id": "666cbedc-af6c-468e-95a9-fdc53871cc26",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 12:52:52.930572+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e6a39613-0225-40fc-9e4f-231347e4f3bb",
+    "id_parcela_rb": "e7064b6c-1e18-4ee5-837a-222edf95b518"
+  },
+  {
+    "id": "29debe4e-5ac4-422f-add1-f9020f58515d",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-17",
+    "descricao": "pagamento pix realizado",
+    "valor": "-500",
+    "tipo": "Saida",
+    "identificacao": "ANDRE TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:05:32.181297+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "a2be060a-b9e5-4887-9f3b-449f9ef6884d",
+    "id_parcela_rb": "4b3cb34f-28e9-427a-99c3-4119d585baf5"
+  },
+  {
+    "id": "499853fe-2e1c-46c2-8cb4-ccb893903543",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-17",
+    "descricao": "pagamento pix realizado",
+    "valor": "-425",
+    "tipo": "Saida",
+    "identificacao": "GILDSON GREGORIO",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:07:56.804874+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5834f710-4f52-448a-a150-37532c62cf96",
+    "id_parcela_rb": "a5b0c844-124b-4f9a-84a5-b0e5d58276fc"
+  },
+  {
+    "id": "e7b575ab-5ad4-43d9-a004-87459a308802",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-17",
+    "descricao": "pagamento pix realizado",
+    "valor": "-425",
+    "tipo": "Saida",
+    "identificacao": "Marilena Lira Tavares",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:09:51.203746+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "8fb8aa37-45c0-432e-8a15-f6e21d54c165",
+    "id_parcela_rb": "73ef09b2-e5ce-4463-9530-52824d5dc171"
+  },
+  {
+    "id": "bf91280f-8433-4e51-9307-b37579d4c0d4",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-01-27",
+    "descricao": "pagamento pix realizado",
+    "valor": "-400",
+    "tipo": "Saida",
+    "identificacao": "Marilena Lira Tavares",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:11:51.87548+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bf9300ea-f3e5-4311-8b54-a573b8177b19",
+    "id_parcela_rb": "329c6ba2-5b7b-4c3e-b8b1-6499c0a76e5a"
+  },
+  {
+    "id": "c8bdbd71-54c6-487e-9a60-dd209ad7a9ac",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-23",
+    "descricao": "pagamento pix realizado",
+    "valor": "-750",
+    "tipo": "Saida",
+    "identificacao": "TATIANA LOUREIRO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:13:46.45602+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "07f9622c-0e64-40e6-a8c5-b82298337564",
+    "id_parcela_rb": "31ac5ec6-9a35-4bff-8157-7f23ac20fae8"
+  },
+  {
+    "id": "a9c2459a-3406-4d87-97ab-b2291ec3f650",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-01-23",
+    "descricao": "pagamento pix realizado",
+    "valor": "-750",
+    "tipo": "Saida",
+    "identificacao": "TATIANA LOUREIRO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:15:19.158042+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "01355bde-0cfc-4d99-926f-e0904a224b46",
+    "id_parcela_rb": "e4573e5a-79c2-4bfc-93af-6ffaf7786a6e"
+  },
+  {
+    "id": "2c7ebf09-31ca-4800-9f90-7e686216800b",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-01-27",
+    "descricao": "pagamento pix realizado",
+    "valor": "-750",
+    "tipo": "Saida",
+    "identificacao": "TATIANA LOUREIRO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:16:03.55828+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e349f665-ec67-4d60-bd13-53c3aa5a9265",
+    "id_parcela_rb": "c075524f-1334-4717-8205-445d103c3fe4"
+  },
+  {
+    "id": "0d5afe70-a896-4043-90c3-ae9f825186ab",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-14",
+    "descricao": "pagamento pix realizado",
+    "valor": "-116.55",
+    "tipo": "Saida",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-23 13:23:09.697058+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c3f9dd0d-02c5-4cb2-8a85-3821a92a543e",
+    "id_parcela_rb": "0e1452bb-1197-4d0f-8804-0d939612fb88"
+  },
+  {
+    "id": "d49ac233-3e50-44c8-8846-1491598943a0",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 13:55:43.650888+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "38dff766-00c3-4a80-aaa8-d828d67b6173",
+    "id_parcela_rb": "3b3d731f-164b-4a26-b98a-3fe3ff943840"
+  },
+  {
+    "id": "a57e59d5-75bf-43aa-88df-d2bdf642624c",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 14:11:17.598668+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "dab94aa3-c3e0-476e-aa89-4d1b70b01e89",
+    "id_parcela_rb": "c2ef36f4-2c31-494c-8e41-608ede3a1b3b"
+  },
+  {
+    "id": "7fa10279-a439-4626-9be1-d85d9ddddada",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 14:16:08.249218+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5ce9682c-fadd-4fe5-b1e3-28dfd067f97f",
+    "id_parcela_rb": "ecf5fdce-96e3-46c6-8a40-a063966c5410"
+  },
+  {
+    "id": "5c42afd8-94fe-4b39-8a18-439f72a21a8f",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 14:37:13.131576+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "bc49dc1a-3f52-4950-8af5-bc28ecdf9b2e",
+    "id_parcela_rb": "96bde8b2-feba-4bf6-ad72-f31dd923cb15"
+  },
+  {
+    "id": "9906b8c3-5c5c-43e7-b28b-cab56048c7b5",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 14:48:53.008678+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2d06e616-469f-49da-b0b4-9a05795ad0a7",
+    "id_parcela_rb": "d0edbcc1-e207-45aa-b326-c7e7ccf18802"
+  },
+  {
+    "id": "9433f413-9f79-4f1b-8daa-ddc9146aef35",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 18:22:18.398399+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5b2bc394-c487-43e7-ab83-ff087596f9e9",
+    "id_parcela_rb": "efe511fc-e371-4556-a860-53029126b636"
+  },
+  {
+    "id": "371fce80-5a72-4998-b41f-fea13d1a1592",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 18:29:18.024809+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2e11eea1-e9b5-40a5-bddd-203abc364890",
+    "id_parcela_rb": "c18020e7-feb4-4f8c-89cb-729160ba67db"
+  },
+  {
+    "id": "1b254dfb-01c6-436f-8afb-0c7bd6e03823",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 18:31:20.8662+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "8b9c6415-0783-48b6-abd3-d0f11dc96fed",
+    "id_parcela_rb": "5e909fef-f084-4b5b-9dda-a2e73fea9387"
+  },
+  {
+    "id": "1b507a94-16ab-457e-9027-209c7a6f27c1",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 19:35:07.542427+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "361c5369-862c-4f70-8ad8-f9853773dd7e",
+    "id_parcela_rb": "47653858-6e12-4fe3-868c-420e17e23eeb"
+  },
+  {
+    "id": "4bc76b3d-b061-46cb-91d9-4c38bfde70fb",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 19:38:37.945694+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "ec208281-e203-417c-abb7-99f344fd04ad",
+    "id_parcela_rb": "b9c065c9-02e8-4054-b850-cfebd9c088bc"
+  },
+  {
+    "id": "e291f8ce-f27d-4fb9-935c-5f4f7fb74ea7",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 19:52:43.324562+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "467adb6c-43e7-4f91-a2e1-5039e2eff4ea",
+    "id_parcela_rb": "a9e0b67d-c72b-4596-a616-ecef039811b1"
+  },
+  {
+    "id": "6abb357e-53e6-4723-beb6-a13861d2dd57",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 19:53:37.210275+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "8896516f-b24f-4da9-8821-e9ab09ee868b",
+    "id_parcela_rb": "371b6bfa-f880-4d0f-9302-0bf5d0243229"
+  },
+  {
+    "id": "f72949f3-d97f-4939-8bea-4c63c70d4cce",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 19:54:24.1714+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "507e909c-b800-43ae-9671-9400c160af75",
+    "id_parcela_rb": "4ea60917-5d83-496c-96ce-3d0533ae6b8b"
+  },
+  {
+    "id": "88b3fba7-0955-44a6-a170-380592beff00",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:01:36.388214+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "e202c9eb-cfe9-4519-838f-7a8c7cb8d34c",
+    "id_parcela_rb": "3c9c25c4-00a0-4664-a343-4346ebc4077d"
+  },
+  {
+    "id": "cba3641b-3b65-439c-a661-8d66adf56a0f",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:16:28.253545+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "d3ed34bf-e66d-4083-afbc-4448ca021b56",
+    "id_parcela_rb": "60082c75-105d-4dab-80a9-0c08fcc594ca"
+  },
+  {
+    "id": "afd2e73d-2955-457b-aeee-7f10ab7dcf61",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:20:38.058626+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "dc8ca9de-bcca-4749-9eea-56926b8932f7",
+    "id_parcela_rb": "c495f45d-a7ca-4e23-a0df-039113bce9d3"
+  },
+  {
+    "id": "c1eea7a2-8376-481b-baf0-f2b27acd59e2",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:22:01.901874+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "38c16a5c-fbad-4754-933b-25fc4490c652",
+    "id_parcela_rb": "64f4a82b-0748-432b-9df6-83b733834824"
+  },
+  {
+    "id": "eac7d715-3bc3-4b31-81bc-706c4886e5fd",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:23:41.496584+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "d00766ed-d924-4dad-a563-2b389513683f",
+    "id_parcela_rb": "ee6db5ff-e6c5-477b-b974-041295376792"
+  },
+  {
+    "id": "335366a3-eb98-441b-b7aa-f84134e669ca",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:25:40.996858+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "0b7f5390-07a3-414c-80f8-7756cddaab58",
+    "id_parcela_rb": "ca7c71fa-8867-422f-a976-89675e87b72b"
+  },
+  {
+    "id": "76f42ab1-7624-495e-b6f4-615b1142e304",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:28:19.339973+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "cb62b348-a8ef-4fd7-8dc8-5992c9fa424b",
+    "id_parcela_rb": "01c75c1d-48ec-487c-905a-740bedbda15c"
+  },
+  {
+    "id": "fa84f0a6-c6e3-48cc-ae89-a0bca6672863",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 20:36:54.119945+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "CONCILIADA",
+    "valor_conciliado": "100.00",
+    "id_parcela_pg": "28776f29-da73-4cdd-9d31-c425a1b019e1",
+    "id_parcela_rb": "54873d03-3cce-4fd2-9c12-9d83769b09cd"
+  },
+  {
+    "id": "9ab58011-c28d-4cb7-b1ad-8bfba1a6c8ea",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": true,
+    "conta_contabil_id": "e585c4be-58b0-402a-92f9-d8dc1733d547",
+    "criado_em": "2026-02-23 20:40:34.654241+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c6ace523-50c3-4aa0-b946-76110753288c",
+    "id_parcela_rb": "6cb2dd8c-5ebf-4e19-8f42-651086daf39d"
+  },
+  {
+    "id": "f69525ea-3306-407d-b898-55a8e5f6100f",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-23 21:26:16.306605+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "30179ac9-40d5-42c4-a983-d6b3124dfdf1",
+    "id_parcela_rb": "1136a4f9-aee6-4ebb-8655-89c8d7492fd0"
+  },
+  {
+    "id": "772850ba-2559-4199-b258-ae7ec77e23a9",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-23",
+    "descricao": "pagamento pix realizado",
+    "valor": "-90",
+    "tipo": "Saida",
+    "identificacao": "h angel",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 12:35:46.759936+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "41df59d0-6b7b-4383-8c89-bf64d310f4db",
+    "id_parcela_rb": "5bad7547-8ce0-4764-973b-52a86a3fa403"
+  },
+  {
+    "id": "15f42fa4-484a-4899-8273-8c0bce36e15c",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-23",
+    "descricao": "pagamento pix realizado",
+    "valor": "-54.7",
+    "tipo": "Saida",
+    "identificacao": "WANDERLEY ASMUN",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 12:39:14.594183+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "24d76b8b-badf-434f-a15e-a8b7266bca62",
+    "id_parcela_rb": "711e8d35-f1cc-4cf0-b852-add5d3993732"
+  },
+  {
+    "id": "963149f3-7f46-4520-8bd5-2746d61bdae1",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-23",
+    "descricao": "pagamento pix realizado",
+    "valor": "-38.66",
+    "tipo": "Saida",
+    "identificacao": "V B S DA CUNHA",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 12:41:46.22453+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "c3a036e2-e31a-43bb-9072-9c50067f6f40",
+    "id_parcela_rb": "f2b09965-9dca-4a7a-afde-173446f30784"
+  },
+  {
+    "id": "1405604c-2f43-4844-ad7a-d94de8653332",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-11",
+    "descricao": "pagamento pix realizado",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 13:34:55.211552+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "5661b994-7c37-4199-ad4e-25ff81f7447c",
+    "id_parcela_rb": "ad50ea7b-df1d-416c-b9a1-695564085855"
+  },
+  {
+    "id": "314fc0f2-dd41-44ba-8e69-bd706ad6a16f",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-15",
+    "descricao": "pagamento pix realizado",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 13:43:14.340664+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "adb5afed-46ed-4097-aec4-c4357737eefd",
+    "id_parcela_rb": "b23af314-1d1b-49d7-a3a8-90d8ea6cc32c"
+  },
+  {
+    "id": "9a46ad1a-1a53-4662-92fc-64d926e6bc60",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-21",
+    "descricao": "pagamento pix realizado",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-24 13:44:49.615011+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6a014b9b-8b27-4641-9071-16cadf7fe034",
+    "id_parcela_rb": "442bc2ec-e08a-4da6-a62e-37e2129cc50e"
+  },
+  {
+    "id": "84794c69-357b-47c3-aae2-fe1fbff2d3ef",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-100",
+    "tipo": "Saida",
+    "identificacao": "joao luiz silva tavares",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-24 14:29:18.51866+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "59574da9-f637-499b-aa9d-cd25793a9e34",
+    "id_parcela_rb": "ea6e1dbd-dff1-4682-948b-e4c1cdc0f2e9"
+  },
+  {
+    "id": "c432516d-2a0a-493c-ac33-c28e99a3fcae",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-01-31",
+    "descricao": "Transf Pix enviada",
+    "valor": "-50",
+    "tipo": "Saida",
+    "identificacao": "Maria Solange Gonçalves Campos",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-24 16:35:46.899687+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "828ab694-3c76-4f4a-9671-c0feca14d2e7",
+    "id_parcela_rb": "9223ee0f-b0b2-4349-8b87-3e1cd2c8457f"
+  },
+  {
+    "id": "b746c3aa-ad42-4e85-8fcb-8c0e363a8c54",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-24",
+    "descricao": "pagamento pix realizado",
+    "valor": "-650",
+    "tipo": "Saida",
+    "identificacao": "TATIANA LOUREIRO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-26 12:49:53.936113+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "cdbb0cbe-62b4-4f0a-8ec6-dba8e43819a5",
+    "id_parcela_rb": "7cff71b4-c043-4bcf-8a2f-f78a94666440"
+  },
+  {
+    "id": "ed7ccad1-251c-42d7-b826-ed3a5f693100",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-25",
+    "descricao": "pagamento pix realizado",
+    "valor": "-440",
+    "tipo": "Saida",
+    "identificacao": "Marilena Lira Tavares",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-26 12:53:09.407984+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "2013f40d-8f61-4bc4-bd80-40d14c0da555",
+    "id_parcela_rb": "d42c09d2-fd1f-4b3e-8bab-ac849dbcf937"
+  },
+  {
+    "id": "0babf14d-8717-4c84-bdb8-cb8809cfce94",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-26",
+    "descricao": "pagamento pix realizado",
+    "valor": "-40.61",
+    "tipo": "Saida",
+    "identificacao": "EVALDO ARAGAO TOP MOTOS CARANANDUBA",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-26 14:03:48.590725+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "973d9cfc-3e9c-474c-9c04-587e6883b2ab",
+    "id_parcela_rb": "68b13468-2630-4c65-8c4d-8345b6139577"
+  },
+  {
+    "id": "e74532be-60bb-48bb-bbd6-dd0d59f8262b",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "5efc4439-60df-439b-8831-fbb08314d790",
+    "data": "2026-02-04",
+    "descricao": "Transf Pix recebida",
+    "valor": "303.8",
+    "tipo": "Entrada",
+    "identificacao": "Nayara Do Socorro Saldanha Rabelo 01299187250 (27)",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-27 12:07:06.229715+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "6d5634ae-612e-4dfa-9c39-c2e661a82106",
+    "id_parcela_rb": "c17c0b2d-a881-4ce9-a8e2-4555fd3fdf0d"
+  },
+  {
+    "id": "6e07adfa-9f9b-493c-9efa-29fc6e1dc0d4",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "5efc4439-60df-439b-8831-fbb08314d790",
+    "data": "2026-02-03",
+    "descricao": "Transf Pix recebida",
+    "valor": "670.89",
+    "tipo": "Entrada",
+    "identificacao": "R D de Tavares Nonato",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-27 12:23:35.882939+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7ad3ecbe-fd21-46af-88b9-04f30d0bc8df",
+    "id_parcela_rb": "f65bb55b-a133-4f75-87ad-77546e99459f"
+  },
+  {
+    "id": "29893245-e728-4f85-9b10-163bdaf33d01",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-27",
+    "descricao": "pagamento pix realizado",
+    "valor": "-666.05",
+    "tipo": "Saida",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-27 12:43:02.808151+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "dbf1e693-2e6d-411b-aae4-73c23f71b463",
+    "id_parcela_rb": "1d909957-992c-4863-8349-f33327c03bdf"
+  },
+  {
+    "id": "07a44adf-c57f-4d61-96eb-295257c52361",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-25",
+    "descricao": "pagamento pix realizado",
+    "valor": "-425",
+    "tipo": "Saida",
+    "identificacao": "GILDSON GREGORIO",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-27 12:46:03.972833+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "7d62c9f0-940e-48d2-95dd-c516e34e5c4f",
+    "id_parcela_rb": "bd8c9255-9724-447c-a808-bf14f9f09f9c"
+  },
+  {
+    "id": "c240e8c8-9e9f-42af-be4a-92cda28158da",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-27",
+    "descricao": "pagamento pix realizado",
+    "valor": "-34.84",
+    "tipo": "Saida",
+    "identificacao": "PEDRO MELO",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-27 12:54:45.24779+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "494972c8-8b72-406b-9fac-f1ef46b05fbc",
+    "id_parcela_rb": "3b297002-80ba-4882-b880-3baf673e9ff8"
+  },
+  {
+    "id": "fa0c1be6-b703-46c3-b722-b3adcaee44ef",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-26",
+    "descricao": "pagamento pix realizado",
+    "valor": "-62.85",
+    "tipo": "Saida",
+    "identificacao": "ARAGAO MOTOS ANANINDEUA",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-27 13:01:34.484956+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "04e08e23-02bc-4fc0-be5f-719ff6ede442",
+    "id_parcela_rb": "59ed3bc3-18ba-4513-b1b4-1d67ce73f9c4"
+  },
+  {
+    "id": "f2e3f7c8-72ab-49b8-8a49-e820d2f0d644",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-01-18",
+    "descricao": "Transf Pix recebida",
+    "valor": "1",
+    "tipo": "Entrada",
+    "identificacao": "JOAO TAVARES",
+    "conciliado": false,
+    "conta_contabil_id": null,
+    "criado_em": "2026-02-27 18:24:12.634871+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "f8b4f0a4-4900-420c-b885-7f70da6c8d3b",
+    "id_parcela_rb": "89e0d6cd-0e25-453e-a95f-aee529fc13e4"
+  },
+  {
+    "id": "85b8bd9c-845e-4ff6-9fa5-80dee9cc7a82",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "271a4bc7-d640-4d98-b203-f9e6e29b50a9",
+    "data": "2026-02-27",
+    "descricao": "pagamento pix realizado",
+    "valor": "-192.18",
+    "tipo": "Saida",
+    "identificacao": "Unama - João Tavares (MBA em Gestão Tributária)",
+    "conciliado": false,
+    "conta_contabil_id": "007cefd6-0557-48b6-a588-ce2010c496b3",
+    "criado_em": "2026-02-27 20:25:53.468063+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "319eca4e-26ca-46cb-b24f-491879e79440",
+    "id_parcela_rb": "f22a8466-94f9-49f5-88ee-d0c36338e236"
+  },
+  {
+    "id": "11838b0c-d7d0-4679-b269-9e55efa47d64",
+    "empresa_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "id_saldo_contas": "bd6976cd-2f7f-46ac-9743-ed599163c892",
+    "data": "2026-02-27",
+    "descricao": "Transf Pix recebida",
+    "valor": "1459",
+    "tipo": "Entrada",
+    "identificacao": "Cmr Comercio De Moveis Rusticos E Plantas Ltda (35)",
+    "conciliado": false,
+    "conta_contabil_id": "2fd54bf3-35c7-4587-bb32-90228aaf13fa",
+    "criado_em": "2026-02-27 22:26:39.330619+00",
+    "status_mapeamento": "sem_mapeamento",
+    "mapeado_parcela_id": null,
+    "mapeado_tipo": null,
+    "status_conciliacao": "PENDENTE",
+    "valor_conciliado": "0.00",
+    "id_parcela_pg": "73ca3fee-11e5-4a08-b8f0-ef70db943e74",
+    "id_parcela_rb": "21908e7a-a217-46a5-bee7-be18241fb53c"
   }
 ]

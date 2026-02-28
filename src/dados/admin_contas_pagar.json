@@ -68,23 +68,6 @@
     "id_conta_resultado": "f2db1404-8fb6-476f-84a0-4b4abc4736ae"
   },
   {
-    "id": "00f4c548-8e1e-47ac-ae73-65d2489e5671",
-    "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
-    "fornecedor": "Unama - João Tavares (MBA em Gestão Tributária)",
-    "documento": null,
-    "data_vencimento": "2026-02-08",
-    "valor_total": "1820.3999999999999",
-    "status": "pendente",
-    "criado_em": "2026-02-07 02:49:18.489611+00",
-    "atualizado_em": "2026-02-07 02:49:18.489611+00",
-    "conta_id": null,
-    "descricao": "Unama - João Tavares (MBA em Gestão Tributária)",
-    "origem": "manual",
-    "id_conta_patrimonial": "12121f6d-ca58-4d48-8a0a-405216b18710",
-    "historico_id": "7b37b839-c7dd-4819-8bf3-2f1bfc6aa8ac",
-    "id_conta_resultado": "2d6af2a2-8ec8-4bb5-9d9a-560985731d96"
-  },
-  {
     "id": "0da9fa9d-1d2e-4413-978f-567ce8b52ef4",
     "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
     "fornecedor": "Unama - João Tavares (Engenharia de Software)",
@@ -204,6 +187,23 @@
     "id_conta_resultado": "e585c4be-58b0-402a-92f9-d8dc1733d547"
   },
   {
+    "id": "68501bf0-496f-468b-a7f5-c4146a895c88",
+    "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "fornecedor": "ENERGIA ELETRICA",
+    "documento": null,
+    "data_vencimento": "2026-02-19",
+    "valor_total": "7992.599999999999",
+    "status": "pendente",
+    "criado_em": "2026-02-27 12:31:03.677747+00",
+    "atualizado_em": "2026-02-27 12:31:03.677747+00",
+    "conta_id": null,
+    "descricao": "ENERGIA ELETRICA",
+    "origem": "manual",
+    "id_conta_patrimonial": "0c3e722b-4755-4e3f-b87b-d714670ee9d3",
+    "historico_id": "ebd74cc2-48fa-4a7e-8218-177a410001ab",
+    "id_conta_resultado": "3c272278-f216-4687-a872-0e86e6d6b44d"
+  },
+  {
     "id": "d4a1aa5b-03ea-4859-a9bb-4c45c9fe061f",
     "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
     "fornecedor": "Unama-Facul-Tatiana",
@@ -238,23 +238,6 @@
     "id_conta_resultado": "36fe8369-b233-4b8b-b925-88b4c7c14dae"
   },
   {
-    "id": "2c86b196-84de-426f-925a-d7801b6bcbf2",
-    "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
-    "fornecedor": "João Tavares",
-    "documento": null,
-    "data_vencimento": "2026-01-30",
-    "valor_total": "96000",
-    "status": "pendente",
-    "criado_em": "2026-01-07 13:22:33.085894+00",
-    "atualizado_em": "2026-01-07 13:22:33.085894+00",
-    "conta_id": null,
-    "descricao": "Pró Labore",
-    "origem": "manual",
-    "id_conta_patrimonial": "adaf2744-67f7-401b-98ce-28fc4a6638c9",
-    "historico_id": "090cb994-1661-482c-813e-7d01895af04f",
-    "id_conta_resultado": "36fe8369-b233-4b8b-b925-88b4c7c14dae"
-  },
-  {
     "id": "441f7701-bd9d-4fca-bc79-51a8258a06bf",
     "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
     "fornecedor": "CERTIFICADORA",
@@ -270,5 +253,39 @@
     "id_conta_patrimonial": "9a61a591-2649-43f3-be7d-255f557f3be3",
     "historico_id": "5c11bea8-7c5f-4508-9dc1-255134645e95",
     "id_conta_resultado": "5ed545cd-b958-44f2-8ddb-07bf177bc4ff"
+  },
+  {
+    "id": "00f4c548-8e1e-47ac-ae73-65d2489e5671",
+    "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "fornecedor": "Unama - João Tavares (MBA em Gestão Tributária)",
+    "documento": null,
+    "data_vencimento": "2026-02-08",
+    "valor_total": "1820.3999999999999",
+    "status": "pendente",
+    "criado_em": "2026-02-07 02:49:18.489611+00",
+    "atualizado_em": "2026-02-07 02:49:18.489611+00",
+    "conta_id": null,
+    "descricao": "Unama - João Tavares (MBA em Gestão Tributária)",
+    "origem": "manual",
+    "id_conta_patrimonial": "12121f6d-ca58-4d48-8a0a-405216b18710",
+    "historico_id": "7b37b839-c7dd-4819-8bf3-2f1bfc6aa8ac",
+    "id_conta_resultado": "2d6af2a2-8ec8-4bb5-9d9a-560985731d96"
+  },
+  {
+    "id": "2c86b196-84de-426f-925a-d7801b6bcbf2",
+    "admin_id": "0561e0b6-6a03-412f-bf42-66a420bd4523",
+    "fornecedor": "João Tavares",
+    "documento": null,
+    "data_vencimento": "2026-01-30",
+    "valor_total": "96000",
+    "status": "pendente",
+    "criado_em": "2026-01-07 13:22:33.085894+00",
+    "atualizado_em": "2026-01-07 13:22:33.085894+00",
+    "conta_id": null,
+    "descricao": "Pró Labore",
+    "origem": "manual",
+    "id_conta_patrimonial": "adaf2744-67f7-401b-98ce-28fc4a6638c9",
+    "historico_id": "090cb994-1661-482c-813e-7d01895af04f",
+    "id_conta_resultado": "36fe8369-b233-4b8b-b925-88b4c7c14dae"
   }
 ]

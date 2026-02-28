@@ -147,8 +147,8 @@ const EditarPagamentoCPDialog: React.FC<EditarPagamentoCPDialogProps> = ({
     }, [open, parcelaId]);
 
     const onSubmit = async (values: FormValues) => {
-        if (!parcelaId || !proprietarioId || !parcelaData) {
-            showError('Dados incompletos.');
+        if (!parcelaId || parcelaId.trim() === '' || !proprietarioId || !parcelaData) {
+            showError('Dados incompletos. Feche e reabra o diálogo.');
             return;
         }
         setLoading(true);
@@ -172,14 +172,25 @@ const EditarPagamentoCPDialog: React.FC<EditarPagamentoCPDialogProps> = ({
                 })
                 .eq('parcela_id', parcelaId);
 
-            const { error: deleteLancErr } = await supabase
+            const { error: deleteLancErr1 } = await supabase
                 .from('lancamentos')
                 .delete()
                 .eq('proprietario_id', proprietarioId)
                 .eq('documento', parcelaId)
+                .like('origem', 'pagamento_cp:%')
                 .not('origem', 'like', '%_estornada');
 
-            if (deleteLancErr) throw deleteLancErr;
+            if (deleteLancErr1) throw deleteLancErr1;
+
+            const legacyDocumento = `pagamento_cp:${parcelaId}`;
+            const { error: deleteLancErr2 } = await supabase
+                .from('lancamentos')
+                .delete()
+                .eq('proprietario_id', proprietarioId)
+                .eq('documento', legacyDocumento)
+                .not('origem', 'like', '%_estornada');
+
+            if (deleteLancErr2) throw deleteLancErr2;
 
             const { data: contaSintetica } = await supabase
                 .from(tabelaContasPagar)
