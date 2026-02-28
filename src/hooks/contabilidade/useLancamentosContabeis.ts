@@ -74,6 +74,23 @@ export function useLancamentosContabeis(parcelaId: string | null, proprietarioId
   }, [parcelaId, proprietarioId, refreshKey]);
 
   const deletarPorDocumento = useCallback(async (docId: string, apenasManual: boolean = true): Promise<boolean> => {
+    if (!apenasManual) {
+      const origensSeguras = ['lancamento_manual_cp', 'lancamento_manual_cr', 'contrato_assinado'];
+      const { data: lancamentosVinculados, error: checkError } = await supabase
+        .from('lancamentos')
+        .select('id, origem')
+        .eq('documento', docId)
+        .not('origem', 'in', `(${origensSeguras.join(',')})`)
+        .not('origem', 'ilike', '%estornada%');
+      if (checkError) {
+        showError('Erro ao verificar lançamentos: ' + checkError.message);
+        return false;
+      }
+      if (lancamentosVinculados && lancamentosVinculados.length > 0) {
+        showError('Não é possível excluir. Existem lançamentos de pagamento vinculados a esta parcela. Estorne o pagamento antes.');
+        return false;
+      }
+    }
     let query = supabase.from('lancamentos').delete().eq('documento', docId);
     if (apenasManual) {
       query = query.in('origem', ['lancamento_manual_cp', 'lancamento_manual_cr']);

@@ -346,6 +346,19 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         if (error) throw error;
         contaReceberId = data.id;
         
+        const { data: parcelasBloqueadas, error: checkParcelasError } = await supabase
+            .from(tabelaParcelasReceber)
+            .select('numero_parcela, status')
+            .eq('conta_receber_id', contaReceberId)
+            .in('status', ['recebida', 'parcial']);
+        if (checkParcelasError) throw checkParcelasError;
+        if (parcelasBloqueadas && parcelasBloqueadas.length > 0) {
+            const nums = parcelasBloqueadas.map((p: any) => `Parcela ${p.numero_parcela} (${p.status})`).join(', ');
+            showError(`Não é possível editar esta conta. As seguintes parcelas já possuem recebimentos vinculados: ${nums}. Cancele os recebimentos antes de editar.`);
+            setIsSubmitting(false);
+            return;
+        }
+        
         const { error: deleteError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', contaReceberId);
         if (deleteError) throw deleteError;
       } else {

@@ -23,6 +23,7 @@ interface ConciliacaoHook {
     contasContabeis: PlanoContas[];
     historico: ConciliacaoHistorico[];
     contaSelecionadaId: string | null;
+    contaSelecionada: SaldoConta | undefined;
     configSelecionada: ConfiguracaoConciliacao | null;
     file: File | null;
     transacoes: TransacaoExtrato[];
@@ -441,7 +442,11 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                         const transacoesMapeadas = applyRegras(transacoesValidas);
                         const transacoesCompletas = [...transacoesMapeadas, ...rawTransacoes.filter(t => t.isDuplicated)];
                         
-                        setTransacoes(() => transacoesCompletas);
+                        setTransacoes(() => [...transacoesCompletas].sort((a, b) => {
+                            const da = new Date(a.data || '').getTime();
+                            const db = new Date(b.data || '').getTime();
+                            return da - db;
+                        }));
                         
                         const jaMapedas = rawTransacoes.filter(t => t.isDuplicated).length;
                         let successMessage = `${transacoesValidas.length} transações novas encontradas.`;
@@ -632,6 +637,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         contasContabeis,
         historico,
         contaSelecionadaId,
+        contaSelecionada,
         configSelecionada,
         file,
         transacoes,

@@ -224,19 +224,34 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
       setIsDeleting(true);
       try {
           // 1. Verificar se há pagamentos associados
-          const { count, error: countError } = await supabase
+          const { count: countPag, error: countError } = await supabase
               .from(tabelaPagamentos)
               .select('id', { count: 'exact', head: true })
               .eq('parcela_id', parcelaId);
               
           if (countError) throw countError;
           
-          if (count && count > 0) {
+          if (countPag && countPag > 0) {
               showError('Não é possível excluir. Existem pagamentos registrados para esta parcela.');
               return;
           }
           
-          // 2. Deletar a parcela
+          // 2. Verificar se há lançamentos contábeis vinculados
+          if (ownerId) {
+              const { count: countLanc, error: countLancError } = await supabase
+                  .from('lancamentos')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('proprietario_id', ownerId)
+                  .eq('documento', parcelaId)
+                  .not('origem', 'ilike', '%estornada%');
+              if (countLancError) throw countLancError;
+              if (countLanc && countLanc > 0) {
+                  showError('Não é possível excluir. Existem lançamentos contábeis vinculados a esta parcela. Estorne o pagamento antes de excluir.');
+                  return;
+              }
+          }
+          
+          // 3. Deletar a parcela
           const { error } = await supabase
               .from(tabelaParcelas)
               .delete()

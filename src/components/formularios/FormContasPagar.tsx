@@ -299,7 +299,21 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         if (error) throw error;
         contaPagarId = data.id;
         
-        // 1. Deletar parcelas antigas
+        // 1. Verificar parcelas com vínculo (pagas ou parciais)
+        const { data: parcelasBloqueadas, error: checkParcelasError } = await supabase
+            .from(tabelaParcelasPagar)
+            .select('numero_parcela, status')
+            .eq('conta_pagar_id', contaPagarId)
+            .in('status', ['paga', 'parcial']);
+        if (checkParcelasError) throw checkParcelasError;
+        if (parcelasBloqueadas && parcelasBloqueadas.length > 0) {
+            const nums = parcelasBloqueadas.map((p: any) => `Parcela ${p.numero_parcela} (${p.status})`).join(', ');
+            showError(`Não é possível editar esta conta. As seguintes parcelas já possuem pagamentos vinculados: ${nums}. Cancele os pagamentos antes de editar.`);
+            setIsSubmitting(false);
+            return;
+        }
+        
+        // 2. Deletar parcelas antigas
         const { error: deleteParcelasError } = await supabase.from(tabelaParcelasPagar).delete().eq('conta_pagar_id', contaPagarId);
         if (deleteParcelasError) throw deleteParcelasError;
         

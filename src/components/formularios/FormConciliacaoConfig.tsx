@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ConfiguracaoConciliacao } from '@/types/conciliacao';
 import { Separator } from '../ui/separator';
+import { ConfigPalavrasChaveBanco } from '@/components/conciliacao/ConfigPalavrasChaveBanco';
 
 const formSchema = z.object({
   nome_configuracao: z.string().min(1, 'O nome é obrigatório.'),
@@ -164,6 +165,10 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Configuração
         </Button>
+
+        <Separator />
+
+        <ConfigPalavrasChaveBanco />
       </form>
     </Form>
   );

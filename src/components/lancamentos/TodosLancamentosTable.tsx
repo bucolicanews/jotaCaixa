@@ -152,6 +152,13 @@ const TodosLancamentosTable: React.FC = () => {
         
         setIsDeleting(true);
         try {
+            // 1. Bloquear se tem documento vinculado (parcela)
+            if (lancamento.documento) {
+                showError('Não é possível excluir. Este lançamento está vinculado a uma parcela (CP/CR). Estorne o pagamento/recebimento antes de excluir.');
+                setIsDeleting(false);
+                return;
+            }
+            
             const pairedId = lancamento.conta_resultado_id;
             
             const idsToDelete = [lancamento.id];

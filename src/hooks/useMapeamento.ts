@@ -278,6 +278,23 @@ export function useMapeamento() {
   }, []);
 
   const deletarExtrato = useCallback(async (extratoId: string) => {
+    // Verificar se o extrato tem parcela vinculada antes de deletar
+    const { data: extratoDb } = await supabase
+      .from('extratos')
+      .select('id_parcela_rb, id_parcela_pg, mapeado_parcela_id, status_mapeamento')
+      .eq('id', extratoId)
+      .single();
+
+    if (
+      extratoDb?.id_parcela_rb ||
+      extratoDb?.id_parcela_pg ||
+      extratoDb?.mapeado_parcela_id ||
+      extratoDb?.status_mapeamento === 'mapeado_manual'
+    ) {
+      showError('Não é possível excluir. Este extrato está vinculado a uma parcela conciliada. Desvincule antes de excluir.');
+      return false;
+    }
+
     const { error } = await supabase
       .from('extratos')
       .delete()

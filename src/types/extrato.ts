@@ -58,6 +58,7 @@ export interface ParcelaMatching {
   status: string;
   matchScore?: number;
   tipoMatch?: 'VALOR_EXATO_DATA_EXATA' | 'VALOR_EXATO' | 'DATA_EXATA' | 'APROXIMADO';
+  temLancamento?: boolean;
 }
 
 export interface TransacaoExtratoCompleta extends ExtratoBase {

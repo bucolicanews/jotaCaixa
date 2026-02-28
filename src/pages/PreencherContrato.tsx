@@ -541,12 +541,23 @@ const PreencherContrato: React.FC = () => {
 
                 const parcelasAbertasIds = (existingParcelas || []).filter(p => p.status === 'aberta').map(p => p.id);
                 if (parcelasAbertasIds.length > 0) {
+                    const { count: lancamentosVinculados } = await supabase
+                        .from('lancamentos')
+                        .select('id', { count: 'exact', head: true })
+                        .in('documento', parcelasAbertasIds)
+                        .not('origem', 'ilike', '%estornada%');
+                    if (lancamentosVinculados && lancamentosVinculados > 0) {
+                        showError('Não é possível reeditar. Existem lançamentos contábeis vinculados às parcelas em aberto. Estorne os pagamentos antes.');
+                        setIsSubmitting(false);
+                        return;
+                    }
                     await supabase.from(tabelaParcelasReceber).delete().in('id', parcelasAbertasIds);
                 }
                 
                 await supabase.from('lancamentos')
                     .delete()
                     .eq('origem', 'lancamento_cr')
+                    .eq('conciliado', false)
                     .eq('proprietario_id', proprietarioContratoId)
                     .ilike('descricao', `%CR ID: ${contaReceberId!.substring(0, 8)}%`);
             }

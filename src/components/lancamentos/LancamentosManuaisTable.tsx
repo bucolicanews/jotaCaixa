@@ -75,16 +75,23 @@ const LancamentosManuaisTable: React.FC = () => {
             const launchToDelete = lancamentos.find(l => l.id === id);
             const pairedId = launchToDelete?.conta_resultado_id;
             
+            // 2. Verificar se tem documento vinculado (parcela)
+            if (launchToDelete?.documento) {
+                showError('Não é possível excluir. Este lançamento está vinculado a uma parcela. Estorne o pagamento antes de excluir.');
+                setIsDeleting(false);
+                return;
+            }
+            
             const idsToDelete = [id];
             if (pairedId) {
                 idsToDelete.push(pairedId);
             }
             
-            // 2. Deletar ambos os lançamentos (Débito e Crédito)
+            // 3. Deletar ambos os lançamentos (Débito e Crédito)
             const { error } = await supabase
                 .from('lancamentos')
                 .delete()
-                .in('id', idsToDelete); // Deleta ambos os IDs
+                .in('id', idsToDelete);
                 
             if (error) throw error;
             

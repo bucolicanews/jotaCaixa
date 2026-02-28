@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +22,7 @@ interface Step4MappingTableProps {
   contaContabilLote: string | null;
   isSaving: boolean;
   contaSelecionadaId?: string | null;
+  saldoAnterior?: number;
   
   onToggleSelection: (index: number, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
@@ -53,6 +54,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   contaContabilLote,
   isSaving,
   contaSelecionadaId,
+  saldoAnterior = 0,
   onToggleSelection,
   onSelectAll,
   onContaContabilChange,
@@ -71,6 +73,17 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   
   const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
   const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
+
+  const resumo = useMemo(() => {
+    const validas = transacoes.filter(t => !t.isDuplicated);
+    const entradas = validas
+      .filter(t => t.tipo === 'Entrada')
+      .reduce((acc, t) => acc + Math.abs(t.valor), 0);
+    const saidas = validas
+      .filter(t => t.tipo === 'Saida')
+      .reduce((acc, t) => acc + Math.abs(t.valor), 0);
+    return { entradas, saidas, saldo: entradas - saidas };
+  }, [transacoes]);
   const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
   
   const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
@@ -140,9 +153,11 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const handleConfirmarMapeamento = async (
     mapeamentos: any[],
     valorRestante?: any,
-    modoExcedente: 'restante' | 'redistribuir' = 'restante'
+    modoExcedente: 'restante' | 'redistribuir' = 'restante',
+    opcoes?: { ehBancoPuro: boolean }
   ) => {
     if (!transacaoSelecionada) return;
+    const ehBancoPuro = opcoes?.ehBancoPuro ?? false;
 
     try {
       const mapeamentosMutaveis = mapeamentos.map(m => ({
@@ -346,16 +361,23 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
       }
 
       const valorTotal = valorTotalAplicado + (valorRestanteAjustado?.valor || 0);
-      const statusConciliacao = valorTotal >= Math.abs(Number(transacaoSelecionada.transacao.valor))
-        ? 'CONCILIADA'
-        : 'PARCIALMENTE_CONCILIADA';
+      const statusConciliacao = ehBancoPuro
+        ? 'PENDENTE'
+        : valorTotal >= Math.abs(Number(transacaoSelecionada.transacao.valor))
+          ? 'CONCILIADA'
+          : 'PARCIALMENTE_CONCILIADA';
 
       await supabase.from('extratos').update({
         status_conciliacao: statusConciliacao,
         valor_conciliado: valorTotal,
+        ...(ehBancoPuro ? {} : { conciliado: true }),
       }).eq('id', transacaoSelecionada.transacao.id);
 
-      showSuccess(`✅ Baixa realizada com sucesso! ${mapeamentosMutaveis.length} parcela(s) processada(s).`);
+      if (ehBancoPuro) {
+        showSuccess(`Mapeamento registrado como pendência (tarifa/juros detectado). ${mapeamentosMutaveis.length} parcela(s) processada(s).`);
+      } else {
+        showSuccess(`Baixa realizada com sucesso! ${mapeamentosMutaveis.length} parcela(s) processada(s).`);
+      }
       setModalMapeamentoOpen(false);
       setTransacaoSelecionada(null);
 
@@ -366,8 +388,50 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
     }
   };
 
+  const saldoFinal = saldoAnterior + resumo.saldo;
+
   return (
     <>
+    {transacoes.filter(t => !t.isDuplicated).length > 0 && (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 col-span-1 md:col-span-3 mb-2">
+        <Card className="border-slate-200 bg-slate-50">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <List className="h-4 w-4 text-slate-600" />
+              <span className="text-xs font-semibold text-slate-600">Saldo Anterior</span>
+            </div>
+            <p className={`text-lg font-bold font-mono ${saldoAnterior >= 0 ? 'text-slate-700' : 'text-red-600'}`}>{formatCurrency(saldoAnterior)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowUpCircle className="h-4 w-4 text-green-600" />
+              <span className="text-xs font-semibold text-green-700">Total de Entradas</span>
+            </div>
+            <p className="text-lg font-bold text-green-700 font-mono">{formatCurrency(resumo.entradas)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowDownCircle className="h-4 w-4 text-red-600" />
+              <span className="text-xs font-semibold text-red-700">Total de Saídas</span>
+            </div>
+            <p className="text-lg font-bold text-red-700 font-mono">{formatCurrency(resumo.saidas)}</p>
+          </CardContent>
+        </Card>
+        <Card className={saldoFinal >= 0 ? 'border-blue-200 bg-blue-50' : 'border-orange-200 bg-orange-50'}>
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <List className={`h-4 w-4 ${saldoFinal >= 0 ? 'text-blue-600' : 'text-orange-600'}`} />
+              <span className={`text-xs font-semibold ${saldoFinal >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>Saldo Final</span>
+            </div>
+            <p className={`text-lg font-bold font-mono ${saldoFinal >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{formatCurrency(saldoFinal)}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )}
     <Card className="col-span-1 md:col-span-3">
       <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
       <CardContent>

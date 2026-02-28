@@ -164,6 +164,25 @@ const Extratos: React.FC = () => {
     
     setIsDeleting(true);
     try {
+        // Verificar se o extrato está vinculado a uma parcela (CR ou CP)
+        if (extrato.id_parcela_rb || extrato.id_parcela_pg) {
+            showError('Não é possível excluir. Este extrato está vinculado a uma parcela. Desvincule o mapeamento antes de excluir.');
+            setIsDeleting(false);
+            return;
+        }
+        
+        // Verificar também via mapeado_parcela_id (campo legado)
+        const { data: extratoDb } = await supabase
+            .from('extratos')
+            .select('mapeado_parcela_id, status_mapeamento')
+            .eq('id', extrato.id)
+            .single();
+        if (extratoDb?.mapeado_parcela_id || extratoDb?.status_mapeamento === 'mapeado_manual') {
+            showError('Não é possível excluir. Este extrato está vinculado a uma parcela conciliada. Desvincule antes de excluir.');
+            setIsDeleting(false);
+            return;
+        }
+        
         const valorAbsoluto = Math.abs(extrato.valor);
         
         await supabase

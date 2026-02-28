@@ -393,9 +393,21 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                 .in('id', pagamentoIds);
             if (deletePagamentosError) throw deletePagamentosError;
 
-            // Deletar extrato vinculado se informado
+            // Deletar extrato vinculado se informado e pertence a esta parcela
             if (extratoId) {
-                await supabase.from('extratos').delete().eq('id', extratoId);
+                const { data: extratoCheck } = await supabase
+                    .from('extratos')
+                    .select('id, id_parcela_pg, id_parcela_rb')
+                    .eq('id', extratoId)
+                    .single();
+                const pertenceAParcela =
+                    extratoCheck?.id_parcela_pg === parcelaId ||
+                    extratoCheck?.id_parcela_rb === parcelaId;
+                if (pertenceAParcela) {
+                    await supabase.from('extratos').delete().eq('id', extratoId);
+                } else {
+                    console.warn('Extrato não pertence à parcela — delete ignorado.', extratoId, parcelaId);
+                }
             }
 
             const { error: resetError } = await supabase

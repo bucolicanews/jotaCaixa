@@ -269,22 +269,35 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const handleDeleteParcela = async (parcelaId: string) => {
       setIsDeleting(true);
       try {
-          // 1. Verificar se há recebimentos associados (Admin ou funcionário do Admin)
-          if (isAdminOrEmployee) {
-              const { count, error: countError } = await supabase
-                  .from('admin_recebimentos')
-                  .select('id', { count: 'exact', head: true })
-                  .eq('parcela_id', parcelaId);
-                  
-              if (countError) throw countError;
+          // 1. Verificar se há recebimentos associados
+          const { count: countRec, error: countError } = await supabase
+              .from(tabelaRecebimentos)
+              .select('id', { count: 'exact', head: true })
+              .eq('parcela_id', parcelaId);
               
-              if (count && count > 0) {
-                  showError('Não é possível excluir. Existem recebimentos registrados para esta parcela.');
+          if (countError) throw countError;
+          
+          if (countRec && countRec > 0) {
+              showError('Não é possível excluir. Existem recebimentos registrados para esta parcela.');
+              return;
+          }
+          
+          // 2. Verificar se há lançamentos contábeis vinculados
+          if (ownerId) {
+              const { count: countLanc, error: countLancError } = await supabase
+                  .from('lancamentos')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('proprietario_id', ownerId)
+                  .eq('documento', parcelaId)
+                  .not('origem', 'ilike', '%estornada%');
+              if (countLancError) throw countLancError;
+              if (countLanc && countLanc > 0) {
+                  showError('Não é possível excluir. Existem lançamentos contábeis vinculados a esta parcela. Estorne o recebimento antes de excluir.');
                   return;
               }
           }
           
-          // 2. Deletar a parcela
+          // 3. Deletar a parcela
           const { error } = await supabase
               .from(tabelaParcelas)
               .delete()

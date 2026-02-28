@@ -14,12 +14,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, AlertTriangle } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import type { TransacaoExtratoCompleta, ParcelaMatching } from '@/types/conciliacao';
 import { ParcelasTableSelecao } from './ParcelasTableSelecao';
 import { LancamentoAvulsoForm } from './LancamentoAvulsoForm';
+import { useChavesBancoPuro } from '@/hooks/conciliacao/useChavesBancoPuro';
 
 interface ModalMapeamentoParcelasProps {
   open: boolean;
@@ -36,7 +37,8 @@ interface ModalMapeamentoParcelasProps {
       contaContabilId: string;
       descricao: string;
     },
-    modoExcedente?: 'restante' | 'redistribuir'
+    modoExcedente?: 'restante' | 'redistribuir',
+    opcoes?: { ehBancoPuro: boolean }
   ) => Promise<void>;
 }
 
@@ -47,6 +49,7 @@ export function ModalMapeamentoParcelas({
   onConfirmar,
 }: ModalMapeamentoParcelasProps) {
   const { usuario, role, ownerId } = useSessao();
+  const { isBancoPuro } = useChavesBancoPuro();
 
   const [loading, setLoading] = useState(true);
   const [parcelasCR, setParcelasCR] = useState<ParcelaMatching[]>([]);
@@ -82,6 +85,15 @@ export function ModalMapeamentoParcelas({
 
     if (!parcelas || parcelas.length === 0) return [];
 
+    const ids = parcelas.map((p: any) => p.id);
+    const { data: comLancamento } = await supabase
+      .from('lancamentos')
+      .select('documento')
+      .eq('proprietario_id', ownerId)
+      .in('documento', ids)
+      .not('origem', 'ilike', '%estornada%');
+    const idsComLancamento = new Set((comLancamento || []).map((l: any) => l.documento).filter(Boolean));
+
     return parcelas.map((p: any) => {
       const conta = p.admin_contas_receber;
       const cliente = conta?.tbl_clientes;
@@ -97,6 +109,7 @@ export function ModalMapeamentoParcelas({
         clienteNome: cliente?.razao_social || cliente?.nome || '',
         tipo: 'CR' as const,
         matchScore: 0,
+        temLancamento: idsComLancamento.has(p.id),
       };
     });
   }, [ownerId]);
@@ -119,6 +132,15 @@ export function ModalMapeamentoParcelas({
 
     if (!parcelas || parcelas.length === 0) return [];
 
+    const ids = parcelas.map((p: any) => p.id);
+    const { data: comLancamento } = await supabase
+      .from('lancamentos')
+      .select('documento')
+      .eq('proprietario_id', ownerId)
+      .in('documento', ids)
+      .not('origem', 'ilike', '%estornada%');
+    const idsComLancamento = new Set((comLancamento || []).map((l: any) => l.documento).filter(Boolean));
+
     return parcelas.map((p: any) => {
       const conta = p.admin_contas_pagar;
       return {
@@ -133,6 +155,7 @@ export function ModalMapeamentoParcelas({
         fornecedorNome: conta?.fornecedor || '',
         tipo: 'CP' as const,
         matchScore: 0,
+        temLancamento: idsComLancamento.has(p.id),
       };
     });
   }, [ownerId]);
@@ -195,7 +218,22 @@ export function ModalMapeamentoParcelas({
       };
     });
 
-    return [...resultadoCR, ...resultadoCP];
+    const todosResultados = [...resultadoCR, ...resultadoCP];
+
+    if (todosResultados.length > 0) {
+      const ids = todosResultados.map(p => p.id);
+      const { data: lancamentosVinculados } = await supabase
+        .from('lancamentos')
+        .select('documento')
+        .eq('proprietario_id', ownerId)
+        .in('documento', ids)
+        .not('origem', 'ilike', '%estornada%');
+
+      const idsComLancamento = new Set((lancamentosVinculados || []).map(l => l.documento).filter(Boolean));
+      return todosResultados.map(p => ({ ...p, temLancamento: idsComLancamento.has(p.id) }));
+    }
+
+    return todosResultados;
   }, [ownerId]);
 
   // Carregar parcelas ao abrir o modal
@@ -303,19 +341,25 @@ export function ModalMapeamentoParcelas({
   }, [transacao.valor, valorSelecionado]);
 
   // Validações
+  const parcelasSemLancamento = useMemo(() => {
+    return [...parcelasSelecionadas.keys()].filter(id => {
+      const p = [...parcelasCR, ...parcelasCP, ...parcelasQuitadas].find(x => x.id === id);
+      return p && p.temLancamento === false;
+    }).map(id => {
+      const p = [...parcelasCR, ...parcelasCP, ...parcelasQuitadas].find(x => x.id === id);
+      return p ? { id, label: `${p.clienteNome || (p as any).fornecedorNome || ''} — Parcela ${p.numeroParcela}` } : { id, label: id };
+    });
+  }, [parcelasSelecionadas, parcelasCR, parcelasCP, parcelasQuitadas]);
+
   const podeConfirmar = useMemo(() => {
-    // Tem parcelas selecionadas
     if (parcelasSelecionadas.size === 0) return false;
-
-    // Se sobrou valor, precisa ter conta contábil
+    if (parcelasSemLancamento.length > 0) return false;
     if (valorRestante > 0 && !contaContabilRestante) return false;
-
-    // Não pode exceder valor da transação
     if (valorSelecionado > Math.abs(transacao.valor)) return false;
-
     return true;
   }, [
     parcelasSelecionadas,
+    parcelasSemLancamento,
     valorRestante,
     contaContabilRestante,
     valorSelecionado,
@@ -360,13 +404,8 @@ export function ModalMapeamentoParcelas({
 
     const mapeamentos = Array.from(parcelasSelecionadas.entries()).map(
       ([parcelaId, valorAplicar]) => {
-        // Determinar tipo baseado na transação
         const tipo = transacao.tipo === 'Entrada' ? ('CR' as const) : ('CP' as const);
-        return {
-          parcelaId,
-          tipo,
-          valorAplicar,
-        };
+        return { parcelaId, tipo, valorAplicar };
       }
     );
 
@@ -379,8 +418,10 @@ export function ModalMapeamentoParcelas({
           }
         : undefined;
 
+    const ehBancoPuro = isBancoPuro(transacao.descricao || '');
+
     try {
-      await onConfirmar(mapeamentos, valorRestanteObj, modoExcedente);
+      await onConfirmar(mapeamentos, valorRestanteObj, modoExcedente, { ehBancoPuro });
       onClose();
     } catch (error) {
       console.error('Erro ao confirmar mapeamento:', error);
@@ -590,6 +631,21 @@ export function ModalMapeamentoParcelas({
                     <Alert>
                       <AlertDescription className="text-xs">
                         Selecione parcelas na lista ao lado para iniciar a conciliação.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {parcelasSemLancamento.length > 0 && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        <p className="font-semibold mb-1">Parcelas sem lançamento contábil:</p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {parcelasSemLancamento.map(p => (
+                            <li key={p.id}>{p.label}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-1">Clique em <strong>Vínculos</strong> na linha para criar o lançamento antes de confirmar.</p>
                       </AlertDescription>
                     </Alert>
                   )}

@@ -23,6 +23,7 @@ interface Lancamento {
   tipo: 'Entrada' | 'Saida';
   origem?: string;
   fonte?: 'lancamento' | 'extrato';
+  documento?: string | null;
 }
 
 interface DetalhesLancamentosDialogProps {
@@ -51,7 +52,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
     let query = supabase
       .from('lancamentos')
-      .select('id, data_movimentacao, descricao, valor, tipo, origem')
+      .select('id, data_movimentacao, descricao, valor, tipo, origem, documento')
       
     if (isCaixaBanco) {
         query = query.eq('conta_bancaria_id', conta.id);
@@ -108,18 +109,24 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     }
   }, [conta, open, fetchLancamentos]);
 
-  const handleDeleteLancamento = async (lancamentoId: string) => {
+  const handleDeleteLancamento = async (lancamento: Lancamento) => {
     setIsDeleting(true);
     try {
+      if (lancamento.documento) {
+        showError('Não é possível excluir. Este lançamento está vinculado a uma parcela (CP/CR). Estorne o pagamento/recebimento antes de excluir.');
+        setIsDeleting(false);
+        return;
+      }
+      
       const { error } = await supabase
         .from('lancamentos')
         .delete()
-        .eq('id', lancamentoId);
+        .eq('id', lancamento.id);
 
       if (error) throw error;
 
       showSuccess('Lançamento excluído com sucesso!');
-      fetchLancamentos(); // Recarrega a lista para atualizar o saldo
+      fetchLancamentos();
     } catch (error: any) {
       showError('Falha ao excluir lançamento: ' + error.message);
     } finally {
@@ -268,7 +275,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteLancamento(l.id)} disabled={isDeleting}>
+                                        <AlertDialogAction onClick={() => handleDeleteLancamento(l)} disabled={isDeleting}>
                                             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
                                         </AlertDialogAction>
                                     </AlertDialogFooter>

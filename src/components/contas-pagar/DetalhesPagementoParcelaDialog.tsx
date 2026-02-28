@@ -347,7 +347,19 @@ const DetalhesPagementoParcelaDialog: React.FC<DetalhesPagementoParcelaDialogPro
       if (deletePagError) throw deletePagError;
 
       if (extratoId) {
-        await supabase.from('extratos').delete().eq('id', extratoId);
+        const { data: extratoCheck } = await supabase
+          .from('extratos')
+          .select('id, id_parcela_pg, id_parcela_rb')
+          .eq('id', extratoId)
+          .single();
+        const pertenceAParcela =
+          extratoCheck?.id_parcela_pg === parcela.id ||
+          extratoCheck?.id_parcela_rb === parcela.id;
+        if (pertenceAParcela) {
+          await supabase.from('extratos').delete().eq('id', extratoId);
+        } else {
+          console.warn('Extrato não pertence à parcela — delete ignorado.', extratoId, parcela.id);
+        }
       }
 
       const pagamentoEstornado = pagamentos.find(pg => pg.id === pagamentoId);

@@ -278,6 +278,10 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   };
   
   const handleDeletar = async (lancamento: Lancamento) => {
+    if (lancamento.documento) {
+      showError('Não é possível excluir. Este lançamento está vinculado a uma parcela. Estorne o pagamento antes.');
+      return;
+    }
     setDeletingId(lancamento.id);
     try {
       await supabase.from('extratos').delete().eq('id_parcela_rb', lancamento.id);

@@ -1,13 +1,14 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Link2 } from 'lucide-react';
+import { Loader2, Link2, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/formularios/FormConciliacaoConfig';
 import HistoricoConciliacaoDialog from '@/components/conciliacao/HistoricoConciliacaoDialog';
 import ModalMapeamentoParcela from '@/components/conciliacao/ModalMapeamentoParcela';
 import ModalBuscaManualParcelas from '@/components/conciliacao/ModalBuscaManualParcelas';
 import ModalCategorizacaoDireta from '@/components/conciliacao/ModalCategorizacaoDireta';
+import { PainelParcelasSemVinculo } from '@/components/conciliacao/PainelParcelasSemVinculo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +50,7 @@ const Conciliacao = () => {
     contasContabeis,
     historico,
     contaSelecionadaId,
+    contaSelecionada,
     configSelecionada,
     file,
     transacoes,
@@ -442,9 +444,13 @@ const Conciliacao = () => {
       )}
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="conciliacao">Nova Conciliação</TabsTrigger>
             <TabsTrigger value="historico">Histórico</TabsTrigger>
+            <TabsTrigger value="pendencias" className="flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+              Pendências de Vínculo
+            </TabsTrigger>
         </TabsList>
         
         <TabsContent value="conciliacao" className="mt-4">
@@ -489,6 +495,7 @@ const Conciliacao = () => {
                             contaContabilLote={contaContabilLote}
                             isSaving={isSaving}
                             contaSelecionadaId={contaSelecionadaId}
+                            saldoAnterior={contaSelecionada?.saldo_inicial ?? 0}
                             onToggleSelection={handleToggleSelection}
                             onSelectAll={handleSelectAll}
                             onContaContabilChange={handleContaContabilChange}
@@ -509,6 +516,10 @@ const Conciliacao = () => {
                 onDeleteAll={handleDeleteHistorico}
                 isDeleting={isDeletingHistorico}
             />
+        </TabsContent>
+
+        <TabsContent value="pendencias" className="mt-4">
+            <PainelParcelasSemVinculo ownerId={proprietarioDaConfiguracao || undefined} />
         </TabsContent>
       </Tabs>
       
