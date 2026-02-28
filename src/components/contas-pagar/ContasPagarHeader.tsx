@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Filter, Printer, DollarSign, Search } from 'lucide-react';
+import { Plus, Filter, Printer, DollarSign, Search, GitMerge } from 'lucide-react';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +13,7 @@ import ContasPagarPrint from './ContasPagarPrint';
 import { showError } from '@/utils/toast';
 import { format as formatDateFns } from 'date-fns';
 import { Input } from '@/components/ui/input';
+import MigrarCadeiaParcelasDialog from './MigrarCadeiaParcelasDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
@@ -54,7 +55,8 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
     setFiltroTexto,
 }) => {
     const { printContent } = usePrint();
-    const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
+    const { logoUrl, ownerName } = useOwnerBranding();
+    const [migrarCadeiaOpen, setMigrarCadeiaOpen] = useState(false);
 
     const getDataForPrint = () => {
         let data: any[] = [];
@@ -130,7 +132,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
     };
 
     return (
-        <>
+        <React.Fragment>
             <Card>
                 <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
                     <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros e Ações</CardTitle>
@@ -154,6 +156,11 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                                     <SelectItem value="manual">Manual</SelectItem>
                                 </SelectContent>
                             </Select>
+                        )}
+                        {isSupervisao && (
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setMigrarCadeiaOpen(true)} title="Migrar vínculos de cadeias de parcelas">
+                                <GitMerge className="w-4 h-4 mr-2" /> Migrar Cadeias
+                            </Button>
                         )}
                         <Select value={filtroStatus} onValueChange={setFiltroStatus}>
                             <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filtrar Status" /></SelectTrigger>
@@ -193,7 +200,8 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 </Card>
                 {/* Outros cards de resumo aqui */}
             </div>
-        </>
+            <MigrarCadeiaParcelasDialog open={migrarCadeiaOpen} onOpenChange={setMigrarCadeiaOpen} />
+        </React.Fragment>
     );
 };
 

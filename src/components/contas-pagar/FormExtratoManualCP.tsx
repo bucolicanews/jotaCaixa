@@ -502,7 +502,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             numero_parcela: 99,
                             valor_parcela: saldoRestanteCalculado,
                             data_vencimento: format(parentValues?.nova_data_vencimento!, 'yyyy-MM-dd'),
-                            status: 'reprogramada'
+                            status: 'reprogramada',
+                            observacao: `parcela_raiz_id:${parcela.id}`,
                         });
                     } else {
                         const valorNovaParcela = saldoRestanteCalculado / parentValues?.numero_novas_parcelas!;
@@ -513,6 +514,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             valor_parcela: valorNovaParcela,
                             data_vencimento: format(addDays(parentValues?.nova_data_vencimento!, i * parentValues?.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
                             status: 'reprogramada',
+                            observacao: `parcela_raiz_id:${parcela.id}`,
                         }));
                         await supabase.from(tabelaParcelas).insert(novasParcelas);
                     }

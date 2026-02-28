@@ -530,21 +530,18 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
 
   // Agrupar parcelas em cadeias.
   // Parcelas com numero_parcela >= 99 são reprogramações — não têm linha própria na tabela.
-  // Parcelas normais (< 99) com observacao contendo 'reprogramado'/'parcelado' são raízes
-  // de cadeia; as parcelas reprogramadas (>= 99) são associadas à raiz mais recente (por
-  // data_vencimento) que ainda não foi fechada.
+  // Critério forte: observacao contém "parcela_raiz_id:UUID" → vínculo direto.
+  // Fallback: parcelas normais (< 99) com observacao contendo 'reprogramado'/'parcelado' são raízes;
+  //   as reprogramadas (>= 99) são associadas à raiz mais recente por data_vencimento.
   const gruposParcelas = useMemo(() => {
     const normais = parcelas.filter(p => p.numero_parcela < 99);
     const reprogramadas = parcelas.filter(p => p.numero_parcela >= 99);
 
-    // Para cada parcela normal, verificar se originou reprogramação
     const eRaizDeCadeia = (p: ExtendedParcelaPagar) =>
       p.status === 'paga' &&
       (p.observacao?.toLowerCase().includes('reprogramado') ||
        p.observacao?.toLowerCase().includes('parcelado'));
 
-    // Associar cada reprogramada à raiz normal 'paga com reprogramação' mais recente
-    // que venceu antes dela (ordenando por data_vencimento).
     const raizes = normais.filter(eRaizDeCadeia).sort(
       (a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()
     );
@@ -553,25 +550,33 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
       (a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()
     );
 
-    // Map raiz.id -> cadeia (inclui a própria raiz)
     const cadeiaMap = new Map<string, ExtendedParcelaPagar[]>();
     for (const r of normais) {
       cadeiaMap.set(r.id, [r]);
     }
 
-    // Distribuir reprogramadas: cada uma vai para a raiz com data_vencimento imediatamente anterior
     for (const rep of reprogramadasOrdenadas) {
+      // Critério forte: observacao contém "parcela_raiz_id:UUID"
+      const matchRaizId = rep.observacao?.match(/parcela_raiz_id:([a-f0-9-]{36})/i);
+      if (matchRaizId) {
+        const raizId = matchRaizId[1];
+        if (cadeiaMap.has(raizId)) {
+          cadeiaMap.get(raizId)!.push(rep);
+          continue;
+        }
+      }
+
+      // Fallback: heurística por data_vencimento
       const raizAlvo = raizes
         .filter(r => new Date(r.data_vencimento) <= new Date(rep.data_vencimento))
-        .pop(); // a mais recente antes da reprogramada
+        .pop();
 
       if (raizAlvo) {
         cadeiaMap.get(raizAlvo.id)?.push(rep);
       } else {
-        // fallback: adiciona à primeira raiz disponível
         const primeiraRaiz = raizes[0];
         if (primeiraRaiz) cadeiaMap.get(primeiraRaiz.id)?.push(rep);
-        else cadeiaMap.set(rep.id, [rep]); // parcela órfã
+        else cadeiaMap.set(rep.id, [rep]);
       }
     }
 
