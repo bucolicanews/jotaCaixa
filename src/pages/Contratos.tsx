@@ -18,6 +18,7 @@ const Contratos = () => {
   const [activeContratoTab, setActiveContratoTab] = useState('pendentes');
   
   const {
+    contratos,
     contratosAgrupados,
     carregando,
     isAdmin,
@@ -35,6 +36,10 @@ const Contratos = () => {
 
   // Determina a lista de contratos a ser exibida na tabela
   const contratosParaExibir = useMemo(() => {
+      if (filtroTexto.trim()) {
+          return contratos;
+      }
+
       if (isAdmin) {
           switch (activeContratoTab) {
               case 'meus_contratos': return contratosAgrupados.meusContratos;
@@ -52,7 +57,7 @@ const Contratos = () => {
               default: return [];
           }
       }
-  }, [activeContratoTab, isAdmin, contratosAgrupados]);
+  }, [activeContratoTab, isAdmin, contratosAgrupados, filtroTexto, contratos]);
   
   const isSupervisao = isAdmin && activeContratoTab === 'contratos_clientes';
   // CORREÇÃO: Garante que o resultado seja estritamente booleano
@@ -126,6 +131,11 @@ const Contratos = () => {
             <Card>
                 <CardHeader><CardTitle className="text-xl">Contratos ({contratosParaExibir.length})</CardTitle></CardHeader>
                 <CardContent>
+                    {filtroTexto.trim() && (
+                        <p className="text-sm text-muted-foreground mb-3">
+                            Exibindo resultados de todas as abas para "{filtroTexto}"
+                        </p>
+                    )}
                     <ContratosTable
                         list={contratosParaExibir}
                         isSupervisao={isSupervisao}

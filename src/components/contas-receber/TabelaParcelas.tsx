@@ -271,7 +271,19 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs">{p.id.substring(0, 8)}</TableCell>
+                                            <TableCell className="font-mono text-xs">
+                                              {(p.contas_receber as any)?.contrato_gerado_id && (
+                                                <div className="text-[10px] text-purple-600" title={(p.contas_receber as any).contrato_gerado_id}>
+                                                  Ctr: {(p.contas_receber as any).contrato_gerado_id.substring(0, 8)}
+                                                </div>
+                                              )}
+                                              {p.conta_receber_id && (
+                                                <div className="text-[10px] text-blue-500" title={p.conta_receber_id}>
+                                                  CR: {p.conta_receber_id.substring(0, 8)}
+                                                </div>
+                                              )}
+                                              <div title={p.id}>Parc: {p.id.substring(0, 8)}</div>
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 {razaoSocial && <div className="font-bold text-foreground">{razaoSocial}</div>}
                                                 <div className={cn(razaoSocial && "text-xs text-muted-foreground")}>{clienteNome}</div>

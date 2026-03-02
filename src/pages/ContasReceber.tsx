@@ -146,6 +146,7 @@ const ContasReceber = () => {
             descricao,
             cliente_id,
             origem,
+            contrato_gerado_id,
             id_conta_patrimonial,
             id_conta_resultado,
             historico_id

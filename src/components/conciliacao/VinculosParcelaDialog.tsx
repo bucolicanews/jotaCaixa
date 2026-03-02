@@ -95,23 +95,35 @@ export function VinculosParcelaDialog({
       if (tipo === 'CR') {
         const { data: parcela } = await supabase
           .from('admin_parcelas_receber')
-          .select(`
-            id, numero_parcela, valor_parcela, valor_pago,
-            data_vencimento, data_pagamento, status,
-            mapeado_extrato_id,
-            admin_contas_receber!conta_receber_id(
-              id, descricao, status, valor_total, contrato_id,
-              tbl_clientes!cliente_id(nome, razao_social),
-              contratos_gerados!contrato_id(id, status, valor_total, data_inicio, numero_parcelas)
-            )
-          `)
+          .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, mapeado_extrato_id, conta_receber_id')
           .eq('id', parcelaId)
           .single();
 
         if (parcela) {
-          const conta = (parcela as any).admin_contas_receber;
+          let conta: any = null;
+          let contrato: any = null;
+
+          const contaReceberId: string | null = (parcela as any).conta_receber_id || null;
+
+          if (contaReceberId) {
+            const { data: contaData } = await supabase
+              .from('admin_contas_receber')
+              .select('id, descricao, status, valor_total, contrato_gerado_id, tbl_clientes!cliente_id(nome, razao_social)')
+              .eq('id', contaReceberId)
+              .single();
+            conta = contaData;
+
+            if (conta?.contrato_gerado_id) {
+              const { data: contratoData } = await supabase
+                .from('contratos_gerados')
+                .select('id, status, valor_total, data_inicio, numero_parcelas')
+                .eq('id', conta.contrato_gerado_id)
+                .single();
+              contrato = contratoData;
+            }
+          }
+
           const cliente = conta?.tbl_clientes;
-          const contrato = conta?.contratos_gerados;
 
           const novoDados: VinculoData = {
             contrato: contrato

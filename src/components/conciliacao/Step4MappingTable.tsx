@@ -182,7 +182,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
 
         const { data: parcelaAtual, error: errorBusca } = await supabase
           .from(tabela)
-          .select('valor_parcela, valor_pago, valor_vinculado, status, data_pagamento, conta_pagar_id, conta_receber_id')
+          .select(`valor_parcela, valor_pago, valor_vinculado, status, data_pagamento, ${m.tipo === 'CR' ? 'conta_receber_id' : 'conta_pagar_id'}`)
           .eq('id', m.parcelaId)
           .single();
 

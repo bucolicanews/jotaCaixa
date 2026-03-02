@@ -55,6 +55,7 @@ export function ModalMapeamentoParcelas({
   const [parcelasCR, setParcelasCR] = useState<ParcelaMatching[]>([]);
   const [parcelasCP, setParcelasCP] = useState<ParcelaMatching[]>([]);
   const [parcelasQuitadas, setParcelasQuitadas] = useState<ParcelaMatching[]>([]);
+  const [parcelasMapeadas, setParcelasMapeadas] = useState<ParcelaMatching[]>([]);
   const [filtro, setFiltro] = useState('');
   const [filtroMes, setFiltroMes] = useState('todos');
   const [abaAtiva, setAbaAtiva] = useState<string>('');
@@ -168,7 +169,7 @@ export function ModalMapeamentoParcelas({
         .from('admin_parcelas_receber')
         .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, admin_contas_receber!conta_receber_id(id, descricao, cliente_id, tbl_clientes!cliente_id(id, nome, razao_social))')
         .eq('admin_id', ownerId)
-        .eq('status', 'paga')
+        .in('status', ['paga', 'recebida'])
         .is('mapeado_extrato_id', null)
         .order('data_pagamento', { ascending: false }),
       supabase
@@ -236,6 +237,67 @@ export function ModalMapeamentoParcelas({
     return todosResultados;
   }, [ownerId]);
 
+  // Buscar parcelas já mapeadas (mapeado_extrato_id preenchido, sem vinculo ao extrato atual)
+  const buscarParcelasMapeadas = useCallback(async () => {
+    if (!ownerId) return [];
+
+    const [{ data: crData }, { data: cpData }] = await Promise.all([
+      supabase
+        .from('admin_parcelas_receber')
+        .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, conta_receber_id, admin_contas_receber!conta_receber_id(id, descricao, contrato_gerado_id, cliente_id, tbl_clientes!cliente_id(id, nome, razao_social))')
+        .eq('admin_id', ownerId)
+        .in('status', ['paga', 'recebida'])
+        .not('mapeado_extrato_id', 'is', null)
+        .order('data_pagamento', { ascending: false }),
+      supabase
+        .from('admin_parcelas_pagar')
+        .select('id, numero_parcela, valor_parcela, valor_pago, data_vencimento, data_pagamento, status, admin_contas_pagar!conta_pagar_id(id, descricao, fornecedor)')
+        .eq('admin_id', ownerId)
+        .eq('status', 'paga')
+        .not('mapeado_extrato_id', 'is', null)
+        .order('data_pagamento', { ascending: false }),
+    ]);
+
+    const resultadoCR: ParcelaMatching[] = (crData || []).map((p: any) => {
+      const conta = p.admin_contas_receber;
+      const cliente = conta?.tbl_clientes;
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
+        dataVencimento: p.data_pagamento || p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        clienteNome: cliente?.razao_social || cliente?.nome || '',
+        tipo: 'CR' as const,
+        matchScore: 0,
+        contratoId: conta?.contrato_gerado_id || null,
+        contaReceberId: p.conta_receber_id || null,
+      };
+    });
+
+    const resultadoCP: ParcelaMatching[] = (cpData || []).map((p: any) => {
+      const conta = p.admin_contas_pagar;
+      return {
+        id: p.id,
+        numeroParcela: p.numero_parcela,
+        valor_parcela: p.valor_parcela,
+        valorPago: p.valor_pago || 0,
+        valorRestante: p.valor_parcela - (p.valor_pago || 0),
+        dataVencimento: p.data_pagamento || p.data_vencimento,
+        status: p.status,
+        descricao: conta?.descricao || `Parcela ${p.numero_parcela}`,
+        fornecedorNome: conta?.fornecedor || '',
+        tipo: 'CP' as const,
+        matchScore: 0,
+      };
+    });
+
+    return [...resultadoCR, ...resultadoCP];
+  }, [ownerId]);
+
   // Carregar parcelas ao abrir o modal
   useEffect(() => {
     if (open && ownerId) {
@@ -249,11 +311,12 @@ export function ModalMapeamentoParcelas({
       setModoExcedente('restante');
       setAbaAtiva(transacao.tipo === 'Entrada' ? 'CR' : 'CP');
 
-      Promise.all([buscarParcelasCR(), buscarParcelasCP(), buscarParcelasQuitadas()])
-        .then(([cr, cp, quitadas]) => {
+      Promise.all([buscarParcelasCR(), buscarParcelasCP(), buscarParcelasQuitadas(), buscarParcelasMapeadas()])
+        .then(([cr, cp, quitadas, mapeadas]) => {
           setParcelasCR(cr);
           setParcelasCP(cp);
           setParcelasQuitadas(quitadas);
+          setParcelasMapeadas(mapeadas);
         })
         .catch((error) => {
           console.error('Erro ao carregar parcelas:', error);
@@ -284,7 +347,8 @@ export function ModalMapeamentoParcelas({
       p.descricao?.toLowerCase().includes(filtroLower) ||
       p.numeroParcela?.toString().includes(filtroLower) ||
       p.valor_parcela?.toString().includes(filtroLower) ||
-      p.dataVencimento?.includes(filtro)
+      p.dataVencimento?.includes(filtro) ||
+      p.id?.toLowerCase().includes(filtroLower)
     );
   }, [parcelasCR, filtro, filtroMes]);
 
@@ -304,7 +368,8 @@ export function ModalMapeamentoParcelas({
       p.descricao?.toLowerCase().includes(filtroLower) ||
       p.numeroParcela?.toString().includes(filtroLower) ||
       p.valor_parcela?.toString().includes(filtroLower) ||
-      p.dataVencimento?.includes(filtro)
+      p.dataVencimento?.includes(filtro) ||
+      p.id?.toLowerCase().includes(filtroLower)
     );
   }, [parcelasCP, filtro, filtroMes]);
 
@@ -327,9 +392,34 @@ export function ModalMapeamentoParcelas({
       p.descricao?.toLowerCase().includes(filtroLower) ||
       p.numeroParcela?.toString().includes(filtroLower) ||
       p.valor_parcela?.toString().includes(filtroLower) ||
-      p.dataVencimento?.includes(filtro)
+      p.dataVencimento?.includes(filtro) ||
+      p.id?.toLowerCase().includes(filtroLower)
     );
   }, [parcelasQuitadas, filtro, filtroMes, tipoTransacao]);
+
+  const parcelasMapeadasFiltradas = useMemo(() => {
+    let lista = parcelasMapeadas.filter(p => p.tipo === tipoTransacao);
+    if (filtroMes !== 'todos') {
+      lista = lista.filter(p => {
+        if (!p.dataVencimento) return false;
+        const d = new Date(p.dataVencimento);
+        return String(d.getMonth() + 1).padStart(2, '0') === filtroMes;
+      });
+    }
+    if (!filtro) return lista;
+    const filtroLower = filtro.toLowerCase();
+    return lista.filter(p =>
+      p.clienteNome?.toLowerCase().includes(filtroLower) ||
+      p.fornecedorNome?.toLowerCase().includes(filtroLower) ||
+      p.descricao?.toLowerCase().includes(filtroLower) ||
+      p.numeroParcela?.toString().includes(filtroLower) ||
+      p.valor_parcela?.toString().includes(filtroLower) ||
+      p.dataVencimento?.includes(filtro) ||
+      p.id?.toLowerCase().includes(filtroLower) ||
+      (p as any).contratoId?.toLowerCase().includes(filtroLower) ||
+      (p as any).contaReceberId?.toLowerCase().includes(filtroLower)
+    );
+  }, [parcelasMapeadas, filtro, filtroMes, tipoTransacao]);
 
   // Cálculo de valores
   const valorSelecionado = useMemo(() => {
@@ -519,7 +609,7 @@ export function ModalMapeamentoParcelas({
                 {/* Tabela com Scroll */}
                 <div className="flex-1 overflow-y-auto border rounded-lg">
                   <Tabs defaultValue={tipoTransacao} className="h-full" onValueChange={setAbaAtiva}>
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="CR" disabled={transacao.tipo !== 'Entrada'}>
                         Contas a Receber ({parcelasCRFiltradas.length}/{parcelasCR.length})
                       </TabsTrigger>
@@ -528,6 +618,9 @@ export function ModalMapeamentoParcelas({
                       </TabsTrigger>
                       <TabsTrigger value="QUITADAS">
                         Já Quitadas ({parcelasQuitadasFiltradas.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="MAPEADAS">
+                        Já Mapeadas ({parcelasMapeadasFiltradas.length})
                       </TabsTrigger>
                     </TabsList>
 
@@ -585,6 +678,28 @@ export function ModalMapeamentoParcelas({
                       ) : (
                         <ParcelasTableSelecao
                           parcelas={parcelasQuitadasFiltradas}
+                          tipo={tipoTransacao}
+                          parcelasSelecionadas={parcelasSelecionadas}
+                          onToggleSelecao={handleToggleSelecao}
+                          onValorChange={handleValorChange}
+                          valorTransacao={Math.abs(transacao.valor)}
+                          labelData="Dt. Pagamento"
+                        />
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="MAPEADAS" className="mt-0 h-full overflow-y-auto">
+                      {parcelasMapeadasFiltradas.length === 0 ? (
+                        <Alert className="m-4">
+                          <AlertDescription>
+                            {filtro
+                              ? 'Nenhuma parcela encontrada com o filtro aplicado.'
+                              : 'Nenhuma parcela já mapeada encontrada.'}
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <ParcelasTableSelecao
+                          parcelas={parcelasMapeadasFiltradas}
                           tipo={tipoTransacao}
                           parcelasSelecionadas={parcelasSelecionadas}
                           onToggleSelecao={handleToggleSelecao}
@@ -660,7 +775,7 @@ export function ModalMapeamentoParcelas({
                 </div>
 
                 {/* Seletor Modo Excedente */}
-                {parcelasSelecionadas.size > 0 && (
+                {parcelasSelecionadas.size > 0 && valorSelecionado > Math.abs(transacao.valor) && (
                   <div className="border rounded-lg p-4 bg-blue-50">
                     <h3 className="text-sm font-bold text-blue-800 mb-2">Tratamento do Excedente</h3>
                     <p className="text-xs text-blue-600 mb-3">

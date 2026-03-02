@@ -82,6 +82,12 @@ export default function ContratosTable({
                 <TableCell className="font-medium">
                   <div className="font-bold">{c.clientes?.razao_social || c.clientes?.nome || 'N/A'}</div>
                   <div className="text-xs text-muted-foreground">{c.modelos_contratos?.titulo || 'Tipo não informado'}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="font-mono text-[10px] text-gray-400">#{c.id.substring(0, 8)}</span>
+                    {c.tem_parcelas_pagas && (
+                      <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-semibold">Parcelas pagas</span>
+                    )}
+                  </div>
                 </TableCell>
 
                 <TableCell>

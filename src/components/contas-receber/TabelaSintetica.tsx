@@ -167,7 +167,14 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                                     </AlertDialog>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell>
+                                            <TableCell className="font-mono text-xs text-muted-foreground max-w-[130px]">
+                                              {(conta as any).contrato_gerado_id && (
+                                                <div className="text-[10px] text-purple-600" title={(conta as any).contrato_gerado_id}>
+                                                  Ctr: {(conta as any).contrato_gerado_id.substring(0, 8)}
+                                                </div>
+                                              )}
+                                              <div title={conta.id}>CR: {conta.id.substring(0, 8)}</div>
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 {conta.clientes?.razao_social && <div className="font-bold text-foreground">{conta.clientes.razao_social}</div>}
                                                 <div className={cn(conta.clientes?.razao_social && "text-xs text-muted-foreground")}>{conta.clientes?.nome || 'N/A'}</div>

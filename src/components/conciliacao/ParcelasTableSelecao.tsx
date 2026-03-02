@@ -98,6 +98,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[50px]">Sel.</TableHead>
+            <TableHead className="w-[80px] text-xs text-muted-foreground">ID</TableHead>
             <TableHead>{tipo === 'CR' ? 'Cliente' : 'Fornecedor'}</TableHead>
             <TableHead>Descrição</TableHead>
             <TableHead>Nº</TableHead>
@@ -113,7 +114,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
         <TableBody>
           {parcelas.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+              <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                 Nenhuma parcela encontrada.
               </TableCell>
             </TableRow>
@@ -135,6 +136,9 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
                       }
                     />
                   </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {parcela.id.substring(0, 8)}
+                  </TableCell>
                   <TableCell>
                     {tipo === 'CR' ? parcela.clienteNome : parcela.fornecedorNome}
                   </TableCell>
@@ -151,7 +155,7 @@ export const ParcelasTableSelecao: React.FC<Props> = ({
                       >
                         {parcela.status}
                       </Badge>
-                      {parcela.status === 'paga' && parcela.temLancamento !== undefined && (
+                      {(parcela.status === 'paga' || parcela.status === 'recebida') && parcela.temLancamento !== undefined && (
                         parcela.temLancamento ? (
                           <Badge className="bg-green-100 text-green-800 text-xs">Lanc. OK</Badge>
                         ) : (

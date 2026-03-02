@@ -46,16 +46,15 @@ export function LancamentoAvulsoForm({
 }: Props) {
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [loading, setLoading] = useState(true);
-  const { usuario, role } = useSessao();
+  const { ownerId } = useSessao();
 
   useEffect(() => {
     const buscarContas = async () => {
-      const isAdmin = role === 'Admin';
       const { data } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao, Tipo')
-        .eq(isAdmin ? 'id_admin' : 'empresa_id', usuario?.id)
-        .in('Tipo', ['3', '4']) // 3=Receitas, 4=Despesas
+        .eq('proprietario_id', ownerId)
+        .eq('Analitica', 'Sim')
         .order('Conta');
 
       setContasContabeis(data || []);
@@ -63,7 +62,7 @@ export function LancamentoAvulsoForm({
     };
 
     buscarContas();
-  }, [usuario?.id, role]);
+  }, [ownerId]);
 
   return (
     <Card className="border-yellow-500 bg-yellow-50">

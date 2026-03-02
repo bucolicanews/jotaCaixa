@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { PlusCircle, Undo2, Loader2, Pencil, BookOpen } from 'lucide-react';
+import { PlusCircle, Undo2, Loader2, Pencil, BookOpen, Trash2 } from 'lucide-react';
 import { ContaReceber } from '@/types/contas-receber';
 import { supabase } from '@/integrations/supabase/client';
 import { useOwner } from '@/hooks/use-owner';
@@ -68,7 +68,7 @@ interface DetalhesRecebimentoParcelaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parcela: Parcela;
-  conta: ContaReceber;
+  conta?: ContaReceber;
   proprietarioId: string;
   onDataChange: () => void;
 }
@@ -81,6 +81,7 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
   proprietarioId,
   onDataChange,
 }) => {
+  const contaReceber = conta ?? (parcela as any).contas_receber ?? null;
   const { ownerId } = useOwner();
   const { role, perfil } = useSessao();
 
@@ -101,6 +102,8 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
   const [estornandoRecebimento, setEstornandoRecebimento] = useState<string | null>(null);
   const [lancamentoDialogOpen, setLancamentoDialogOpen] = useState(false);
   const [editarPagaDialogOpen, setEditarPagaDialogOpen] = useState(false);
+  const [deletandoLancamentoId, setDeletandoLancamentoId] = useState<string | null>(null);
+  const [confirmDeleteLancamento, setConfirmDeleteLancamento] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const [confirmEstornoDialog, setConfirmEstornoDialog] = useState<{
     open: boolean;
@@ -128,8 +131,8 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
     [recebimentos]
   );
   const saldoRestante = parcela.valor_parcela - totalRecebido;
-  const cliente = conta.clientes?.nome || 'N/A';
-  const descricao = conta.descricao || 'Conta a Receber';
+  const cliente = contaReceber?.clientes?.nome || 'N/A';
+  const descricao = contaReceber?.descricao || 'Conta a Receber';
 
   const carregarDados = useCallback(async () => {
     if (!open) return;
@@ -354,6 +357,26 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
       showError('Falha ao estornar: ' + error.message);
     } finally {
       setEstornandoRecebimento(null);
+    }
+  };
+
+  const deletarLancamento = async (lancamentoId: string) => {
+    setDeletandoLancamentoId(lancamentoId);
+    try {
+      const { error } = await supabase
+        .from('lancamentos')
+        .delete()
+        .eq('id', lancamentoId)
+        .eq('proprietario_id', proprietarioId);
+      if (error) throw error;
+      showSuccess('Lançamento excluído.');
+      await carregarDados();
+      onDataChange();
+    } catch (error: any) {
+      showError('Erro ao excluir lançamento: ' + error.message);
+    } finally {
+      setDeletandoLancamentoId(null);
+      setConfirmDeleteLancamento({ open: false, id: null });
     }
   };
 
@@ -583,6 +606,7 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
                     <TableHead>Conta</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead>Origem</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -601,6 +625,22 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
                       <TableCell className="text-right font-semibold">{formatCurrency(l.valor)}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">{l.origem}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {l.origem === 'lancamento_manual_cr' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Excluir lançamento"
+                            disabled={deletandoLancamentoId === l.id}
+                            onClick={() => setConfirmDeleteLancamento({ open: true, id: l.id })}
+                          >
+                            {deletandoLancamentoId === l.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Trash2 className="w-4 h-4 text-red-500" />
+                            }
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -648,8 +688,8 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           parcelaData={parcela.data_vencimento}
           origemTipo="contas_receber"
           proprietarioId={proprietarioId}
-          contaPatrimonialId={conta.id_conta_patrimonial}
-          contaResultadoId={(conta as any)?.id_conta_resultado}
+          contaPatrimonialId={contaReceber?.id_conta_patrimonial}
+          contaResultadoId={contaReceber?.id_conta_resultado}
           onSaved={() => {
             setLancamentoDialogOpen(false);
             carregarDados();
@@ -657,6 +697,26 @@ const DetalhesRecebimentoParcelaDialog: React.FC<DetalhesRecebimentoParcelaDialo
           }}
         />
       )}
+
+      <AlertDialog open={confirmDeleteLancamento.open} onOpenChange={(open) => setConfirmDeleteLancamento(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Lançamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este lançamento contábil será excluído permanentemente. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => confirmDeleteLancamento.id && deletarLancamento(confirmDeleteLancamento.id)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmEstornoDialog.open} onOpenChange={(open) => setConfirmEstornoDialog(prev => ({ ...prev, open }))}>
         <AlertDialogContent>
