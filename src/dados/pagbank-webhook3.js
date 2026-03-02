@@ -142,7 +142,7 @@ serve(async (req) => {
     // ✅ PASSO 2B: LANÇAMENTOS CONTÁBEIS (independente do recebimento)
     if (config) {
       try {
-        const contaSinteticaId = config.conta_sintetica_id ?? config.conta_id ?? null;
+        const contaSinteticaId = config.conta_sintetica_id ?? null;
         const contaPatrimonialId = parcela.admin_contas_receber?.id_conta_patrimonial ?? null;
 
         console.log(`[pagbank-webhook:${requestId}] PASSO 2B: conta_sintetica=${contaSinteticaId}, id_conta_patrimonial=${contaPatrimonialId}`);
