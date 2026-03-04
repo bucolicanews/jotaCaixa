@@ -81,11 +81,11 @@ export function useConciliacaoLogic({
 
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         
-        const existingKeys = new Set<string>();
+        const existingKeys = new Map<string, string>();
         
         const { data, error } = await supabase
             .from('extratos')
-            .select('data, descricao, valor, tipo')
+            .select('data, descricao, valor, tipo, status_conciliacao')
             .eq('empresa_id', empresaId)
             .eq('id_saldo_contas', contaId);
             
@@ -94,13 +94,11 @@ export function useConciliacaoLogic({
             return existingKeys;
         }
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (2 casas) | Tipo)
         (data || []).forEach(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
-            // CRÍTICO: Usamos o valor original (com sinal) para a verificação de unicidade
             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
-            existingKeys.add(uniqueKey);
+            existingKeys.set(uniqueKey, e.status_conciliacao || 'EXISTENTE');
         });
         
         return existingKeys;
@@ -269,7 +267,12 @@ export function useConciliacaoLogic({
                             // Verifica duplicidade de transação (CHAVE ÚNICA)
                             if (existingExtratosSet.has(uniqueKey)) {
                                 isDuplicated = true;
-                                motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                                const statusExistente = existingExtratosSet.get(uniqueKey);
+                                if (statusExistente === 'CONCILIADA' || statusExistente === 'PARCIALMENTE_CONCILIADA') {
+                                    motivoDuplicidade = 'Parcelas já mapeadas anteriormente.';
+                                } else {
+                                    motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                                }
                             }
                             
                             return {
@@ -338,7 +341,11 @@ export function useConciliacaoLogic({
         }
         
         // Filtra apenas transações válidas e mapeadas
-        const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
+        const transacoesParaSalvar = transacoes.filter(
+            t => t.conta_contabil_id &&
+                 t.conta_contabil_id !== 'MAPEADO_PARCELAS' &&
+                 !t.isDuplicated
+        );
         
         if (transacoesParaSalvar.length === 0) {
             showError('Nenhuma transação mapeada para salvar.');

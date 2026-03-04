@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Link2, AlertCircle, CheckCircle2, FileText, Building2, Receipt, Landmark, BookOpen } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Link2, AlertCircle, CheckCircle2, FileText, Building2, Receipt, Landmark, BookOpen, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { showError, showSuccess } from '@/utils/toast';
@@ -76,6 +77,15 @@ export function VinculosParcelaDialog({
   const { ownerId } = useSessao();
   const [loading, setLoading] = useState(true);
   const [criandoLancamento, setCriandoLancamento] = useState(false);
+  const [buscandoExtrato, setBuscandoExtrato] = useState(false);
+  const [filtroDescricao, setFiltroDescricao] = useState('');
+  const [filtroValor, setFiltroValor] = useState('');
+  const [filtroData, setFiltroData] = useState('');
+  const [filtroIdentificacao, setFiltroIdentificacao] = useState('');
+  const [extratosCandidatos, setExtratosCandidatos] = useState<Array<{
+    id: string; data: string; descricao: string; valor: number; tipo: string; conciliado: boolean; identificacao?: string; saldo_contas?: { nome: string };
+  }>>([]);
+  const [vinculandoExtrato, setVinculandoExtrato] = useState(false);
   const [dados, setDados] = useState<VinculoData>({
     contrato: null,
     conta: null,
@@ -89,6 +99,12 @@ export function VinculosParcelaDialog({
     setLoading(true);
     carregarVinculos();
   }, [open, parcelaId, ownerId]);
+
+  useEffect(() => {
+    if (!loading && !dados.extrato && dados.parcela && ownerId) {
+      handleBuscarExtratos(dados.parcela);
+    }
+  }, [loading, dados.extrato, dados.parcela]);
 
   const carregarVinculos = async () => {
     try {
@@ -236,7 +252,7 @@ export function VinculosParcelaDialog({
     if (mapeadoExtratoId) {
       const { data } = await supabase
         .from('extratos')
-        .select('id, data, descricao, valor, tipo, conciliado, saldo_contas!id_saldo_contas(nome)')
+        .select('id, data, descricao, valor, tipo, conciliado, identificacao, saldo_contas!id_saldo_contas(nome)')
         .eq('id', mapeadoExtratoId)
         .single();
       extrato = data;
@@ -245,7 +261,7 @@ export function VinculosParcelaDialog({
     if (!extrato) {
       const { data } = await supabase
         .from('extratos')
-        .select('id, data, descricao, valor, tipo, conciliado, saldo_contas!id_saldo_contas(nome)')
+        .select('id, data, descricao, valor, tipo, conciliado, identificacao, saldo_contas!id_saldo_contas(nome)')
         .eq(campoVinculo, parcelaId)
         .limit(1)
         .maybeSingle();
@@ -265,6 +281,117 @@ export function VinculosParcelaDialog({
       : null;
 
     setDados({ ...alvo });
+  };
+
+  const handleBuscarExtratos = async (
+    parcela?: typeof dados.parcela,
+    filtros?: { descricao?: string; identificacao?: string; valor?: string; data?: string }
+  ) => {
+    const parcelaAlvo = parcela || dados.parcela;
+    if (!ownerId || !parcelaAlvo) return;
+    setBuscandoExtrato(true);
+
+    const fDesc = filtros ? (filtros.descricao ?? '') : filtroDescricao;
+    const fId   = filtros ? (filtros.identificacao ?? '') : filtroIdentificacao;
+    const fVal  = filtros ? (filtros.valor ?? '') : filtroValor;
+    const fData = filtros ? (filtros.data ?? '') : filtroData;
+
+    try {
+      const temFiltro = fDesc.trim() || fId.trim() || fVal.trim() || fData.trim();
+      let query = supabase
+        .from('extratos')
+        .select('id, data, descricao, valor, tipo, conciliado, identificacao, saldo_contas!id_saldo_contas(nome)')
+        .eq('empresa_id', ownerId)
+        .order('data', { ascending: false })
+        .limit(temFiltro ? 30 : 50);
+
+      if (fDesc.trim()) {
+        query = query.ilike('descricao', `%${fDesc.trim()}%`);
+      }
+      if (fId.trim()) {
+        query = query.ilike('identificacao', `%${fId.trim()}%`);
+      }
+      if (fData.trim()) {
+        query = query.eq('data', fData.trim());
+      }
+      if (fVal.trim()) {
+        const v = parseFloat(fVal.replace(',', '.'));
+        if (!isNaN(v)) {
+          query = query.gte('valor', v * 0.99).lte('valor', v * 1.01);
+        }
+      } else if (!fDesc.trim() && !fId.trim() && !fData.trim()) {
+        const valor = parcelaAlvo.valor_parcela;
+        query = query.gte('valor', valor * 0.9).lte('valor', valor * 1.1);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setExtratosCandidatos(
+        (data || []).map((e: any) => ({
+          id: e.id,
+          data: e.data,
+          descricao: e.descricao,
+          valor: e.valor,
+          tipo: e.tipo,
+          conciliado: e.conciliado,
+          identificacao: e.identificacao,
+          saldo_contas: e.saldo_contas,
+        }))
+      );
+    } catch (err: any) {
+      showError('Erro ao buscar extratos: ' + err.message);
+    } finally {
+      setBuscandoExtrato(false);
+    }
+  };
+
+  const handleVincularExtrato = async (extrato: typeof extratosCandidatos[0]) => {
+    if (!dados.parcela || !ownerId) return;
+    setVinculandoExtrato(true);
+    try {
+      const tabelaParcela = tipo === 'CR' ? 'admin_parcelas_receber' : 'admin_parcelas_pagar';
+      const { error } = await supabase
+        .from(tabelaParcela)
+        .update({ mapeado_extrato_id: extrato.id })
+        .eq('id', dados.parcela.id);
+
+      if (error) throw error;
+
+      await supabase
+        .from('extratos')
+        .update({ conciliado: true })
+        .eq('id', extrato.id);
+
+      showSuccess('Extrato vinculado com sucesso!');
+      setExtratosCandidatos([]);
+      setTermoBusca('');
+      await carregarVinculos();
+    } catch (err: any) {
+      showError('Erro ao vincular extrato: ' + err.message);
+    } finally {
+      setVinculandoExtrato(false);
+    }
+  };
+
+  const handleDesvincularExtrato = async () => {
+    if (!dados.parcela || !dados.extrato) return;
+    setVinculandoExtrato(true);
+    try {
+      const tabelaParcela = tipo === 'CR' ? 'admin_parcelas_receber' : 'admin_parcelas_pagar';
+      const { error } = await supabase
+        .from(tabelaParcela)
+        .update({ mapeado_extrato_id: null })
+        .eq('id', dados.parcela.id);
+
+      if (error) throw error;
+
+      showSuccess('Vínculo com extrato removido.');
+      await carregarVinculos();
+    } catch (err: any) {
+      showError('Erro ao desvincular extrato: ' + err.message);
+    } finally {
+      setVinculandoExtrato(false);
+    }
   };
 
   const handleCriarLancamento = async () => {
@@ -305,7 +432,7 @@ export function VinculosParcelaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-blue-600" />
@@ -321,7 +448,7 @@ export function VinculosParcelaDialog({
         ) : (
           <div className="space-y-4">
             {/* Colunas de Vínculos */}
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-6 gap-3">
               {/* COLUNA 1: Contrato */}
               <VinculoColuna
                 icone={<BookOpen className="h-4 w-4" />}
@@ -464,7 +591,8 @@ export function VinculosParcelaDialog({
                 )}
               </VinculoColuna>
 
-              {/* COLUNA 5: Extrato */}
+              {/* COLUNA 5: Extrato (ocupa 2 colunas) */}
+              <div className="col-span-2">
               <VinculoColuna
                 icone={<Landmark className="h-4 w-4" />}
                 titulo="Extrato Bancário"
@@ -499,11 +627,131 @@ export function VinculosParcelaDialog({
                         </>
                       )}
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs border-red-200 text-red-600 hover:bg-red-50 mt-1"
+                      onClick={handleDesvincularExtrato}
+                      disabled={vinculandoExtrato}
+                    >
+                      {vinculandoExtrato ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <X className="h-3 w-3 mr-1" />}
+                      Desvincular
+                    </Button>
                   </div>
                 ) : (
-                  <SemVinculo label="Sem extrato vinculado" />
+                  <div className="space-y-2">
+                    <SemVinculo label="Sem extrato vinculado" />
+                    <div className="space-y-1">
+                      <div>
+                        <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Descrição</p>
+                        <Input
+                          placeholder="Ex: Pix, Ted, Boleto..."
+                          value={filtroDescricao}
+                          onChange={(e) => setFiltroDescricao(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleBuscarExtratos()}
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Identificação</p>
+                        <Input
+                          placeholder="Código, CPF, CNPJ..."
+                          value={filtroIdentificacao}
+                          onChange={(e) => setFiltroIdentificacao(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleBuscarExtratos()}
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Valor (R$)</p>
+                          <Input
+                            placeholder="Ex: 150.00"
+                            value={filtroValor}
+                            onChange={(e) => setFiltroValor(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarExtratos()}
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Data</p>
+                          <Input
+                            type="date"
+                            value={filtroData}
+                            onChange={(e) => setFiltroData(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarExtratos()}
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                        onClick={() => handleBuscarExtratos()}
+                        disabled={buscandoExtrato}
+                      >
+                        {buscandoExtrato ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
+                        Buscar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs border-gray-300 text-gray-600 hover:bg-gray-50"
+                        onClick={() => {
+                          setFiltroDescricao('');
+                          setFiltroIdentificacao('');
+                          setFiltroValor('');
+                          setFiltroData('');
+                          if (dados.parcela) handleBuscarExtratos(dados.parcela, { descricao: '', identificacao: '', valor: '', data: '' });
+                        }}
+                        disabled={buscandoExtrato}
+                        title="Limpar filtros e recarregar"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {extratosCandidatos.length > 0 && (
+                      <div className="space-y-1 max-h-[55vh] overflow-y-auto pr-1">
+                        {extratosCandidatos.map((e) => (
+                          <button
+                            key={e.id}
+                            onClick={() => handleVincularExtrato(e)}
+                            disabled={vinculandoExtrato}
+                            className="w-full text-left text-xs border rounded p-1.5 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors space-y-0.5 disabled:opacity-50"
+                          >
+                            <div className="font-semibold truncate" title={e.descricao}>{e.descricao}</div>
+                            {e.identificacao && (
+                              <div className="text-gray-500 truncate text-[10px]">ID: {e.identificacao}</div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Badge variant={e.tipo === 'Entrada' ? 'default' : 'destructive'} className="text-[10px] h-4 px-1">
+                                {e.tipo}
+                              </Badge>
+                              <span className="font-mono">{formatCurrency(Math.abs(e.valor))}</span>
+                              <span className="text-gray-400 ml-auto">{formatarData(e.data)}</span>
+                            </div>
+                            {e.saldo_contas && (
+                              <div className="text-gray-400 truncate">{(e.saldo_contas as any).nome}</div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {extratosCandidatos.length === 0 && !buscandoExtrato && !filtroDescricao && !filtroValor && !filtroData && !filtroIdentificacao && (
+                      <p className="text-[10px] text-gray-400 text-center">
+                        Nenhum extrato encontrado próximo ao valor da parcela. Use os filtros para buscar manualmente.
+                      </p>
+                    )}
+                    {extratosCandidatos.length === 0 && !buscandoExtrato && (filtroDescricao || filtroValor || filtroData || filtroIdentificacao) && (
+                      <p className="text-[10px] text-gray-400 text-center">Nenhum extrato encontrado.</p>
+                    )}
+                  </div>
                 )}
               </VinculoColuna>
+              </div>
             </div>
 
             {/* Indicador geral de integridade */}
@@ -547,7 +795,7 @@ function VinculoColuna({
   };
 
   return (
-    <div className={`rounded-lg border-2 p-3 flex flex-col gap-2 min-h-[180px] ${corMap[cor]}`}>
+    <div className={`rounded-lg border-2 p-3 flex flex-col gap-2 min-h-[220px] ${corMap[cor]}`}>
       <div className={`flex items-center gap-1.5 font-semibold text-xs ${headerMap[cor]}`}>
         {icone}
         <span>{titulo}</span>

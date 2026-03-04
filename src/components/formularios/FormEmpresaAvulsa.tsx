@@ -8,7 +8,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CalendarIcon, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { useSessao } from '@/hooks/use-sessao';
-import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
+import { BASE_URL } from '@/config/app-config';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome da empresa é obrigatório.'),
@@ -37,6 +38,9 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [loadingPlanos, setLoadingPlanos] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [erroVisivel, setErroVisivel] = useState<string | null>(null);
+  const [verificandoEmail, setVerificandoEmail] = useState(false);
+  const [emailDisponivel, setEmailDisponivel] = useState<boolean | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -72,14 +76,48 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
     fetchPlanos();
   }, [fetchPlanos]);
 
+  const verificarEmail = useCallback(async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailDisponivel(null);
+      return;
+    }
+    setVerificandoEmail(true);
+    setEmailDisponivel(null);
+    try {
+      const { data } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (data) {
+        setEmailDisponivel(false);
+        setErroVisivel(`Email já cadastrado no sistema para o cliente "${data.nome}". Cada empresa precisa de um email único.`);
+      } else {
+        setEmailDisponivel(true);
+        setErroVisivel(null);
+      }
+    } catch {
+      setEmailDisponivel(null);
+    } finally {
+      setVerificandoEmail(false);
+    }
+  }, []);
+
   const onSubmit = async (values: FormValues) => {
     if (!usuario?.id) {
       showError('Sessão de administrador inválida.');
       return;
     }
-    
+
+    if (emailDisponivel === false) {
+      setErroVisivel(`Email "${values.email}" já está cadastrado. Use outro email para continuar.`);
+      return;
+    }
+
     setIsSubmitting(true);
-    
+    setErroVisivel(null);
+
     try {
       const { data, error } = await supabase.functions.invoke('create-client', {
         body: {
@@ -93,27 +131,73 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
       });
 
       if (error) {
-        throw new Error(error.message || 'Erro ao comunicar com o servidor');
+        let mensagem = '';
+
+        // Tentar extrair mensagem real do corpo da resposta da Edge Function
+        try {
+          if (error.context?.body) {
+            const texto = typeof error.context.body === 'string'
+              ? error.context.body
+              : await error.context.body.text?.();
+            const parsed = JSON.parse(texto);
+            if (parsed?.error) mensagem = parsed.error;
+          }
+        } catch {}
+
+        if (!mensagem) {
+          try {
+            const ctx = typeof error.context === 'string' ? JSON.parse(error.context) : error.context;
+            if (ctx?.error) mensagem = ctx.error;
+          } catch {}
+        }
+
+        if (!mensagem) mensagem = error.message || 'Erro desconhecido';
+
+        console.error('[create-client] erro bruto:', error, '| mensagem extraída:', mensagem);
+        setErroVisivel(traduzirErro(mensagem));
+        return;
       }
 
       if (!data?.success) {
-        throw new Error(data?.error || 'Erro desconhecido ao cadastrar cliente');
+        const msg = data?.error || 'Erro desconhecido ao cadastrar cliente';
+        console.error('[create-client] data sem success:', data);
+        setErroVisivel(traduzirErro(msg));
+        return;
       }
 
-      showSuccess(`Empresa Avulsa ${values.nome} cadastrada com sucesso! Convite de acesso enviado para ${values.email}.`);
+      showSuccess(`Empresa "${values.nome}" cadastrada com sucesso! Convite de acesso enviado para ${values.email}.`);
+      setErroVisivel(null);
       onSaveComplete();
 
     } catch (error: any) {
       console.error('Erro ao cadastrar empresa avulsa:', error);
-      showError('Falha no cadastro: ' + error.message);
+      setErroVisivel(traduzirErro(error.message));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const traduzirErro = (msg: string): string => {
+    if (!msg) return 'Erro desconhecido. Tente novamente.';
+    if (msg.includes('Email já cadastrado') || msg.includes('already been registered') || msg.includes('already exists')) {
+      return 'Este email já está cadastrado no sistema. Cada empresa precisa de um email único para acesso.';
+    }
+    if (msg.includes('Plano não encontrado')) return 'O plano selecionado não foi encontrado. Recarregue a página e tente novamente.';
+    if (msg.includes('non-2xx')) return 'Erro de comunicação com o servidor. Verifique os dados e tente novamente.';
+    return msg;
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+        {erroVisivel && (
+          <Alert variant="destructive" className="border-red-400 bg-red-50">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="font-medium">{erroVisivel}</AlertDescription>
+          </Alert>
+        )}
+
         <h3 className="font-semibold text-lg">Dados de Acesso</h3>
         <FormField
           control={form.control}
@@ -132,7 +216,37 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
           render={({ field }) => (
             <FormItem>
               <FormLabel>Email (Login)</FormLabel>
-              <FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type="email"
+                    placeholder="email@empresa.com"
+                    {...field}
+                    disabled={isSubmitting}
+                    onBlur={(e) => {
+                      field.onBlur();
+                      verificarEmail(e.target.value);
+                    }}
+                    className={cn(
+                      emailDisponivel === false && 'border-red-500 focus-visible:ring-red-500',
+                      emailDisponivel === true && 'border-green-500 focus-visible:ring-green-500',
+                    )}
+                  />
+                </FormControl>
+                <div className="absolute right-3 top-2.5">
+                  {verificandoEmail && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  {!verificandoEmail && emailDisponivel === true && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                  {!verificandoEmail && emailDisponivel === false && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                </div>
+              </div>
+              {emailDisponivel === false && (
+                <p className="text-xs text-red-600 font-medium mt-1">
+                  Este email já está cadastrado no sistema.
+                </p>
+              )}
+              {emailDisponivel === true && (
+                <p className="text-xs text-green-600 mt-1">Email disponível.</p>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -223,7 +337,7 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="w-full" disabled={isSubmitting || emailDisponivel === false || verificandoEmail}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Cadastrar Empresa Avulsa
         </Button>

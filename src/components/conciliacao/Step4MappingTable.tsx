@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, Link, Sparkles } from 'lucide-react';
+import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, Link, Sparkles, AlertCircle } from 'lucide-react';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import { cn } from '@/lib/utils';
@@ -72,7 +72,12 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const isAdmin = ownerType === 'Admin' || ownerType === 'AdminUsuario';
   
   const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
-  const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
+  const transacoesJaMapeadas = transacoes.filter(
+    t => t.isDuplicated && t.motivoDuplicidade?.includes('Parcelas já mapeadas')
+  );
+  const transacoesDuplicadasSimples = transacoes.filter(
+    t => t.isDuplicated && !t.motivoDuplicidade?.includes('Parcelas já mapeadas')
+  );
 
   const resumo = useMemo(() => {
     const validas = transacoes.filter(t => !t.isDuplicated);
@@ -436,15 +441,30 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
       <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
       <CardContent>
         
-        {transacoesRejeitadas.length > 0 && (
-            <div className="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 rounded-md mb-4">
+        {transacoesJaMapeadas.length > 0 && (
+            <div className="p-3 bg-emerald-100 dark:bg-emerald-900/20 border border-emerald-500 rounded-md mb-4">
+                <h3 className="font-semibold text-emerald-700 dark:text-emerald-300 flex items-center mb-2">
+                    <CheckCircle2 className="w-5 h-5 mr-2" /> {transacoesJaMapeadas.length} Transações Já Conciliadas por Mapeamento de Parcelas
+                </h3>
+                <ul className="list-disc list-inside text-sm text-emerald-600 dark:text-emerald-400">
+                    {transacoesJaMapeadas.map((t, i) => (
+                        <li key={i}>
+                            {t.data} — {t.descricao} ({formatCurrency(Math.abs(t.valor))})
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        )}
+
+        {transacoesDuplicadasSimples.length > 0 && (
+            <div className="p-3 bg-green-100 dark:bg-green-900/20 border border-green-400 rounded-md mb-4">
                 <h3 className="font-semibold text-green-700 dark:text-green-300 flex items-center mb-2">
-                    <CheckCircle2 className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Já Mapeadas
+                    <AlertCircle className="w-5 h-5 mr-2" /> {transacoesDuplicadasSimples.length} Transações Ignoradas (já existem no extrato)
                 </h3>
                 <ul className="list-disc list-inside text-sm text-green-600 dark:text-green-400">
-                    {transacoesRejeitadas.map((t, i) => (
+                    {transacoesDuplicadasSimples.map((t, i) => (
                         <li key={i}>
-                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
+                            {t.data} — {t.descricao} ({formatCurrency(Math.abs(t.valor))})
                         </li>
                     ))}
                 </ul>
@@ -539,8 +559,9 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
                                 {t.isDuplicated ? (
-                                    <span className="text-xs font-medium text-green-700 flex items-center">
-                                        <CheckCircle2 className="w-4 h-4 mr-1" /> Já Mapeada
+                                    <span className={`text-xs font-medium flex items-center ${t.motivoDuplicidade?.includes('Parcelas já mapeadas') ? 'text-emerald-700' : 'text-green-700'}`}>
+                                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                                        {t.motivoDuplicidade?.includes('Parcelas já mapeadas') ? 'Parcelas Mapeadas' : 'Já Importada'}
                                     </span>
                                 ) : isMapeada ? (
                                     <span className="text-xs font-medium text-green-700 flex items-center">
@@ -593,7 +614,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             </p>
             <Button 
                 onClick={onSaveConciliacao} 
-                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
+                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && t.conta_contabil_id !== 'MAPEADO_PARCELAS' && !t.isDuplicated).length === 0}
                 className="w-full sm:w-auto"
             >
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

@@ -272,10 +272,10 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     }, []);
 
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
-        const existingKeys = new Set<string>();
+        const existingKeys = new Map<string, string>();
         const { data, error } = await supabase
             .from('extratos')
-            .select('data, descricao, valor, tipo')
+            .select('data, descricao, valor, tipo, status_conciliacao')
             .eq('empresa_id', empresaId)
             .eq('id_saldo_contas', contaId);
             
@@ -288,7 +288,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
-            existingKeys.add(uniqueKey);
+            existingKeys.set(uniqueKey, e.status_conciliacao || 'EXISTENTE');
         });
         
         return existingKeys;
@@ -414,6 +414,15 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
                             
                             let isDuplicated = existingExtratosSet.has(uniqueKey);
+                            let motivoDuplicidade: string | null = null;
+                            if (isDuplicated) {
+                                const statusExistente = existingExtratosSet.get(uniqueKey);
+                                if (statusExistente === 'CONCILIADA' || statusExistente === 'PARCIALMENTE_CONCILIADA') {
+                                    motivoDuplicidade = 'Parcelas já mapeadas anteriormente.';
+                                } else {
+                                    motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                                }
+                            }
                             
                             const transacao: TransacaoExtrato = {
                                 data: formattedDate || String(dataMovimentacaoRaw),
@@ -422,7 +431,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                                 tipo: tipo,
                                 identificacao: identificacao,
                                 isDuplicated: isDuplicated,
-                                motivoDuplicidade: isDuplicated ? 'Transação já existe na tabela de extratos.' : null,
+                                motivoDuplicidade: motivoDuplicidade,
                             };
 
                             if (!isDuplicated && formattedDate) {
@@ -485,7 +494,11 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
             return;
         }
         
-        const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
+        const transacoesParaSalvar = transacoes.filter(
+            t => t.conta_contabil_id &&
+                 t.conta_contabil_id !== 'MAPEADO_PARCELAS' &&
+                 !t.isDuplicated
+        );
         
         if (transacoesParaSalvar.length === 0) {
             showError('Nenhuma transação mapeada para salvar.');
