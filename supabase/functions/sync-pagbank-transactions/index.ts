@@ -38,8 +38,14 @@ serve(async (req) => {
 
     const ownerId = parcela.admin_contas_receber.admin_id
     
-    // 3. Define qual ID usar (Manual, Order/Checkout ou Charge)
-    const transactionId = manualOrderId || parcela.pagbank_checkout_id || parcela.pagbank_charge_id
+    // 3. Define qual ID usar:
+    // - CHEC_ (checkout) NÃO é consultável diretamente; usa o pagbank_charge_id (ORDE_/ORD_) gerado pelo checkout
+    // - Prioridade: manual > charge_id > checkout_id (somente se não for CHEC_)
+    const checkoutId = parcela.pagbank_checkout_id
+    const isChecCheckout = checkoutId?.startsWith("CHEC_")
+    const transactionId = manualOrderId
+      || parcela.pagbank_charge_id
+      || (!isChecCheckout ? checkoutId : null)
 
     if (!transactionId) {
       return new Response(
@@ -70,8 +76,20 @@ serve(async (req) => {
       ? "https://api.pagseguro.com" 
       : "https://sandbox.api.pagseguro.com"
 
-    // Detecta se é Order (ORD_) ou Charge (CHAR_)
-    const isOrder = transactionId.startsWith("ORD") || transactionId.includes("-"); // Checkout geralmente gera UUIDs ou ORDs
+    // Detecta o tipo de ID para usar o endpoint correto da API PagBank:
+    // CHAR_ → boleto ou PIX (charge direta) → /charges/
+    // ORD_  → order criado via API           → /orders/
+    // ORDE_ → order (variação do prefixo)    → /orders/
+    // CHK_  → checkout (link de pagamento)   → /orders/
+    // CHEC_ → checkout (variação do prefixo) → /orders/
+    // sem prefixo conhecido                  → /charges/ (fallback conservador)
+    const isCharge = transactionId.startsWith("CHAR_")
+    const isOrder  = !isCharge && (
+      transactionId.startsWith("ORD_")  ||
+      transactionId.startsWith("ORDE_") ||
+      transactionId.startsWith("CHK_")  ||
+      transactionId.startsWith("CHEC_")
+    )
     const endpoint = isOrder ? `/orders/${transactionId}` : `/charges/${transactionId}`
     const fullUrl = `${baseUrl}${endpoint}`
 
@@ -82,20 +100,20 @@ serve(async (req) => {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "x-api-version": "4.0" // OBRIGATÓRIO PARA EVITAR 406
+        "Accept": "*/*",
+        "x-api-version": "4.0"
       },
     })
 
     if (!response.ok) {
       const rawText = await response.text()
+      console.error(`[sync-pagbank] ${response.status} para ${fullUrl} — body: ${rawText}`)
       let errorMsg = `PagBank ${response.status}`
       try {
         const jsonErr = JSON.parse(rawText)
         errorMsg = jsonErr.error_messages?.[0]?.description || jsonErr.message || errorMsg
       } catch {
-        errorMsg += `: ${rawText}`
+        errorMsg += rawText ? `: ${rawText}` : " (sem corpo na resposta)"
       }
       throw new Error(errorMsg)
     }

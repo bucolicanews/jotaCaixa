@@ -166,7 +166,9 @@ const ContasReceber = () => {
           pagbank_qr_code,
           pagbank_qr_code_text,
           pagbank_payment_method,
-          pagbank_updated_at
+          pagbank_updated_at,
+          pagbank_boleto_barcode,
+          pagbank_transaction_id
         `)
         .eq(ownerKey, proprietarioId)
         .order('data_vencimento', { ascending: true }),
@@ -508,23 +510,8 @@ const ContasReceber = () => {
   const handleSyncStatus = useCallback(async (parcelaId: string) => {
     const toastId = toast.loading('Sincronizando status com PagBank...');
     try {
-      // Buscar a configuração do PagBank para obter os históricos padrão
-      const { data: pagbankConfig, error: configError } = await supabase
-        .from('configuracoes_pagbank')
-        .select('historico_recebimento_id, historico_taxa_id')
-        .eq('proprietario_id', proprietarioId)
-        .single();
-
-      if (configError) {
-        throw new Error('Falha ao buscar configuração do PagBank: ' + configError.message);
-      }
-
       const { data, error } = await supabase.functions.invoke('sync-pagbank-transactions', {
-        body: {
-          parcelaId,
-          historico_recebimento_id: pagbankConfig?.historico_recebimento_id,
-          historico_taxa_id: pagbankConfig?.historico_taxa_id,
-        }
+        body: { parcelaId }
       });
 
       if (error) {

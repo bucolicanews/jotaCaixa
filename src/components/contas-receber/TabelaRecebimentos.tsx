@@ -2,6 +2,9 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { AdminRecebimento } from '@/types/contas-receber';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +38,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                 <TableHead className="text-right">Juros</TableHead>
                                 <TableHead className="text-right">Valor Recebido</TableHead>
                                 <TableHead>Forma Pagamento</TableHead>
+                                <TableHead>Cód. Transação</TableHead>
                                 <TableHead>Conta/Caixa</TableHead>
                                 <TableHead>Histórico</TableHead>
                                 <TableHead>Tipo</TableHead>
@@ -43,7 +47,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                         </TableHeader>
                         <TableBody>
                             {recebimentosFiltrados.length === 0 ? (
-                                <TableRow><TableCell colSpan={13} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={14} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                             ) : (
                                 recebimentosFiltrados.map((r) => {
                                     const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
@@ -81,6 +85,36 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                             </TableCell>
 
                                             <TableCell>{r.forma_pagamento}</TableCell>
+                                            <TableCell className="text-xs">
+                                                <div className="space-y-1 min-w-[140px]">
+                                                    {r.codigo_transacao && (
+                                                        <div className="flex items-center gap-1">
+                                                            <code className="text-[10px] font-mono bg-muted px-1 rounded truncate max-w-[100px]" title={r.codigo_transacao}>
+                                                                {r.codigo_transacao.substring(0, 12)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5"
+                                                                onClick={() => { navigator.clipboard.writeText(r.codigo_transacao!); toast.success('Código copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {r.pagbank_charge_id && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-muted-foreground font-medium text-[10px]">Charge:</span>
+                                                            <code className="text-[10px] font-mono bg-muted px-1 rounded truncate max-w-[80px]" title={r.pagbank_charge_id}>
+                                                                {r.pagbank_charge_id.substring(0, 12)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5"
+                                                                onClick={() => { navigator.clipboard.writeText(r.pagbank_charge_id!); toast.success('Charge ID copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {!r.codigo_transacao && !r.pagbank_charge_id && (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell>{contaDestino}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{historicoDescricao}</TableCell>
                                             <TableCell>

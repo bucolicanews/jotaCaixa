@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart, Edit, BookOpen, ListChecks } from 'lucide-react';
+import { BadgeDollarSign, Eye, FileText, Link2, RefreshCw, Check, AlertTriangle, Receipt, QrCode, ShoppingCart, Edit, BookOpen, ListChecks, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import LancamentoContabilDialog from '@/components/contabilidade/LancamentoContabilDialog';
 import { cn } from '@/lib/utils';
@@ -160,11 +161,12 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 <TableHead>Histórico</TableHead>
                                 <TableHead className="text-center">Contábil</TableHead>
                                 <TableHead>PagBank</TableHead>
+                                <TableHead>Cód. Transação</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={17} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={18} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -383,6 +385,50 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     <span className="text-muted-foreground text-sm">-</span>
                                                 )}
                                             </TableCell>
+
+                                            <TableCell className="text-xs">
+                                                <div className="space-y-1 min-w-[160px]">
+                                                    {(p as any).pagbank_boleto_barcode && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-muted-foreground font-medium">Boleto:</span>
+                                                            <code className="text-[10px] font-mono bg-muted px-1 rounded truncate max-w-[100px]" title={(p as any).pagbank_boleto_barcode}>
+                                                                {(p as any).pagbank_boleto_barcode.substring(0, 12)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5"
+                                                                onClick={() => { navigator.clipboard.writeText((p as any).pagbank_boleto_barcode); toast.success('Código do boleto copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {p.pagbank_charge_id && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-muted-foreground font-medium">Charge:</span>
+                                                            <code className="text-[10px] font-mono bg-muted px-1 rounded truncate max-w-[80px]" title={p.pagbank_charge_id}>
+                                                                {p.pagbank_charge_id.substring(0, 12)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5"
+                                                                onClick={() => { navigator.clipboard.writeText(p.pagbank_charge_id!); toast.success('Charge ID copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {(p as any).pagbank_transaction_id && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-muted-foreground font-medium">Transação:</span>
+                                                            <code className="text-[10px] font-mono bg-muted px-1 rounded truncate max-w-[80px]" title={(p as any).pagbank_transaction_id}>
+                                                                {(p as any).pagbank_transaction_id.substring(0, 12)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5"
+                                                                onClick={() => { navigator.clipboard.writeText((p as any).pagbank_transaction_id); toast.success('Código de transação copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {!(p as any).pagbank_boleto_barcode && !p.pagbank_charge_id && !(p as any).pagbank_transaction_id && (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })
@@ -455,6 +501,54 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             )}
                                         </div>
                                         <Button variant="ghost" size="sm" onClick={() => toggleCardExpansion(p.id)} className="w-full mt-3 text-xs">{isExpanded ? 'Ocultar detalhes' : 'Ver mais detalhes'}</Button>
+
+                                        {isExpanded && ((p as any).pagbank_boleto_barcode || p.pagbank_charge_id || (p as any).pagbank_transaction_id) && (
+                                            <div className="mt-2 p-2 bg-muted/30 rounded space-y-1 text-xs border-t pt-3">
+                                                <div className="font-semibold text-muted-foreground mb-1">Códigos PagBank:</div>
+                                                {(p as any).pagbank_boleto_barcode && (
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-muted-foreground shrink-0">Boleto:</span>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <code className="font-mono text-[10px] truncate" title={(p as any).pagbank_boleto_barcode}>
+                                                                {(p as any).pagbank_boleto_barcode.substring(0, 20)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0"
+                                                                onClick={() => { navigator.clipboard.writeText((p as any).pagbank_boleto_barcode); toast.success('Copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {p.pagbank_charge_id && (
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-muted-foreground shrink-0">Charge ID:</span>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <code className="font-mono text-[10px] truncate" title={p.pagbank_charge_id}>
+                                                                {p.pagbank_charge_id.substring(0, 16)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0"
+                                                                onClick={() => { navigator.clipboard.writeText(p.pagbank_charge_id!); toast.success('Copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {(p as any).pagbank_transaction_id && (
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-muted-foreground shrink-0">Transação:</span>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <code className="font-mono text-[10px] truncate" title={(p as any).pagbank_transaction_id}>
+                                                                {(p as any).pagbank_transaction_id.substring(0, 16)}...
+                                                            </code>
+                                                            <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0"
+                                                                onClick={() => { navigator.clipboard.writeText((p as any).pagbank_transaction_id); toast.success('Copiado!'); }}>
+                                                                <Copy className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             );

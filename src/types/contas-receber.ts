@@ -51,13 +51,16 @@ export interface ContaReceberComProgresso extends ContaReceber {
 export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
     ciente_cliente?: boolean | null;
-    forma_pagamento?: string | null; // ADICIONADO
-    conta_nome?: string | null; // ADICIONADO
-    valor_recebido?: number | null; // ADICIONADO
+    forma_pagamento?: string | null;
+    conta_nome?: string | null;
+    valor_recebido?: number | null;
     valor_original?: number | null;
-    valor_juros?: number | null;
+    valor_juros?: number | undefined;
     valor_multa?: number | null;
     valor_atualizado?: number | null;
+    pagbank_charge_id?: string | null;
+    pagbank_boleto_barcode?: string | null;
+    pagbank_transaction_id?: string | null;
     contas_receber: {
         id: string;
         descricao: string;
@@ -82,6 +85,8 @@ export interface AdminRecebimento {
     conta_id: string;
     parcela_id?: string | null;
     tipo_recebimento?: string | null;
+    codigo_transacao?: string | null;
+    pagbank_charge_id?: string | null;
     saldo_contas: { nome: string } | null;
     historico_id?: string | null;
     historicos?: { descricao: string } | null;
