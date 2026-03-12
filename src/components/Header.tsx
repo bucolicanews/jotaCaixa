@@ -93,7 +93,7 @@ const Header: React.FC = () => {
     };
     
     updatePlanoDetails();
-  }, [perfil, role, isClient, clienteProfile, userProfile]);
+  }, [role]);
 
 
   const lidarComSair = async () => {
@@ -113,7 +113,7 @@ const Header: React.FC = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
   // Lógica para o Título Principal (usando ownerName do hook)
-  let textTitle = ownerName || 'Fluxo de Caixa';
+  const textTitle = ownerName || 'Fluxo de Caixa';
   
   // Prepara o objeto de branding para o MenuLateral
   const menuBranding = { logoUrl, nome: ownerName };

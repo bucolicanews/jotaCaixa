@@ -413,9 +413,7 @@ const PreencherContrato: React.FC = () => {
       modoVencimento,
       diaFixo,
       intervaloDias,
-      diaSemana,
-      valoresTags,
-      formatCurrency
+      diaSemana
   ]);
 
   const tagsParaPreenchimentoManual = useMemo(() => {
@@ -656,7 +654,7 @@ const PreencherContrato: React.FC = () => {
         }
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} e financeiro gerado!`);
-        navigate('/contratos');
+        window.location.href = '/contratos';
     } catch (e: any) {
         showError(e.message);
     } finally {
@@ -683,7 +681,7 @@ const PreencherContrato: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <div className="flex items-center">
-            <Button onClick={() => navigate('/contratos')} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
+            <Button onClick={() => window.location.href = '/contratos'} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center">
               <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Gerar Contrato'}: {modelo?.titulo}
             </h1>
