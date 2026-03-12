@@ -8,7 +8,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Link2, AlertCircle, CheckCircle2, FileText, Building2, Receipt, Landmark, BookOpen, Search, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { showError, showSuccess } from '@/utils/toast';
@@ -86,6 +88,10 @@ export function VinculosParcelaDialog({
     id: string; data: string; descricao: string; valor: number; tipo: string; conciliado: boolean; identificacao?: string; saldo_contas?: { nome: string };
   }>>([]);
   const [vinculandoExtrato, setVinculandoExtrato] = useState(false);
+  const [contasCaixa, setContasCaixa] = useState<any[]>([]);
+  const [caixaSelecionadoId, setCaixaSelecionadoId] = useState<string | null>(null);
+  const [dataConciliacaoCaixa, setDataConciliacaoCaixa] = useState(new Date().toISOString().split('T')[0]);
+  const [conciliandoCaixa, setConciliandoCaixa] = useState(false);
   const [dados, setDados] = useState<VinculoData>({
     contrato: null,
     conta: null,
@@ -172,6 +178,20 @@ export function VinculosParcelaDialog({
             lancamentos: [],
             extrato: null,
           };
+          
+          // Busca contas caixa via Edge Function para contornar RLS
+          const { data: caixas, error: errorCaixas } = await supabase.functions.invoke('get-caixa-accounts', {
+            body: { ownerId },
+          });
+
+          if (errorCaixas) {
+            console.error('Erro ao buscar contas caixa via function:', errorCaixas);
+          }
+
+          setContasCaixa(caixas || []);
+          if(caixas && caixas.length > 0 && !caixaSelecionadoId) {
+            setCaixaSelecionadoId(caixas[0].id);
+          }
 
           await Promise.all([
             buscarLancamentos(parcelaId, novoDados),
@@ -391,6 +411,52 @@ export function VinculosParcelaDialog({
       showError('Erro ao desvincular extrato: ' + err.message);
     } finally {
       setVinculandoExtrato(false);
+    }
+  };
+
+  const [termoBusca, setTermoBusca] = useState('');
+
+  const handleConciliarCaixa = async () => {
+    if (!dados.parcela || !ownerId || !caixaSelecionadoId || !dataConciliacaoCaixa) {
+      showError('Selecione um caixa e uma data para conciliar.');
+      return;
+    }
+    setConciliandoCaixa(true);
+    try {
+      // 1. Criar o "extrato" falso para o caixa
+      const { data: extratoCaixa, error: erroExtrato } = await supabase
+        .from('extratos')
+        .insert({
+          empresa_id: ownerId,
+          data: dataConciliacaoCaixa,
+          valor: dados.parcela.valor_pago || dados.parcela.valor_parcela,
+          tipo: tipo === 'CR' ? 'Entrada' : 'Saida',
+          descricao: `Conciliação de Caixa: Parcela ${dados.parcela.numero_parcela} de "${dados.conta?.descricao}"`,
+          id_saldo_contas: caixaSelecionadoId,
+          conciliado: true,
+          origem_importacao: 'caixa_manual',
+          identificacao: `CAIXA-${dados.parcela.id.substring(0, 8)}`,
+        })
+        .select('id')
+        .single();
+
+      if (erroExtrato) throw erroExtrato;
+
+      // 2. Vincular este extrato à parcela
+      const tabelaParcela = tipo === 'CR' ? 'admin_parcelas_receber' : 'admin_parcelas_pagar';
+      const { error: erroParcela } = await supabase
+        .from(tabelaParcela)
+        .update({ mapeado_extrato_id: extratoCaixa.id })
+        .eq('id', dados.parcela.id);
+
+      if (erroParcela) throw erroParcela;
+
+      showSuccess('Parcela conciliada com o caixa!');
+      await carregarVinculos(); // Recarrega tudo
+    } catch (err: any) {
+      showError('Erro ao conciliar com caixa: ' + err.message);
+    } finally {
+      setConciliandoCaixa(false);
     }
   };
 
@@ -748,6 +814,64 @@ export function VinculosParcelaDialog({
                     {extratosCandidatos.length === 0 && !buscandoExtrato && (filtroDescricao || filtroValor || filtroData || filtroIdentificacao) && (
                       <p className="text-[10px] text-gray-400 text-center">Nenhum extrato encontrado.</p>
                     )}
+                    
+                    <div className="relative my-2">
+                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                            <div className="w-full border-t border-gray-200" />
+                        </div>
+                        <div className="relative flex justify-center">
+                            <span className="bg-gray-50 px-2 text-[10px] text-gray-400">OU</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <p className="text-[10px] text-gray-500 font-medium text-center">Conciliar manualmente no Caixa</p>
+                        
+                        {contasCaixa.length > 0 ? (
+                          <>
+                            <div>
+                                <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Conta Caixa</p>
+                                <Select value={caixaSelecionadoId || ''} onValueChange={setCaixaSelecionadoId}>
+                                    <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione o caixa..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {contasCaixa.map(caixa => (
+                                            <SelectItem key={caixa.id} value={caixa.id}>{caixa.nome}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             <div>
+                              <p className="text-[10px] text-gray-500 mb-0.5 font-medium">Data da Conciliação</p>
+                              <Input
+                                type="date"
+                                value={dataConciliacaoCaixa}
+                                onChange={(e) => setDataConciliacaoCaixa(e.target.value)}
+                                className="h-7 text-xs"
+                              />
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                className="w-full h-7 text-xs"
+                                onClick={handleConciliarCaixa}
+                                disabled={conciliandoCaixa || !caixaSelecionadoId}
+                            >
+                                {conciliandoCaixa ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                Conciliar no Caixa
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="text-center text-xs text-gray-500 bg-gray-100 p-2 rounded-md">
+                            Nenhuma conta 'Caixa' encontrada.
+                            <Link to="/plano-contas" className="text-blue-600 hover:underline font-semibold ml-1">
+                              Cadastre uma
+                            </Link>
+                            &nbsp;para conciliar.
+                          </div>
+                        )}
+                    </div>
                   </div>
                 )}
               </VinculoColuna>

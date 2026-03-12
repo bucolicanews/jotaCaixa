@@ -78,6 +78,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Novo Lançamento', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Pendência de Vínculo', caminho: '/pendencias-vinculo', icone: Link2, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
         ]
     },
     {

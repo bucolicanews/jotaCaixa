@@ -12,6 +12,7 @@ import ContasPagar from "./pages/ContasPagar";
 import ContasReceber from "./pages/ContasReceber";
 import Bancos from "./pages/Bancos";
 import Conciliacao from "./pages/Conciliacao";
+import PendenciasVinculoPage from "./pages/PendenciasVinculoPage";
 import Importar from "./pages/Importar";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
@@ -117,6 +118,7 @@ const App = () => (
               <Route path="/bancos" element={<ProtectedRoute permissionKey="bancos"><Bancos /></ProtectedRoute>} />
               <Route path="/contas-patrimoniais" element={<ProtectedRoute permissionKey="contas_patrimoniais"><ContasPatrimoniais /></ProtectedRoute>} />
               <Route path="/conciliacao" element={<ProtectedRoute permissionKey="conciliacao"><Conciliacao /></ProtectedRoute>} />
+              <Route path="/pendencias-vinculo" element={<ProtectedRoute permissionKey="conciliacao"><PendenciasVinculoPage /></ProtectedRoute>} />
               <Route path="/importar" element={<ProtectedRoute permissionKey="importar"><Importar /></ProtectedRoute>} />
               <Route path="/exportar" element={<ProtectedRoute permissionKey="exportar"><Exportar /></ProtectedRoute>} />
               <Route path="/relatorios" element={<ProtectedRoute permissionKey="relatorios"><Relatorios /></ProtectedRoute>} />
