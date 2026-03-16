@@ -97,6 +97,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                             <TableRow>
                                 <TableHead className="w-[120px]">Ações</TableHead>
                                 <TableHead className="w-[100px]">ID Conta</TableHead>
+                                <TableHead>Contrato</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
                                 <TableHead>Vencimento</TableHead>
@@ -109,7 +110,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                         </TableHeader>
                         <TableBody>
                             {contasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={11} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
                             ) : (
                                 contasFiltradas.map((conta) => {
                                     const { displayStatus, statusVariant } = getStatusInfo(conta);
@@ -168,12 +169,14 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground max-w-[130px]">
-                                              {(conta as any).contrato_gerado_id && (
-                                                <div className="text-[10px] text-purple-600" title={(conta as any).contrato_gerado_id}>
-                                                  Ctr: {(conta as any).contrato_gerado_id.substring(0, 8)}
+                                              <div title={conta.id}>CR: {conta.id.substring(0, 8)}</div>
+                                            </TableCell>
+                                            <TableCell className="font-mono text-xs text-muted-foreground">
+                                              {conta.contrato_gerado_id && (
+                                                <div className="text-[10px] text-purple-600" title={conta.contrato_gerado_id}>
+                                                  {conta.contrato_gerado_id.substring(0, 8)}
                                                 </div>
                                               )}
-                                              <div title={conta.id}>CR: {conta.id.substring(0, 8)}</div>
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {conta.clientes?.razao_social && <div className="font-bold text-foreground">{conta.clientes.razao_social}</div>}

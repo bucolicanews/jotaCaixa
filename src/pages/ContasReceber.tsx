@@ -182,7 +182,7 @@ const ContasReceber = () => {
           admin_parcelas_receber (
             numero_parcela,
             valor_parcela,
-            admin_contas_receber ( id, descricao, origem, cliente_id )
+            admin_contas_receber ( id, descricao, origem, cliente_id, contrato_gerado_id )
           )
         `)
         .eq('admin_id', proprietarioId)

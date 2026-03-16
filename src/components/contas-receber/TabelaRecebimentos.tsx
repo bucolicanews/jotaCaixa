@@ -31,6 +31,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                             <TableRow>
                                 <TableHead>Data Recebimento</TableHead>
                                 <TableHead className="w-[100px]">ID Conta</TableHead>
+                                <TableHead>Contrato</TableHead>
                                 <TableHead className="w-[90px]">ID Parcela</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
@@ -47,7 +48,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                         </TableHeader>
                         <TableBody>
                             {recebimentosFiltrados.length === 0 ? (
-                                <TableRow><TableCell colSpan={14} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={15} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                             ) : (
                                 recebimentosFiltrados.map((r) => {
                                     const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
@@ -56,6 +57,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                     const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
                                     const contaDestino = r.saldo_contas?.nome || 'N/A';
                                     const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A';
+                                    const contratoId = r.admin_parcelas_receber?.admin_contas_receber?.contrato_gerado_id || null;
                                     const parcelaId = (r as any).parcela_id || null;
                                     const historicoDescricao = (r as any).historicos?.descricao || '-';
                                     const tipoRecebimento = (r as any).tipo_recebimento || null;
@@ -68,6 +70,7 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({
                                         <TableRow key={r.id}>
                                             <TableCell>{dataRecebimentoDisplay}</TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell>
+                                            <TableCell className="font-mono text-xs text-muted-foreground" title={contratoId || ''}>{contratoId ? contratoId.substring(0, 8) : '-'}</TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground" title={parcelaId || ''}>{parcelaId ? parcelaId.substring(0, 8) : '-'}</TableCell>
                                             <TableCell className="font-medium">{clienteNome}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>

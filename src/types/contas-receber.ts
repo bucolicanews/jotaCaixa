@@ -46,6 +46,7 @@ export interface ParcelaDetalhada extends Parcela {
 export interface ContaReceberComProgresso extends ContaReceber {
     parcelas_pagas?: number;
     parcelas_total?: number;
+    contrato_gerado_id?: string | null;
 }
 
 export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
@@ -66,6 +67,7 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
         descricao: string;
         cliente_id: string | null;
         origem: ContaReceber['origem'];
+        contrato_gerado_id?: string | null;
         clientes: { nome: string; razao_social?: string | null; telefone?: string; email?: string; } | null;
         id_conta_patrimonial?: string | null;
         id_conta_resultado?: string | null;
@@ -98,6 +100,7 @@ export interface AdminRecebimento {
             id: string;
             descricao: string;
             origem: ContaReceber['origem'];
+            contrato_gerado_id?: string | null;
             cliente_id: string;
         } | null;
     } | null;

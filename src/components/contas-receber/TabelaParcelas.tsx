@@ -146,6 +146,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                             <TableRow>
                                 <TableHead className="w-[120px]">Ações</TableHead>
                                 <TableHead>ID Parcela</TableHead>
+                                <TableHead>Contrato</TableHead>
                                 <TableHead>Cliente</TableHead>
                                 <TableHead>Descrição</TableHead>
                                 <TableHead>Vencimento</TableHead>
@@ -166,7 +167,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={18} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={19} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -274,17 +275,19 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs">
-                                              {(p.contas_receber as any)?.contrato_gerado_id && (
-                                                <div className="text-[10px] text-purple-600" title={(p.contas_receber as any).contrato_gerado_id}>
-                                                  Ctr: {(p.contas_receber as any).contrato_gerado_id.substring(0, 8)}
-                                                </div>
-                                              )}
                                               {p.conta_receber_id && (
                                                 <div className="text-[10px] text-blue-500" title={p.conta_receber_id}>
                                                   CR: {p.conta_receber_id.substring(0, 8)}
                                                 </div>
                                               )}
                                               <div title={p.id}>Parc: {p.id.substring(0, 8)}</div>
+                                            </TableCell>
+                                            <TableCell className="font-mono text-xs">
+                                              {p.contas_receber?.contrato_gerado_id && (
+                                                <div className="text-[10px] text-purple-600" title={p.contas_receber.contrato_gerado_id}>
+                                                  {p.contas_receber.contrato_gerado_id.substring(0, 8)}
+                                                </div>
+                                              )}
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {razaoSocial && <div className="font-bold text-foreground">{razaoSocial}</div>}
@@ -459,6 +462,11 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             <div className="flex-1 min-w-0">
                                                 {razaoSocial && <div className="font-bold text-sm truncate">{razaoSocial}</div>}
                                                 <div className={cn("text-sm truncate", razaoSocial && "text-muted-foreground")}>{clienteNome}</div>
+                                                {p.contas_receber?.contrato_gerado_id && (
+                                                    <div className="text-xs text-purple-600 truncate mt-1" title={p.contas_receber.contrato_gerado_id}>
+                                                        Contrato: {p.contas_receber.contrato_gerado_id.substring(0, 8)}...
+                                                    </div>
+                                                )}
                                                 <div className="text-xs text-muted-foreground truncate mt-1">{descricao}</div>
                                             </div>
                                             <Badge variant={statusVariant} className="shrink-0">{p.status === 'paga' ? 'recebida' : p.status}</Badge>
