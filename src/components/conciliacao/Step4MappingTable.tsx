@@ -117,8 +117,19 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         return;
       }
       
+      const { data: contaData, error: contaError } = await supabase
+        .from('saldo_contas')
+        .select('empresa_id')
+        .eq('id', contaSelecionadaId)
+        .single();
+
+      if (contaError || !contaData) {
+        showError('Falha ao obter a empresa da conta selecionada: ' + contaError?.message);
+        return;
+      }
+      
       const dadosInsert: any = {
-        empresa_id: ownerId,
+        empresa_id: contaData.empresa_id,
         id_saldo_contas: contaSelecionadaId,
         data: converterDataParaISO(transacao.data),
         descricao: transacao.descricao,
@@ -129,6 +140,10 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         conciliado: false,
         valor_conciliado: 0,
       };
+
+      if (isAdmin) {
+        dadosInsert.admin_id = ownerId;
+      }
       
       const { data: extratoSalvo, error } = await supabase
         .from('extratos')

@@ -340,23 +340,26 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     : contaContabilBanco;
                 const contaContabilFinal = contaContabilBanco || contaContabilRecebimento || null;
                 
-                extratosPayload.push({
-    ...(isSupervisao
-        ? { admin_id: proprietarioDaSessao }
-        : { empresa_id: proprietarioDaSessao }),
+                const payload: any = {
+                    empresa_id: parcela.empresa_id,
+                    id_saldo_contas: contaDestinoId,
+                    data: format(dataPagamento, 'yyyy-MM-dd'),
+                    descricao: values.descricao_extrato,
+                    valor: valorExtrato,
+                    tipo: 'Entrada' as const,
+                    identificacao: (values.identificacao && values.identificacao !== '__nenhum__')
+                        ? values.identificacao
+                        : null,
+                    conciliado: false,
+                    conta_contabil_id: contaContabilFinal,
+                    id_parcela_rb: parcela.id,
+                };
 
-    id_saldo_contas: contaDestinoId,
-    data: format(dataPagamento, 'yyyy-MM-dd'),
-    descricao: values.descricao_extrato,
-    valor: valorExtrato,
-    tipo: 'Entrada' as const,
-    identificacao: (values.identificacao && values.identificacao !== '__nenhum__')
-        ? values.identificacao
-        : null,
-    conciliado: false,
-    conta_contabil_id: contaContabilFinal,
-    id_parcela_rb: parcela.id,
-});
+                if (isSupervisao) {
+                    payload.admin_id = proprietarioDaSessao;
+                }
+                
+                extratosPayload.push(payload);
             }
             
             if (extratosPayload.length > 0) {
